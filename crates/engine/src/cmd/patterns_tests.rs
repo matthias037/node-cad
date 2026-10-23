@@ -230,6 +230,35 @@ fn patterns_of_bodies() {
     assert!(s.execute("solid.pattern.rectangular", &json!({"bodies": ["Nope"], "dir1": [1, 0, 0], "count1": 2, "spacing1": 5})).is_err());
 }
 
+/// A construction axis picked in the dialog comes as its name (#2885): the copies turn about it,
+/// and follow it when it is edited.
+#[test]
+fn circular_pattern_about_a_construction_axis_follows_it() {
+    let mut s = Session::default();
+    run(&mut s, "solid.box", json!({"length": 2, "width": 2, "height": 2, "corner": [40, 0, 0], "body_name": "Cube"}));
+    let axis = |x: f64| json!({"a": {"point": [x, 0, 0]}, "b": {"point": [x, 0, 10]}, "name": "Axis1"});
+    run(&mut s, "construct.axis.two_points", axis(30.0));
+    run(&mut s, "solid.pattern.circular", json!({"bodies": ["Cube"], "axis": "Axis1", "count": 4}));
+    // The x and y extent of the four cubes.
+    let span = |s: &Session| {
+        let st = s.model.state();
+        assert_eq!(st.bodies.len(), 4);
+        let mut out = [f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY];
+        for b in st.bodies.iter().filter_map(|mb| solidcraft_kernel::measure(&mb.body).ok()).map(|m| m.bbox) {
+            out = [out[0].min(b.min.x), out[1].max(b.max.x), out[2].min(b.min.y), out[3].max(b.max.y)];
+        }
+        out
+    };
+    // About x = 30: the cube at x 40…42 also lands at 18…20, and at y ±(10…12).
+    for (got, want) in span(&s).into_iter().zip([18.0, 42.0, -12.0, 12.0]) {
+        assert!((got - want).abs() < 1e-6, "{got} vs {want}");
+    }
+    run(&mut s, "timeline.redefine", json!({"feature": "Axis1", "command": "construct.axis.two_points", "params": axis(35.0)}));
+    for (got, want) in span(&s).into_iter().zip([28.0, 42.0, -7.0, 7.0]) {
+        assert!((got - want).abs() < 1e-6, "{got} vs {want}");
+    }
+}
+
 #[test]
 fn patterns_of_components_place_occurrences() {
     let mut s = Session::default();
@@ -547,5 +576,31 @@ fn copies_of_a_primitive_cut_only_its_targets() {
         assert!(rel(body_volume(&mut s, "Voisin"), 60000.0) < 1e-9, "{id} cut Voisin");
         let removed = 60000.0 - body_volume(&mut s, "Plaque");
         assert!(rel(removed, holes * PI * 9.0 * 10.0) < 1e-3, "{id}: {removed} mm³ cut from Plaque");
+    }
+}
+
+/// #3378: a pattern or mirror of a join whose targets the join merged into one body copies onto
+/// that body, as before #2755, instead of looking for the target the join used up.
+#[test]
+fn copies_of_a_join_that_merged_its_targets_join_the_merged_body() {
+    for (copy, n) in [
+        (json!(["solid.pattern.circular", {"features": ["spoke"], "axis": "Y", "count": 5}]), 5.0),
+        (json!(["solid.mirror", {"features": ["spoke"], "plane": {"origin": [0, 0, 0], "normal": [1, 0, 0]}}]), 2.0),
+    ] {
+        let mut s = Session::default();
+        run(&mut s, "solid.cylinder", json!({"radius": 66, "height": 3, "base": [0, 0, 0], "axis": "Y", "body_name": "rim"}));
+        run(&mut s, "solid.cylinder", json!({"radius": 63, "height": 3, "base": [0, 0, 0], "axis": "Y", "operation": "cut", "targets": ["rim"]}));
+        run(&mut s, "solid.cylinder", json!({"radius": 12, "height": 3, "base": [0, 0, 0], "axis": "Y", "body_name": "hub"}));
+        let v0 = volume(&mut s);
+        let spoke = json!({"length": 52, "width": 3, "height": 2.5, "corner": [12, 0, -1.25], "operation": "join", "targets": ["rim", "hub"], "name": "spoke"});
+        run(&mut s, "solid.box", spoke);
+        let v1 = volume(&mut s);
+        let (id, p) = (copy[0].as_str().unwrap_or_default(), copy[1].clone());
+        run(&mut s, id, p);
+        let names = run(&mut s, "inspect.measure", json!({}))["bodies"].as_array().map(|b| b.iter().map(|x| x["name"].clone()).collect::<Vec<_>>());
+        assert_eq!(names, Some(vec![json!("rim")]), "{id}: one body, the merged rim and hub");
+        // Every copy adds what the seed spoke added (curved bodies measure to about 0.02 %; a
+        // missing or doubled spoke is about 5 %).
+        assert!(rel(volume(&mut s), v0 + n * (v1 - v0)) < 1e-3, "{id}: {} vs {}", volume(&mut s), v0 + n * (v1 - v0));
     }
 }

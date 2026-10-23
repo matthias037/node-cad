@@ -5,15 +5,18 @@
 
 use std::collections::BTreeMap;
 
-use egui::RichText;
 use serde_json::{Value, json};
 use solidcraft_engine::command_specs;
 
 use crate::SolveApp;
-use crate::theme::Tokens;
+use crate::ui_kit;
+
+/// Repeats the last tool or dialog started (`SolveApp::repeat_last`, #3045).
+pub const REPEAT_KEY: &str = "Shift+R";
 
 /// Keys the application handles before any command shortcut.
 pub const RESERVED: &[&str] = &[
+    REPEAT_KEY,
     "Escape",
     "S",
     "V",
@@ -113,11 +116,11 @@ pub fn command_for(app: &SolveApp, key: &str) -> Option<&'static str> {
 /// starts in the new sketch.
 pub fn press(app: &mut SolveApp, key: &str) {
     if let Some(id) = command_for(app, key) {
-        app.start(id);
+        app.start(app.preferences.sketch_variants.resolve(id));
     } else if let Some(id) = sketch_tool_for(app, key) {
         app.start("sketch.create");
         if let Some(d) = app.dialog.as_mut().filter(|d| matches!(d.kind, crate::dialogs::Kind::Sketch)) {
-            d.then_start = Some(id);
+            d.then_start = Some(app.preferences.sketch_variants.resolve(id));
         }
     }
 }
@@ -192,58 +195,89 @@ pub fn page(app: &mut SolveApp, ui: &mut egui::Ui) {
             }
         }
     }
-    let t = Tokens::get();
     let mut action: Option<(String, &str)> = None;
-    {
-        {
-            ui.horizontal(|ui| {
-                ui.add(
-                    egui::TextEdit::singleline(&mut app.keymap.filter)
-                        .hint_text(crate::i18n::tr_label("Filter commands or keys"))
-                        .desired_width(300.0),
-                );
-                if !app.keymap.read_only && ui.button(app.tr_label("Reset All")).clicked() {
-                    action = Some((String::new(), "reset_all"));
+    ui_kit::scope(ui, |ui| {
+        let actions = [
+            ui_kit::SearchAction { label: app.tr_label("Reset All"), icon: None, visible: !app.keymap.read_only, tooltip: None },
+            ui_kit::SearchAction { label: app.tr_label("Import…"), icon: Some("import_tray"), visible: !app.keymap.read_only, tooltip: None },
+            ui_kit::SearchAction {
+                label: app.tr_label("Export…"),
+                icon: Some("export_tray"),
+                visible: true,
+                tooltip: Some(app.tr_label("Keys, S box favourites and the toolbar, as a file")),
+            },
+        ];
+        let (filter, toolbar_action) = ui_kit::search_actions_row(
+            ui,
+            egui::Id::new("sc_keymap_filter"),
+            &mut app.keymap.filter,
+            crate::i18n::tr_label("Filter commands or keys"),
+            &actions,
+        );
+        crate::scenario::publish_target("keymap:filter", filter.rect);
+        if let Some(index) = toolbar_action {
+            action = Some((
+                String::new(),
+                match index {
+                    0 => "reset_all",
+                    1 => "import",
+                    _ => "export",
+                },
+            ));
+        }
+        if let Some(m) = &app.keymap.message {
+            ui_kit::text(ui, m, ui_kit::Text::Report("keymap_message", true));
+        }
+        if let Some((id, key, _)) = app.keymap.conflict.clone() {
+            ui.horizontal_wrapped(|ui| {
+                let replace = ui_kit::button(ui, crate::i18n::format("keymap.use_anyway", &[("key", &key)]), ui_kit::Button::Normal);
+                crate::scenario::publish_target("keymap:replace", replace.rect);
+                if replace.clicked() {
+                    action = Some((format!("{id}\n{key}"), "replace"));
                 }
-                if ui.button(app.tr_label("Export…")).on_hover_text(app.tr_label("Keys, S box favourites and the toolbar, as a file")).clicked() {
-                    action = Some((String::new(), "export"));
-                }
-                if !app.keymap.read_only && ui.button(app.tr_label("Import…")).clicked() {
-                    action = Some((String::new(), "import"));
+                if ui_kit::button(ui, app.tr_label("Cancel"), ui_kit::Button::Normal).clicked() {
+                    action = Some((String::new(), "cancel"));
                 }
             });
-            if let Some(m) = &app.keymap.message {
-                ui.label(RichText::new(m).color(t.warning));
-            }
-            if let Some((id, key, _)) = app.keymap.conflict.clone() {
-                ui.horizontal(|ui| {
-                    if ui.button(format!("Use {key} here anyway")).clicked() {
-                        action = Some((format!("{id}\n{key}"), "replace"));
+        }
+        ui_kit::text(ui, app.tr_label("Select Other: hold the left button still on the model (or right-click › Select Other…) to list everything under the cursor; click again on the same spot to select the next thing there. Double-click the middle button to go Home (Preferences › Navigation)."), ui_kit::Text::Note("navigation"));
+        let q = app.keymap.filter.to_lowercase();
+        let commands = command_specs();
+        let t = crate::theme::Tokens::get();
+        let key_width = commands
+            .iter()
+            .map(|c| {
+                let key = effective(app, c.id).unwrap_or_default();
+                ui_kit::ContentWidth::button(ui, &key)
+            })
+            .fold(ui_kit::ContentWidth::button(ui, app.tr_label("press a key…")), f32::max)
+            .max(ui_kit::ContentWidth::label(ui, app.tr_label("Keyboard Shortcuts")) + t.space_8);
+        let action_width = if app.keymap.read_only {
+            t.control_height
+        } else {
+            ui_kit::ContentWidth::button(ui, app.tr_label("Clear")) + ui_kit::ContentWidth::button(ui, app.tr_label("Reset")) + t.space_4
+        };
+        ui_kit::settings_scroll(ui, "sc_keymap_scroll", |ui| {
+            let columns = [
+                ui_kit::Column::new("Command", 1.5).flex().min_content_width(t.form_label_width),
+                ui_kit::Column::new(crate::i18n::tr("keymap.command_id"), 1.8).flex().min_content_width(t.form_label_width),
+                ui_kit::Column::new("Keyboard Shortcuts", 1.0).flex().min_content_width(key_width),
+                ui_kit::Column::new("", 0.0).icon_only().min_content_width(action_width),
+            ];
+            ui_kit::table(ui, "keymap", &columns, crate::i18n::tr("keymap.empty"), |ui, table| {
+                for c in commands {
+                    let key = effective(app, c.id).unwrap_or_default();
+                    let translated_label = app.tr_label(c.label);
+                    if !q.is_empty() && ![c.label, c.id, key.as_str(), translated_label].iter().any(|s| s.to_lowercase().contains(&q)) {
+                        continue;
                     }
-                    if ui.button(app.tr_label("Cancel")).clicked() {
-                        action = Some((String::new(), "cancel"));
-                    }
-                });
-            }
-            ui.label(
-                RichText::new(
-                    app.tr_label("Select Other: hold the left button still on the model (or right-click › Select Other…) to list everything under the cursor; click again on the same spot to select the next thing there. Double-click the middle button to go Home (Preferences › Navigation)."),
-                )
-                .size(11.0)
-                .color(t.text_dim),
-            );
-            ui.separator();
-            let q = app.keymap.filter.to_lowercase();
-            egui::ScrollArea::both().max_height(330.0).auto_shrink([false, true]).show(ui, |ui| {
-                egui::Grid::new("sc_keymap_grid").num_columns(4).striped(true).spacing([10.0, 4.0]).show(ui, |ui| {
-                    for c in command_specs() {
-                        let key = effective(app, c.id).unwrap_or_default();
-                        let translated_label = app.tr_label(c.label);
-                        if !q.is_empty() && ![c.label, c.id, key.as_str(), translated_label].iter().any(|s| s.to_lowercase().contains(&q)) {
-                            continue;
-                        }
-                        ui.label(translated_label);
-                        ui.label(RichText::new(c.id).size(10.5).color(t.text_dim));
+                    table.row(ui, c.id, app.keymap.capturing.as_deref() == Some(c.id), |row| {
+                        row.cell(|ui| {
+                            ui_kit::text(ui, translated_label, ui_kit::Text::Cell);
+                        });
+                        row.cell(|ui| {
+                            ui_kit::text(ui, c.id, ui_kit::Text::Cell);
+                        });
                         let capturing = app.keymap.capturing.as_deref() == Some(c.id);
                         let changed = app.keymap.custom.contains_key(c.id);
                         let text = if capturing {
@@ -253,29 +287,43 @@ pub fn page(app: &mut SolveApp, ui: &mut egui::Ui) {
                         } else {
                             key.clone()
                         };
-                        if app.keymap.read_only {
-                            ui.label(RichText::new(text).strong());
-                            ui.end_row();
-                            continue;
-                        }
-                        let b = egui::Button::new(RichText::new(text).color(if changed { t.accent } else { t.text })).min_size(egui::vec2(80.0, 0.0));
-                        if ui.add(b).on_hover_text(app.tr_label("Click, then press the new key")).clicked() {
-                            action = Some((c.id.to_string(), "capture"));
-                        }
-                        ui.horizontal(|ui| {
-                            if ui.add_enabled(!key.is_empty(), egui::Button::new(app.tr_label("Clear")).small()).clicked() {
-                                action = Some((c.id.to_string(), "clear"));
-                            }
-                            if ui.add_enabled(changed, egui::Button::new(app.tr_label("Reset")).small()).clicked() {
-                                action = Some((c.id.to_string(), "reset"));
+                        row.cell(|ui| {
+                            if app.keymap.read_only {
+                                ui_kit::text(ui, &text, ui_kit::Text::Cell);
+                            } else {
+                                let capture = if key.is_empty() && !capturing {
+                                    let (rect, _) = ui.allocate_exact_size(egui::vec2(t.control_height, t.control_height), egui::Sense::hover());
+                                    ui_kit::quiet_icon_button_at(ui, rect, "plus", app.tr_label("Click, then press the new key"))
+                                } else {
+                                    ui_kit::button(ui, &text, ui_kit::Button::Normal).on_hover_text(app.tr_label("Click, then press the new key"))
+                                };
+                                crate::scenario::publish_target(&format!("keymap:capture:{}", c.id), capture.rect);
+                                if capture.clicked() {
+                                    action = Some((c.id.to_string(), "capture"));
+                                }
                             }
                         });
-                        ui.end_row();
-                    }
-                });
+                        row.cell(|ui| {
+                            if !app.keymap.read_only {
+                                ui.horizontal(|ui| {
+                                    let clear = ui_kit::button(ui, app.tr_label("Clear"), ui_kit::Button::Enabled(!key.is_empty()));
+                                    crate::scenario::publish_target(&format!("keymap:clear:{}", c.id), clear.rect);
+                                    if clear.clicked() {
+                                        action = Some((c.id.to_string(), "clear"));
+                                    }
+                                    let reset = ui_kit::button(ui, app.tr_label("Reset"), ui_kit::Button::Enabled(changed));
+                                    crate::scenario::publish_target(&format!("keymap:reset:{}", c.id), reset.rect);
+                                    if reset.clicked() {
+                                        action = Some((c.id.to_string(), "reset"));
+                                    }
+                                });
+                            }
+                        });
+                    });
+                }
             });
-        }
-    }
+        });
+    });
     match action {
         Some((id, "capture")) => {
             app.keymap.capturing = Some(id);
@@ -361,8 +409,75 @@ mod tests {
         assert_eq!(effective(&b, "solid.move").as_deref(), Some("M"));
         assert_eq!(key_name(egui::Key::K, egui::Modifiers { ctrl: true, shift: true, ..Default::default() }), "Ctrl+Shift+K");
     }
+
+    /// #3045: Shift+R starts the last tool again (here a sketch's Line after Escape put it
+    /// down), R alone is still the rectangle; the menus show the key on Repeat, and no command
+    /// can take it.
+    #[test]
+    fn shift_r_repeats_the_last_tool() {
+        let mut h = crate::scenario::Harness::new();
+        h.app.home.open = false;
+        h.app.run("sketch.create", json!({"plane": "XY"})).unwrap();
+        h.frames(2);
+        h.step(&json!({"start": "sketch.line"})).unwrap();
+        h.step(&json!({"key": "Escape"})).unwrap();
+        h.frames(1);
+        assert!(h.app.tool.is_none());
+        h.step(&json!({"key": "R", "shift": true})).unwrap();
+        h.frames(1);
+        assert_eq!(h.app.tool.as_ref().map(|t| t.cmd.to_string()).as_deref(), Some("sketch.line"), "Shift+R starts Line again");
+        h.step(&json!({"key": "Escape"})).unwrap();
+        h.step(&json!({"key": "R"})).unwrap();
+        h.frames(1);
+        let rectangle = h.app.tool.as_ref().map(|t| t.cmd.to_string()).unwrap_or_default();
+        assert!(rectangle.starts_with("sketch.rectangle"), "R alone: {rectangle}");
+        let repeat = crate::context_menu::radial_items(&h.app).into_iter().find(|i| i.id == "ui.repeat").unwrap();
+        assert_eq!(repeat.shortcut, REPEAT_KEY);
+        let mut a = app();
+        assert!(bind(&mut a, "solid.extrude", REPEAT_KEY, true).is_err(), "Shift+R is the app's");
+    }
 }
 
 #[cfg(test)]
 #[path = "sketch_shortcut_tests.rs"]
 mod sketch_shortcut_tests;
+
+#[cfg(test)]
+mod card_tests {
+    use super::*;
+    use crate::scenario::{self, Harness};
+
+    #[test]
+    fn shortcut_card_captures_clears_resets_and_esc_cancels_capture_only() {
+        let mut h = Harness::new();
+        h.app.home.open = false;
+        h.app.keymap.filter = "solid.extrude".into();
+        h.call("ui.prefs", json!({"open":"Keyboard Shortcuts"}));
+        for (action, expected) in [("capture", "Shift+E"), ("clear", ""), ("reset", "E")] {
+            h.step(&json!({"click":{"handle":format!("keymap:{action}:solid.extrude")}})).unwrap();
+            if action == "capture" {
+                h.step(&json!({"key":"E","shift":true})).unwrap();
+            }
+            assert_eq!(effective(&h.app, "solid.extrude").unwrap_or_default(), expected);
+        }
+        h.step(&json!({"click":{"handle":"keymap:capture:solid.extrude"}})).unwrap();
+        h.step(&json!({"key":"Escape"})).unwrap();
+        assert!(h.app.prefs_window.open && h.app.keymap.capturing.is_none());
+        h.step(&json!({"key":"Escape"})).unwrap();
+        assert!(!h.app.prefs_window.open);
+    }
+
+    #[test]
+    fn help_shortcuts_card_keeps_rebinding_read_only() {
+        let mut h = Harness::new();
+        h.app.home.open = false;
+        h.app.keymap.filter = "solid.extrude".into();
+        h.call("ui.help", json!({"item":"shortcuts"}));
+        assert!(h.app.keymap.read_only);
+        assert!(scenario::handle_at("keymap:filter").is_some());
+        for action in ["capture", "clear", "reset"] {
+            assert!(scenario::handle_at(&format!("keymap:{action}:solid.extrude")).is_none());
+        }
+        assert_eq!(effective(&h.app, "solid.extrude").as_deref(), Some("E"));
+    }
+}

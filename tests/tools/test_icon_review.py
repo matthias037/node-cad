@@ -1,6 +1,7 @@
 """Long-term discovery and acceptance behavior of the repository-owned review app."""
 import contextlib
 import json
+import os
 import re
 from pathlib import Path
 import shutil
@@ -65,6 +66,39 @@ def review_fixture():
 
 
 class IconReviewTest(unittest.TestCase):
+    def test_window_confirm_and_page_list_icons_are_discovered(self):
+        with review_fixture() as (root, design, get, post):
+            source = root / 'crates/ui-egui/src/windows.rs'
+            source.parent.mkdir(parents=True)
+            source.write_text('''fn show() {
+                ui_kit::Window::new(egui::Id::new("prefs"), "settings", title);
+                ui_kit::Confirm::new(id, "status_warning", title);
+                ui_kit::WindowPage { icon: "orbit", label: "ui.navigation", draw: draw_page };
+                ui_kit::Window::new(id, variable_icon, "not_an_icon");
+            }''', encoding='utf-8')
+            page = get('/')
+            for icon in ('settings', 'status_warning', 'orbit'):
+                self.assertIn(f'data-id="{icon}"', page)
+            self.assertNotIn('data-id="not_an_icon"', page)
+
+    def test_runtime_manifest_discovers_variable_ids_and_reports_actual_placeholder(self):
+        with review_fixture() as (root, design, get, post):
+            manifest = design / 'requested_icons.txt'
+            before = get('/api/review')['rev']
+            manifest.write_text('box_alias\tfalse\nonly_in_menu_table\ttrue\n')
+            page = get('/')
+            self.assertIn('data-id="only_in_menu_table"', page)
+            self.assertIn('3 discovered icon ids · 2 with artwork · 1 missing', page)
+            self.assertIn('runtime audit', page)
+            self.assertNotEqual(get('/api/review')['rev'], before)
+            # Even existing artwork can fail to parse in the runtime renderer.
+            manifest.write_text('box_alias\ttrue\nonly_in_menu_table\tfalse\n')
+            self.assertIn('3 discovered icon ids · 1 with artwork · 2 missing', get('/'))
+            # A newly repaired id is discoverable even without any source literal.
+            manifest.write_text('box_alias\tfalse\nonly_in_menu_table\tfalse\n')
+            (design / 'svg/model/only_in_menu_table.svg').write_text(SVG)
+            self.assertIn('3 discovered icon ids · 3 with artwork · 0 missing', get('/'))
+
     def test_inline_clips_and_masks_are_scoped_to_each_preview_and_dashes_use_guides(self):
         with review_fixture() as (root, design, get, post):
             for name in ('environment_map', 'new', 'draft', 'bounding_solid', 'extend'):
@@ -247,7 +281,14 @@ class IconReviewTest(unittest.TestCase):
             self.assertNotIn('box', changed['final'])
             self.assertIn('changed since acceptance', get('/'))
             self.assertEqual(old_hash, json.loads((design / 'review.json').read_text(encoding='utf-8'))['final']['box'])
-            (design / 'svg/model/box.svg').write_text(SVG.replace('r="20"', 'r="17"'), encoding='utf-8')
+            artwork = design / 'svg/model/box.svg'
+            before = artwork.stat()
+            artwork.write_text(SVG.replace('r="20"', 'r="17"'), encoding='utf-8')
+            # Equal-length edits can share a filesystem timestamp on fast CI hosts.
+            # Reproduce that deterministically: acceptance must track the content.
+            os.utime(artwork, ns=(before.st_atime_ns, before.st_mtime_ns))
+            self.assertEqual(artwork.stat().st_size, before.st_size)
+            self.assertEqual(artwork.stat().st_mtime_ns, before.st_mtime_ns)
             with self.assertRaises(urllib.error.HTTPError) as error:
                 post(changed, final=['box'])
             self.assertEqual(error.exception.code, 400)

@@ -330,15 +330,7 @@ fn group(s: &mut Session, p: &Value) -> Result<Value> {
         Some(_) => return Err(bad(cmd, "`name` must be 1…128 characters")),
         None => format!("Folder{}", s.doc.timeline_groups.len() + 1),
     };
-    let id = s
-        .doc
-        .timeline_groups
-        .iter()
-        .map(|group| group.id)
-        .max()
-        .unwrap_or(0)
-        .checked_add(1)
-        .ok_or_else(|| bad(cmd, "no more timeline folder ids are available"))?;
+    let id = s.doc_mut().allocate_id()?;
     let parent = match p.get("parent") {
         Some(Value::Null) | None => None,
         Some(_) => Some(timeline_group_id_field(s, p, "parent", cmd)?),
@@ -1075,7 +1067,7 @@ fn reorder(s: &mut Session, p: &Value) -> Result<Value> {
     sort_group_features(&mut next);
     require_contiguous_groups(&next, cmd)?;
     // Everything that evaluated before must still evaluate.
-    let mut after = solidcraft_doc::Model::new();
+    let mut after = s.model.clone();
     after.evaluate(&next);
     let broken = newly_broken(&s.model, &after);
     if !broken.is_empty() {
@@ -1253,6 +1245,11 @@ fn redefine(s: &mut Session, p: &Value) -> Result<Value> {
     if std::mem::discriminant(&new.kind) != std::mem::discriminant(&old.kind) && !(boundary(&new.kind) && boundary(&old.kind)) {
         return Err(bad(cmd, format!("{} is not a {} feature", old.name, cid)));
     }
+    // The trial still holds the old feature, so a plane offset from its own name was made there,
+    // and once swapped in it would be built on itself (#3567).
+    if new.kind.names_feature(&old.name) {
+        return Err(bad(cmd, format!("{} can't be built on itself: pick another plane or face", old.name)));
+    }
     // Optional inputs can move other inputs' positions (e.g. Distance 2 goes before Taper).
     // Keep each existing model parameter attached to its semantic input, rather than its
     // old index. Constructor-assigned names for new inputs cannot reuse the old dimensions.
@@ -1338,7 +1335,10 @@ fn dependents(s: &mut Session, p: &Value) -> Result<Value> {
     let id = feature_id(s, p.get("feature"), cmd)?;
     let mut next = (*s.doc).clone();
     let gone = next.delete_feature(id)?;
-    let mut after = solidcraft_doc::Model::new();
+    // On a copy of the session's model, which shares its evaluation cache (#2678): the features
+    // before this one are reused rather than recomputed, and the delete that usually follows
+    // finds the ones after it already computed.
+    let mut after = s.model.clone();
     after.evaluate(&next);
     let names = |ids: &[u64]| -> Vec<String> { ids.iter().filter(|x| **x != id).filter_map(|x| s.doc.feature(*x).map(|f| f.name.clone())).collect() };
     let broken: Vec<String> = newly_broken(&s.model, &after).into_iter().map(|(n, _)| n).collect();

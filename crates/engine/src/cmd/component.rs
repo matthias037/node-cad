@@ -107,8 +107,14 @@ pub(super) fn valid_position(m: &Mat) -> bool {
         && (m[3][3] - 1.0).abs() < 1e-9
 }
 
-fn new_component(s: &mut Session, p: &Value) -> Result<Value> {
+pub(super) fn new_component(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "component.create";
+    if let Some(params) = p.as_object()
+        && let Some(key) = params.keys().find(|key| !matches!(key.as_str(), "name" | "parent" | "parent_path" | "activate"))
+    {
+        let hint = if params.contains_key("bodies") { "; use component.move_bodies or component.from_bodies to move bodies" } else { "" };
+        return Err(bad(cmd, format!("unknown parameter `{key}`; accepted parameters: name, parent, parent_path, activate{hint}")));
+    }
     let parent = if p.get("parent").is_some() { component(s, p, "parent", cmd)? } else { s.active_component };
     let parent_path = if let Some(value) = p.get("parent_path") {
         let path = value
@@ -312,7 +318,7 @@ fn move_sketches(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"sketches": ids, "component": to}))
 }
 
-fn copy_occurrence(s: &mut Session, p: &Value) -> Result<Value> {
+pub(super) fn copy_occurrence(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "occurrence.copy";
     let selected = if p.get("occurrence").is_some() {
         let o = occurrence(s, p, cmd)?;

@@ -15,6 +15,9 @@ use super::CommandSpec;
 use crate::params::{bad, str_, vec3};
 use crate::{EngineError, Result, Session};
 
+#[path = "component_extract.rs"]
+mod extract;
+
 #[cfg(test)]
 #[path = "component_relink_tests.rs"]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -23,7 +26,8 @@ mod relink_tests;
 pub static COMMANDS: &[CommandSpec] = &[
     CommandSpec::new("component.insert_design", "Insert Design", insert_design).at("SOLID", "ASSEMBLE").icon("component").params(
         "path: a .solidcraft design → a new component linked to it, holding its solid bodies as placed in that design; \
-         name? (default: the design's name); parent?: component id or name (default: the active one); translate?: [x,y,z]",
+         name? (default: the design's name); parent?: component id or name (default: the active one); translate?: [x,y,z]; \
+         reuse?: bool (default false): insert another occurrence of an existing link to the same file",
     ),
     CommandSpec::new("component.update_links", "Update Links", update_links).icon("update").params(
         "component?: id or name (default: every linked component) — reads the linked designs again and replaces their bodies where they changed",
@@ -34,6 +38,19 @@ pub static COMMANDS: &[CommandSpec] = &[
     CommandSpec::new("component.break_link", "Break Link", break_link)
         .icon("break")
         .params("component: id or name of a linked component — keeps its bodies as they are and forgets the design file"),
+    CommandSpec::new("component.extract", "Extract to File", extract::extract).icon("export").params(
+        "component: id or name of a component that is not linked; path: the .solidcraft design to write → its history, subcomponents and their joints \
+         move to that design, and the component becomes linked to it (as component.insert_design makes it); returns path, file, feature, bodies, \
+         notices (what stays behind), warnings and copies (components that build the same bodies: see component.replace_with_link)",
+    ),
+    CommandSpec::new("component.copies", "Find Identical Copies", extract::copies).icon("inspect").noundo().params(
+        "component: id or name of a linked component → copies: [{component, name}], the components not linked whose own history builds the same bodies",
+    ),
+    CommandSpec::new("component.replace_with_link", "Replace with Link", extract::replace_with_link).icon("chain").params(
+        "component or components: [ids or names] of components that are not linked; with: a linked component, or path: a .solidcraft design \
+         (its link here, else a new linked component) → each component's history goes and its placements become placements of the linked \
+         component; refused when its bodies are not the same as the link's; returns component, name, replaced and warnings",
+    ),
     CommandSpec::new("component.links", "List Links", list_links)
         .icon("chain")
         .noundo()
@@ -111,8 +128,12 @@ fn linked_bodies(file: &Path, own: Option<&str>) -> Result<(String, solidcraft_i
     }
     let bytes = solidcraft_io::vfs::read(&shown, solidcraft_io::MAX_DESIGN_BYTES).map_err(|e| EngineError::Other(format!("{shown}: {e}")))?;
     let doc = solidcraft_io::read_design(&bytes).map_err(|e| EngineError::Other(format!("{shown}: {e}")))?;
-    let name = doc.name.clone();
-    let part = Session::new(doc);
+    session_bodies(&Session::new(doc), &shown)
+}
+
+/// The solid bodies of `part`, the design saved as `shown`, as an Import feature.
+fn session_bodies(part: &Session, shown: &str) -> Result<(String, solidcraft_io::StepFeature)> {
+    let name = part.doc.name.clone();
     if let Some(e) = part.model.results.iter().find_map(|r| r.error.clone()) {
         return Err(EngineError::Other(format!("{shown}: the design has a feature that fails ({e}); fix it before linking it")));
     }
@@ -123,7 +144,7 @@ fn linked_bodies(file: &Path, own: Option<&str>) -> Result<(String, solidcraft_i
     }
     let step = solidcraft_io::export(&part.doc.painted(&world), &solids, solidcraft_io::Format::Step, &name)
         .map_err(|e| EngineError::Other(format!("{shown}: {e}")))?;
-    let mut feature = solidcraft_io::step_import_feature(&step, &shown).map_err(|e| EngineError::Other(format!("{shown}: {e}")))?;
+    let mut feature = solidcraft_io::step_import_feature(&step, shown).map_err(|e| EngineError::Other(format!("{shown}: {e}")))?;
     if world.bodies.len() > solids.len() {
         feature.warnings.push(format!("{} mesh bodies of {shown} are not linked", world.bodies.len() - solids.len()));
     }
@@ -147,13 +168,23 @@ fn insert_design(s: &mut Session, p: &Value) -> Result<Value> {
         Some(v) => vec3(v).filter(|t| t.is_finite() && t.len() < 1e9).ok_or_else(|| bad(cmd, "`translate` must be [x, y, z] in mm"))?,
     };
     let file = absolute(Path::new(given));
+    if s.path.as_deref().is_some_and(|own| absolute(Path::new(own)) == file) {
+        return Err(bad(cmd, "a design can't be linked into itself"));
+    }
+    if p.get("reuse").and_then(Value::as_bool).unwrap_or(false) {
+        let existing = s.doc.links.iter().find(|(_, link)| absolute(&resolve(s.path.as_deref(), &link.path)) == file).map(|(id, _)| *id);
+        if let Some(component) = existing {
+            let parent = p.get("parent").cloned().unwrap_or_else(|| json!(s.active_component));
+            return super::component::copy_occurrence(s, &json!({"component": component, "parent": parent, "translate": translate}));
+        }
+    }
     let (design_name, sf) = linked_bodies(&file, s.path.as_deref())?;
     let name = str_(p, "name").filter(|n| !n.trim().is_empty()).map(str::to_string).unwrap_or(design_name);
     let mut create = json!({"name": name, "activate": false});
     if let Some(parent) = p.get("parent") {
         create["parent"] = parent.clone();
     }
-    let made = s.execute("component.create", &create)?;
+    let made = super::component::new_component(s, &create)?;
     let comp = made["component"].as_u64().ok_or_else(|| bad(cmd, "the component was not created"))?;
     let occ = made["occurrence"].as_u64();
     let id = s.doc_mut().add_feature(sf.kind, Some(&name))?;
