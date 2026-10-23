@@ -550,9 +550,14 @@ pub fn offered(app: &SolveApp) -> Option<&Release> {
     app.preferences.update.offers(r, current_version(), unix_now()).then_some(r)
 }
 
+/// Whether release builds look for new releases. Off: NØDE CAD has no release feed of its own yet,
+/// and the upstream feed (LATEST_API) would offer SolidCraft builds in place of NØDE CAD.
+const RELEASE_CHECKS: bool = false;
+
 /// Checks may run here: a release build with the host's HTTP client, or a test feed.
 pub fn available(app: &mut SolveApp) -> bool {
-    !app.updater.off && (app.updater.feed.is_some() || (app.services.http_get.is_some() && app.updater.kind().checks()))
+    let network = RELEASE_CHECKS && app.services.http_get.is_some() && app.updater.kind().checks();
+    !app.updater.off && (app.updater.feed.is_some() || network)
 }
 
 /// Per frame: the first frame of each launch starts an automatic check, the open app checks

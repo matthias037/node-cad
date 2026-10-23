@@ -236,7 +236,7 @@ fn a_control_import_passes_up_and_names_on() {
     src.execute("file.export", &json!({"path": path})).unwrap();
     // Another program's file: SolidCraft's own exports are not offered (#5150).
     let text = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, text.replace("'SolidCraft','SolidCraft'", "'SolidCraft','Example CAD'")).unwrap();
+    std::fs::write(&path, text.replace("'NØDE CAD','NØDE CAD'", "'NØDE CAD','Example CAD'")).unwrap();
 
     // The reply, the part's height and whether the offer is up, for an import by this window.
     let import = |params: serde_json::Value| {

@@ -1,6 +1,6 @@
 {
-  "name": "SolidCraft",
-  "short_name": "SolidCraft",
+  "name": "NØDE CAD",
+  "short_name": "NØDE CAD",
   "description": "Open-source parametric CAD built in Rust.",
   "start_url": "./",
   "scope": "./",

@@ -156,7 +156,7 @@ fn chamfer_and_step() {
     let b = box_solid(Vec3::ZERO, Vec3::new(20.0, 20.0, 20.0)).unwrap();
     let c = chamfer(&b, &[Vec3::new(20.0, 10.0, 20.0)], 2.0).unwrap();
     assert!(rel(measure(&c).unwrap().volume, 8000.0 - 2.0 * 20.0) < 1e-4);
-    let s = step_export(&[&c], "SolidCraft").unwrap();
+    let s = step_export(&[&c], "NODE CAD").unwrap();
     assert!(s.starts_with("ISO-10303-21;"));
     assert!(s.contains("MANIFOLD_SOLID_BREP") || s.contains("CLOSED_SHELL"));
 }
@@ -960,7 +960,7 @@ fn connected_logo_join_preserves_exact_faces_at_edge_contact() {
     let tops =
         logo.faces(0.01).unwrap().iter().filter(|f| f.plane_normal.is_some_and(|n| n.z > 0.999999) && (f.centroid.z - 20.0).abs() < 1e-9).count();
     assert_eq!(tops, 1);
-    let text = step_export(&[&logo], "SolidCraft").unwrap();
+    let text = step_export(&[&logo], "NODE CAD").unwrap();
     let imported = step_import(&text).unwrap();
     assert_eq!(imported.bodies.len(), 1);
     let roundtrip = &imported.bodies.first().unwrap().body;

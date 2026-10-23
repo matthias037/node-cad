@@ -159,7 +159,7 @@ pub static DESIGN_SAVE_OPTIONS: &[OptionSpec] = &[
     OptionSpec {
         param: "format",
         label: "Format",
-        kind: OptionKind::Choice { choices: &[("container", "SolidCraft container"), ("json", "Plain JSON design")], default: 0 },
+        kind: OptionKind::Choice { choices: &[("container", "NØDE CAD container"), ("json", "Plain JSON design")], default: 0 },
     },
     OptionSpec {
         param: "compression",
@@ -176,7 +176,7 @@ pub static DESIGN_SAVE_OPTIONS: &[OptionSpec] = &[
 pub static FORMATS: &[FormatSpec] = &[
     FormatSpec {
         id: "design",
-        label: "SolidCraft design",
+        label: "NØDE CAD design",
         extensions: &[crate::DESIGN_EXT, crate::LEGACY_DESIGN_EXT, "json"],
         role: Role::Design,
         import: Some(ImportSpec { target: ImportTarget::Design, options: &[], native_only: false }),
@@ -369,7 +369,7 @@ pub fn import_filters(native: bool) -> Vec<(&'static str, Vec<&'static str>)> {
     for f in importable(native) {
         let Some(import) = f.import.as_ref() else { continue };
         match import.target {
-            ImportTarget::Design => add("SolidCraft design (container or JSON)", f.extensions),
+            ImportTarget::Design => add("NØDE CAD design (container or JSON)", f.extensions),
             ImportTarget::Brep if import.native_only => add("FreeCAD and Rhino", f.extensions),
             ImportTarget::Brep => add(f.label, f.extensions),
             ImportTarget::Mesh => add("Mesh (3MF, STL, OBJ, glTF)", f.extensions),
@@ -465,7 +465,7 @@ mod tests {
     fn import_filter_groups_hold_the_expected_extensions() {
         let native = import_filters(true);
         let find = |label: &str| native.iter().find(|(l, _)| *l == label).map(|(_, e)| e.clone()).unwrap_or_default();
-        assert_eq!(find("SolidCraft design (container or JSON)"), vec![crate::DESIGN_EXT, crate::LEGACY_DESIGN_EXT, "json"]);
+        assert_eq!(find("NØDE CAD design (container or JSON)"), vec![crate::DESIGN_EXT, crate::LEGACY_DESIGN_EXT, "json"]);
         assert_eq!(find("STEP"), vec!["step", "stp"]);
         assert_eq!(find("IGES"), vec!["igs", "iges"]);
         assert_eq!(find("FreeCAD and Rhino"), vec!["fcstd", "3dm"]);

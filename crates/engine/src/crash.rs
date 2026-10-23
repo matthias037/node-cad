@@ -447,12 +447,12 @@ fn hook(info: &std::panic::PanicHookInfo<'_>) -> bool {
                 q.push(p);
             }
         });
-        eprintln!("SolidCraft: internal error caught in a command; a crash report will be written");
+        eprintln!("NØDE CAD: internal error caught in a command; a crash report will be written");
     } else {
         // Outside any command: what the journal knows has to do.
         let kind = if recovered { "kernel_panic_recovered" } else { "panic" };
         if let Some(id) = write_from_journal(state, kind, Some(&p)) {
-            eprintln!("SolidCraft: internal error; crash report {}", state.dir.join(&id).display());
+            eprintln!("NØDE CAD: internal error; crash report {}", state.dir.join(&id).display());
             if !recovered && let Ok(mut j) = state.journal.try_lock() {
                 j.record(&json!({ "reported": id }));
             }
@@ -806,14 +806,14 @@ fn unclean_exit(dir: &Path, build: &Build, journal: &Path) {
                 frames.push(format!("on thread {t}"));
             }
             (
-                format!("SolidCraft {was} (started {when}) crashed with {name} ({code}) in {at} {during}"),
+                format!("NØDE CAD {was} (started {when}) crashed with {name} ({code}) in {at} {during}"),
                 format!("native exception in {at}"),
                 format!("{code} {short} {}", starting.as_ref().map_or(doing.unwrap_or("idle"), |(p, _)| p.as_str())),
                 frames,
             )
         }
         None => (
-            format!("SolidCraft {was} (started {when}) ended without a clean exit {during}"),
+            format!("NØDE CAD {was} (started {when}) ended without a clean exit {during}"),
             match (&starting, doing) {
                 (Some((p, _)), _) => format!("unclean exit during startup: {p}"),
                 (None, c) => format!("unclean exit in {}", c.unwrap_or("(between commands)")),

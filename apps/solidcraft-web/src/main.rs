@@ -657,7 +657,7 @@ mod web {
                             let rev = app.session.revision;
                             app.home.show(rev);
                         }
-                        let api = Api::install(sender, cc.egui_ctx.clone()).map_err(|e| format!("SolidCraft browser API: {e:?}"))?;
+                        let api = Api::install(sender, cc.egui_ctx.clone()).map_err(|e| format!("NØDE CAD browser API: {e:?}"))?;
                         let font_language = app.preferences.language.clone();
                         Ok(Box::new(Shell {
                             app,
@@ -681,7 +681,7 @@ mod web {
                 match result {
                     Ok(()) => dismiss_loading(el),
                     Err(e) => {
-                        el.set_inner_html(&format!("<p>SolidCraft failed to start: {e:?}</p><p>A browser with WebGPU or WebGL2 is required.</p>"))
+                        el.set_inner_html(&format!("<p>NØDE CAD failed to start: {e:?}</p><p>A browser with WebGPU or WebGL2 is required.</p>"))
                     }
                 }
             }

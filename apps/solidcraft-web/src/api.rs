@@ -83,12 +83,12 @@ impl Api {
             Err(message) => return js_sys::Promise::reject(&error(&message)),
         };
         if self.pending.borrow().len() >= MAX_PENDING {
-            return js_sys::Promise::reject(&error("too many pending SolidCraft requests (maximum 256)"));
+            return js_sys::Promise::reject(&error("too many pending NØDE CAD requests (maximum 256)"));
         }
         js_sys::Promise::new(&mut |resolve, reject| {
             let (request, reply) = ControlRequest::new(method, params.clone());
             if self.sender.send(request).is_err() {
-                let _ = reject.call1(&JsValue::UNDEFINED, &error("SolidCraft is not running"));
+                let _ = reject.call1(&JsValue::UNDEFINED, &error("NØDE CAD is not running"));
                 return;
             }
             self.pending.borrow_mut().push(Pending { reply, resolve, reject });
@@ -104,11 +104,11 @@ impl Api {
                     if reply.get("ok").and_then(Value::as_bool) == Some(true) {
                         js_sys::JSON::parse(&reply.get("result").unwrap_or(&Value::Null).to_string())
                     } else {
-                        Err(error(reply.get("error").and_then(Value::as_str).unwrap_or("SolidCraft request failed")))
+                        Err(error(reply.get("error").and_then(Value::as_str).unwrap_or("NØDE CAD request failed")))
                     }
                 }
                 Err(TryRecvError::Empty) => return true,
-                Err(TryRecvError::Disconnected) => Err(error("SolidCraft request dropped")),
+                Err(TryRecvError::Disconnected) => Err(error("NØDE CAD request dropped")),
             };
             completed.push((pending.resolve.clone(), pending.reject.clone(), result));
             false

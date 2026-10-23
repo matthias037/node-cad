@@ -186,7 +186,7 @@ mod tests {
         std::fs::create_dir_all(d.join(id)).unwrap();
         let report = json!({
             "format": "solidcraft-crash/1", "id": id, "kind": "unclean_exit", "count": 2,
-            "first_seen": "2026-10-12T16:23:41Z", "message": "SolidCraft ended without a clean exit while running `solid.fillet`",
+            "first_seen": "2026-10-12T16:23:41Z", "message": "NØDE CAD ended without a clean exit while running `solid.fillet`",
             "location": "unclean exit in solid.fillet", "thread": "(unknown)", "backtrace": [],
             "command": {"command": "solid.fillet", "params": {"radius": 2}},
             "recent_commands": [{"command": "solid.box", "ok": true}],
@@ -207,14 +207,14 @@ mod tests {
         let id = "20261012-162341-bb60791ed6692f1d";
         let path = d.join(id).join("report.json");
         let mut report: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-        report["message"] = json!("SolidCraft 0.3.2 (started 2026-10-01T10:00:00Z) ended without a clean exit between commands");
+        report["message"] = json!("NØDE CAD 0.3.2 (started 2026-10-01T10:00:00Z) ended without a clean exit between commands");
         report["command"] = serde_json::Value::Null;
         std::fs::write(&path, report.to_string()).unwrap();
         super::announce(&mut h.app, &solidcraft_engine::crash::list(&d));
         h.frames(6);
         assert!(h.app.crashes.open, "unclean exits still alert the user");
         let status = &h.app.status.as_ref().unwrap().0;
-        assert!(status.contains("earlier SolidCraft session"), "{status}");
+        assert!(status.contains("earlier NØDE CAD session"), "{status}");
         assert!(status.contains("detected at startup"), "{status}");
         assert!(h.widget("Detected 2026-10-12 16:23:41 UTC  Closed unexpectedly  ×2").is_some());
         assert!(h.widget(report["message"].as_str().unwrap()).is_some(), "keep the original session start visible");
@@ -254,7 +254,7 @@ mod tests {
         h.step(&json!({"widget": "Report…"})).unwrap();
         h.frames(2);
         let draft = h.app.issue_report.draft.as_ref().expect("Report… opens the draft");
-        assert!(draft.title.starts_with("Crash: SolidCraft ended without a clean exit"), "{}", draft.title);
+        assert!(draft.title.starts_with("Crash: NØDE CAD ended without a clean exit"), "{}", draft.title);
         for want in [
             "while running `solid.fillet`",
             "\"radius\": 2",

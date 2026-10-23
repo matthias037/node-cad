@@ -56,7 +56,7 @@ pub fn copy_design(app: &mut SolveApp) -> bool {
         return false;
     };
     app.linked_design_clipboard = Some(path);
-    leave_text(format!("SolidCraft linked design: {}", app.session.doc.name));
+    leave_text(format!("NØDE CAD linked design: {}", app.session.doc.name));
     app.set_status("Copied design: switch to the assembly and paste to insert a linked component", false);
     true
 }
@@ -76,7 +76,7 @@ pub fn copy(app: &mut SolveApp) -> bool {
         app.linked_design_clipboard = None;
         let n = out.get("curves").and_then(Value::as_u64).unwrap_or(0) + out.get("points").and_then(Value::as_u64).unwrap_or(0);
         let k = out.get("constraints").and_then(Value::as_u64).unwrap_or(0);
-        let text = format!("SolidCraft sketch geometry: {n} entities, {k} constraints and dimensions");
+        let text = format!("NØDE CAD sketch geometry: {n} entities, {k} constraints and dimensions");
         app.set_status(format!("Copied {n} sketch entities with {k} constraints and dimensions"), false);
         leave_text(text);
         return true;
@@ -90,7 +90,7 @@ pub fn copy(app: &mut SolveApp) -> bool {
     app.linked_design_clipboard = None;
     let names: Vec<&str> = out.get("copied").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
     app.set_status(format!("Copied {}", names.join(", ")), false);
-    leave_text(format!("SolidCraft features: {}", names.join(", ")));
+    leave_text(format!("NØDE CAD features: {}", names.join(", ")));
     true
 }
 
@@ -109,7 +109,7 @@ pub fn cut(app: &mut SolveApp) -> bool {
     app.linked_design_clipboard = None;
     let n = out.get("curves").and_then(Value::as_u64).unwrap_or(0) + out.get("points").and_then(Value::as_u64).unwrap_or(0);
     app.set_status(format!("Cut {n} sketch entities"), false);
-    leave_text(format!("SolidCraft sketch geometry: {n} entities"));
+    leave_text(format!("NØDE CAD sketch geometry: {n} entities"));
     true
 }
 

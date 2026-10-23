@@ -291,7 +291,7 @@ impl Formats<'_> {
     /// newer build's, and the design is refused.
     fn upgrade(&self, v: &mut Value, version: u32, applied: Option<&[String]>) -> Result<()> {
         if version == 0 || version > self.current() {
-            return Err(DocError::Invalid(format!("not a SolidCraft design (format {version})")));
+            return Err(DocError::Invalid(format!("not a NØDE CAD design (format {version})")));
         }
         // A list beside a format that isn't made of changes means nothing (a tool or a test set
         // an older number on a newer file): it is ignored, like any field an upgrade drops.
@@ -299,7 +299,7 @@ impl Formats<'_> {
             let pending = version == self.current() && !self.pending.is_empty();
             if let Some(unknown) = applied.iter().find(|name| pending && !parts.iter().any(|p| p.name == name.as_str())) {
                 return Err(DocError::Invalid(format!(
-                    "this design was saved by a newer SolidCraft (file format {version} with `{unknown}`, which this version doesn't know): update SolidCraft to open it"
+                    "this design was saved by a newer NØDE CAD (file format {version} with `{unknown}`, which this version doesn't know): update NØDE CAD to open it"
                 )));
             }
             for part in parts.iter().filter(|p| !applied.iter().any(|name| name == p.name)) {
@@ -547,22 +547,22 @@ fn v2_to_v3(v: &mut Value) -> Result<()> {
 
 /// Read a design file's JSON, upgrading older formats.
 pub fn read(s: &str) -> Result<Document> {
-    let mut v: Value = serde_json::from_str(s).map_err(|e| DocError::Invalid(format!("not a SolidCraft design: {e}")))?;
+    let mut v: Value = serde_json::from_str(s).map_err(|e| DocError::Invalid(format!("not a NØDE CAD design: {e}")))?;
     let Some(obj) = v.as_object() else {
-        return Err(DocError::Invalid("not a SolidCraft design (expected a JSON object)".into()));
+        return Err(DocError::Invalid("not a NØDE CAD design (expected a JSON object)".into()));
     };
     let version = match obj.get("format") {
         None => 1,
-        Some(Value::String(f)) => version_of(f).ok_or_else(|| DocError::Invalid(format!("not a SolidCraft design (format `{f}`)")))?,
-        Some(_) => return Err(DocError::Invalid("not a SolidCraft design (format is not a string)".into())),
+        Some(Value::String(f)) => version_of(f).ok_or_else(|| DocError::Invalid(format!("not a NØDE CAD design (format `{f}`)")))?,
+        Some(_) => return Err(DocError::Invalid("not a NØDE CAD design (format is not a string)".into())),
     };
     let applied = take_pending(&mut v)?;
     if version == 0 {
-        return Err(DocError::Invalid("not a SolidCraft design (format 0)".into()));
+        return Err(DocError::Invalid("not a NØDE CAD design (format 0)".into()));
     }
     if version > FORMAT {
         return Err(DocError::Invalid(format!(
-            "this design was saved by a newer SolidCraft (file format {version}; this version reads formats up to {FORMAT}): update SolidCraft to open it"
+            "this design was saved by a newer NØDE CAD (file format {version}; this version reads formats up to {FORMAT}): update NØDE CAD to open it"
         )));
     }
     check_design_numbers(&v)?;
@@ -1193,7 +1193,7 @@ mod tests {
         assert_eq!(trace_of(&v), Vec::<&str>::new());
         // A change this build doesn't know is a newer build's: refused, not guessed at.
         let err = formats.upgrade(&mut serde_json::json!({}), next, Some(&["c-later".into()])).unwrap_err();
-        assert!(err.to_string().contains("newer SolidCraft"), "{err}");
+        assert!(err.to_string().contains("newer NØDE CAD"), "{err}");
         // A list on a format that isn't made of changes means nothing.
         let mut v = serde_json::json!({});
         formats.upgrade(&mut v, HAND_WRITTEN, Some(&["a-first".into()])).unwrap();
@@ -1702,7 +1702,7 @@ mod tests {
             let error = read(&value.to_string()).unwrap_err().to_string();
             assert!(error.contains("free-form offset metadata"), "{error}");
             value["format"] = Value::from(format_string(FORMAT + 1));
-            assert!(read(&value.to_string()).unwrap_err().to_string().contains("newer SolidCraft"));
+            assert!(read(&value.to_string()).unwrap_err().to_string().contains("newer NØDE CAD"));
         }
     }
 
@@ -1727,7 +1727,7 @@ mod tests {
             assert!(error.contains("emboss face"), "{error}");
             value["format"] = Value::from(format_string(FORMAT + 1));
             let error = read(&value.to_string()).unwrap_err().to_string();
-            assert!(error.contains("newer SolidCraft"), "{error}");
+            assert!(error.contains("newer NØDE CAD"), "{error}");
         }
     }
 
@@ -1791,7 +1791,7 @@ mod tests {
         value["configs"]["columns"] = serde_json::json!([{"unknown_future_column":"Body"}]);
         value["configs"]["rules"] = serde_json::json!({"unknown_future_rule": true});
         let error = read(&value.to_string()).unwrap_err().to_string();
-        assert!(error.contains("newer SolidCraft") && error.contains("update SolidCraft"), "{error}");
+        assert!(error.contains("newer NØDE CAD") && error.contains("update NØDE CAD"), "{error}");
         assert!(!error.contains("unknown variant"), "format refusal precedes decoding new variants");
     }
 
@@ -1848,7 +1848,7 @@ mod tests {
         saved["format"] = Value::from(format_string(FORMAT + 1));
         saved["features"][0]["sketch"]["constraints"][0]["type"] = Value::from("future_dimension");
         let error = read(&saved.to_string()).unwrap_err().to_string();
-        assert!(error.contains("newer SolidCraft") && !error.contains("unknown variant"), "{error}");
+        assert!(error.contains("newer NØDE CAD") && !error.contains("unknown variant"), "{error}");
     }
 
     #[test]
@@ -1963,7 +1963,7 @@ mod tests {
         assert!(read(&v.to_string()).is_ok(), "a file without a format is format 1");
         v["format"] = Value::from(format_string(FORMAT + 1));
         let e = read(&v.to_string()).unwrap_err().to_string();
-        assert!(e.contains("newer SolidCraft"), "{e}");
+        assert!(e.contains("newer NØDE CAD"), "{e}");
         for bad in ["solidcraft/0", "acad/3", "solidcraft/-1", "solidcraft/99999999999999999999"] {
             v["format"] = Value::from(bad);
             assert!(read(&v.to_string()).is_err(), "{bad}");

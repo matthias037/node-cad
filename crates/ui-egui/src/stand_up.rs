@@ -20,8 +20,8 @@ pub fn offer(app: &mut SolveApp, path: &str, before: &[String], result: Option<&
         return;
     }
     let text = |k: &str| result.and_then(|r| r.get(k)).and_then(serde_json::Value::as_str);
-    // SolidCraft's own STEP exports already use Z up.
-    if text("system") == Some("SolidCraft") || text("exporter_up") == Some("z") {
+    // Our own STEP exports (and SolidCraft's, the upstream project) already use Z up.
+    if matches!(text("system"), Some("NODE CAD" | "SolidCraft")) || text("exporter_up") == Some("z") {
         return;
     }
     let bodies: Vec<String> = app.session.world_state().bodies.iter().map(|b| b.name.clone()).filter(|n| !before.contains(n)).collect();

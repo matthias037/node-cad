@@ -574,7 +574,7 @@ fn start_driver_client(ctx: &Context, shared: &Arc<Mutex<Reading>>) {
     use solidcraft_3dx_client::Event;
     let (ctx, shared) = (ctx.clone(), Arc::clone(shared));
     let started = solidcraft_3dx_client::start(
-        "SolidCraft",
+        "NODE CAD",
         move |event| match event {
             Event::DeviceAdded => {
                 DRIVER_CONNECTED.store(true, Ordering::Relaxed);

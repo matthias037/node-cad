@@ -430,7 +430,7 @@ mod tests {
         assert!((crate::measure(&converted).unwrap().volume - crate::measure(&source).unwrap().volume).abs() < 1e-7);
         assert_eq!(crate::measure(&converted).unwrap().merged.face_types.get("cylinder"), Some(&1));
         assert!(converted.faces(0.01).unwrap().len() < 15);
-        let step = crate::step_export(&[&converted], "SolidCraft regression").unwrap();
+        let step = crate::step_export(&[&converted], "NODE CAD regression").unwrap();
         let reopened = crate::step_import(&step).unwrap();
         assert!((fine_volume(&reopened.bodies[0].body) - expected).abs() < 0.02);
     }

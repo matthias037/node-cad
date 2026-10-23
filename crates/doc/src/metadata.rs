@@ -193,7 +193,7 @@ fn check(key: &str, value: Value) -> Result<Option<Value>> {
     }
     let shown: String = key.chars().take(64).collect();
     Err(invalid(format!(
-        "`{shown}` is not a design property: SolidCraft's are {}; another tool's data goes under a reverse-DNS key such as `com.example.tool`",
+        "`{shown}` is not a design property: NØDE CAD's are {}; another tool's data goes under a reverse-DNS key such as `com.example.tool`",
         WELL_KNOWN.join(", ")
     )))
 }

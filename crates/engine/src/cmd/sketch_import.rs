@@ -109,7 +109,7 @@ fn insert(s: &mut Session, p: &Value, cmd: &str, svg: bool) -> Result<Value> {
     let text = source_text(p, cmd)?;
     let geom = if svg { solidcraft_io::read_svg(&text) } else { solidcraft_io::read_dxf(&text) }.map_err(|e| bad(cmd, e.to_string()))?;
     if geom.is_empty() {
-        return Err(bad(cmd, "the drawing has no geometry SolidCraft reads"));
+        return Err(bad(cmd, "the drawing has no geometry NØDE CAD reads"));
     }
     let k = num(p, "scale").filter(|k| *k > 1e-9 && *k < 1e6).unwrap_or(1.0);
     let off = p.get("at").and_then(vec2).unwrap_or(Vec2::ZERO);

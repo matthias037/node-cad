@@ -271,7 +271,7 @@ pub fn export(app: &SolveApp) -> Value {
 pub fn import(app: &mut SolveApp, v: &Value) -> Result<(), String> {
     // "solvecraft-shortcuts/1": files exported before the rename (compatibility shim).
     if !matches!(v.get("format").and_then(Value::as_str), Some("solidcraft-shortcuts/1" | "solvecraft-shortcuts/1")) {
-        return Err("not a SolidCraft shortcuts file".into());
+        return Err("not a NØDE CAD shortcuts file".into());
     }
     if let Some(s) = v.get("shortcuts") {
         app.keymap.load(s);

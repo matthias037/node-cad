@@ -103,7 +103,7 @@ fn step_export_of_a_flanged_enclosure_finishes_and_reads_back() {
 /// volume and area, and the number of faces the file holds.
 fn read_back(s: &Session, body: &solidcraft_kernel::Body) -> (String, usize) {
     assert!(s.model.results.iter().all(|r| r.error.is_none()), "{:?}", s.model.results);
-    let text = solidcraft_kernel::step_export(&[body], "SolidCraft").unwrap();
+    let text = solidcraft_kernel::step_export(&[body], "NØDE CAD").unwrap();
     let imp = solidcraft_kernel::step_import(&text).unwrap();
     assert!(imp.warnings.is_empty(), "{:?}", imp.warnings);
     assert_eq!(imp.bodies.len(), 1);

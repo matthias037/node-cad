@@ -51,7 +51,7 @@ pub struct Remote {
 
 /// How a tool error starts when no app listens at the bridged address. The agent reads it, and
 /// `batch` uses it to tell "never sent" from "sent, reply lost".
-pub(crate) const NOT_RUNNING: &str = "no SolidCraft app is listening at";
+pub(crate) const NOT_RUNNING: &str = "no NØDE CAD app is listening at";
 
 impl Remote {
     /// Connect to the app at `addr`, with its control token found the usual way
@@ -112,7 +112,7 @@ impl Remote {
             )
         } else {
             format!(
-                "the SolidCraft app at {addr} did not answer ({e}): it may have quit or crashed during this call, after                  running it or not. Inspect the design before sending a change again; if the app quit, start it with                  `solidcraft --control {port}`"
+                "the NØDE CAD app at {addr} did not answer ({e}): it may have quit or crashed during this call, after                  running it or not. Inspect the design before sending a change again; if the app quit, start it with                  `solidcraft --control {port}`"
             )
         }
     }
@@ -200,7 +200,7 @@ impl Backend for Remote {
     }
     fn describe(&self) -> String {
         if self.conn.is_some() {
-            format!("connected to the SolidCraft app at {} (the user watches the viewport)", self.addr)
+            format!("connected to the NØDE CAD app at {} (the user watches the viewport)", self.addr)
         } else {
             // Still "connected to the SolidCraft app": the skills tell bridged from headless by it.
             format!(
@@ -310,7 +310,7 @@ impl Backend for Headless {
         false
     }
     fn describe(&self) -> String {
-        "headless in-process SolidCraft session".into()
+        "headless in-process NØDE CAD session".into()
     }
     fn design_path(&self) -> Option<String> {
         self.session.path.clone()

@@ -706,7 +706,7 @@ fn write_xml(model: &UrdfModel, name: &str, options: &UrdfOptions) -> String {
     let effort = options.effort.filter(|x| x.is_finite() && *x > 0.0).unwrap_or(DEFAULT_EFFORT);
     let velocity = options.velocity.filter(|x| x.is_finite() && *x > 0.0).unwrap_or(DEFAULT_VELOCITY);
     let prefix = attr(&options.mesh_prefix);
-    let mut s = String::from("<?xml version=\"1.0\"?>\n<!-- Exported by SolidCraft; units: m, kg, rad -->\n");
+    let mut s = String::from("<?xml version=\"1.0\"?>\n<!-- Exported by NODE CAD; units: m, kg, rad -->\n");
     s += &format!("<robot name=\"{}\">\n", attr(name));
     for l in &model.links {
         s += &format!("  <link name=\"{}\">\n", attr(&l.name));

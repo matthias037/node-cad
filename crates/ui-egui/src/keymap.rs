@@ -141,7 +141,7 @@ fn sketch_tool_for(app: &SolveApp, key: &str) -> Option<&'static str> {
 pub fn bind(app: &mut SolveApp, id: &str, key: &str, replace: bool) -> Result<(), String> {
     let spec = solidcraft_engine::find_command(id).ok_or_else(|| format!("no command `{id}`"))?;
     if RESERVED.contains(&key) {
-        return Err(format!("{key} is used by SolidCraft itself"));
+        return Err(format!("{key} is used by NØDE CAD itself"));
     }
     if !key.is_empty() {
         let others: Vec<&'static str> = commands_for(app, key).into_iter().filter(|o| *o != id).collect();
@@ -335,7 +335,7 @@ pub fn page(app: &mut SolveApp, ui: &mut egui::Ui) {
         Some((_, "reset_all")) => reset(app, None),
         Some((_, "export")) => {
             let text = crate::toolbar_custom::export(app).to_string();
-            app.pick_save("SolidCraft shortcuts.json", &["json"], move |app, path| {
+            app.pick_save("NØDE CAD shortcuts.json", &["json"], move |app, path| {
                 if let Some(path) = path {
                     app.keymap.message = std::fs::write(&path, text).err().map(|e| format!("export: {e}"));
                 }

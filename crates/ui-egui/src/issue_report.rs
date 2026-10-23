@@ -17,7 +17,7 @@ const MAX_BODY: usize = 24_000;
 // Room for all three answers and the original bounded diagnostic context.
 const MAX_REPORT: usize = 32_000;
 const MAX_IMAGE_PIXELS: usize = 16_000_000;
-const ISSUE_URL: &str = "https://github.com/tangency-labs/solidcraft/issues/new";
+const ISSUE_URL: &str = "https://github.com/matthias037/node-cad/issues/new";
 
 thread_local! {
     static CAD_INPUT_BLOCKED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -359,8 +359,8 @@ pub fn crash_draft(report: &serde_json::Value) -> Draft {
     let what = match kind {
         Some("command_panic") => "An internal error stopped a command (the design was left unchanged)",
         Some("kernel_panic_recovered") => "The geometry kernel hit an internal error (caught; the operation failed)",
-        Some("unclean_exit") => "An earlier SolidCraft session ended without recording a clean exit",
-        _ => "SolidCraft hit an internal error",
+        Some("unclean_exit") => "An earlier NØDE CAD session ended without recording a clean exit",
+        _ => "NØDE CAD hit an internal error",
     };
     let detection = if kind == Some("unclean_exit") {
         "\n\nDetected on a later launch; the exact exit time was not recorded. A system shutdown or forced stop can also cause an unclean exit."
@@ -402,7 +402,7 @@ pub fn crash_draft(report: &serde_json::Value) -> Draft {
         },
         s("id"),
         block(&format!(
-            "SolidCraft {} ({}, built {})\nOS: {} {}\n{}",
+            "NØDE CAD {} ({}, built {})\nOS: {} {}\n{}",
             field(app, "version"),
             field(app, "commit"),
             field(app, "built"),
@@ -755,7 +755,7 @@ mod tests {
     #[test]
     fn crash_draft_marks_later_detection_without_losing_native_evidence() {
         let message =
-            "SolidCraft 0.3.2 (started 2026-10-01T10:00:00Z) crashed with ACCESS_VIOLATION (0xc0000005) in driver.dll+0x1234 between commands";
+            "NØDE CAD 0.3.2 (started 2026-10-01T10:00:00Z) crashed with ACCESS_VIOLATION (0xc0000005) in driver.dll+0x1234 between commands";
         let frame = "0xc0000005 ACCESS_VIOLATION at driver.dll+0x1234";
         let report = json!({
             "kind": "unclean_exit", "count": 2, "first_seen": "2026-10-12T16:23:41Z",

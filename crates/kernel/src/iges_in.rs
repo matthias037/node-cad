@@ -1331,7 +1331,7 @@ fn translate(text: &str) -> std::result::Result<(String, Vec<String>), String> {
         .collect::<String>()
         .replace('\'', "''");
     let mut s = format!(
-        "ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION(('IGES import'),'2;1');\nFILE_NAME('','',(''),(''),'SolidCraft IGES','{}','');\nFILE_SCHEMA(('AUTOMOTIVE_DESIGN'));\nENDSEC;\nDATA;\n",
+        "ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION(('IGES import'),'2;1');\nFILE_NAME('','',(''),(''),'NODE CAD IGES','{}','');\nFILE_SCHEMA(('AUTOMOTIVE_DESIGN'));\nENDSEC;\nDATA;\n",
         native.trim()
     );
     for (i, l) in t.o.lines.iter().enumerate() {

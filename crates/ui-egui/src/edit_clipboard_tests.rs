@@ -89,7 +89,7 @@ fn copy_leaves_text_on_the_system_clipboard_so_paste_can_follow() {
             _ => None,
         }));
     }
-    assert!(copied.iter().any(|t| t.starts_with("SolidCraft sketch geometry")), "{copied:?}");
+    assert!(copied.iter().any(|t| t.starts_with("NØDE CAD sketch geometry")), "{copied:?}");
 }
 
 #[test]
@@ -339,7 +339,7 @@ fn contribution_native_copy_paste_events_insert_the_saved_design_in_another_tab(
     clipboard_event(&mut h, egui::Event::Copy, None);
     assert!(h.app.linked_design_clipboard.is_some());
     crate::documents::open_tab(&mut h.app, solidcraft_engine::Session::default()).unwrap();
-    clipboard_event(&mut h, egui::Event::Paste("SolidCraft linked design".into()), None);
+    clipboard_event(&mut h, egui::Event::Paste("NØDE CAD linked design".into()), None);
     assert_eq!(h.app.session.doc.links.len(), 1, "{:?}", h.app.status);
     assert_eq!(h.app.session.undo.len(), 1);
 }

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Build and package SolidCraft for macOS:
+# Build and package NØDE CAD for macOS:
 #
-#   $DIST/solidcraft-<version>-macos-<arch>.dmg        SolidCraft.app (with solidcraft-cli inside) on a
+#   $DIST/NODE-CAD-<version>-mac-<arch>.dmg           NØDE CAD.app (with solidcraft-cli inside) on a
 #                                                      drag-to-Applications DMG
-#   $DIST/solidcraft-cli-<version>-macos-<arch>.zip    the headless CLI (and its solvecraft-cli
+#   $DIST/node-cad-cli-<version>-mac-<arch>.zip       the headless CLI (and its solvecraft-cli
 #                                                      compatibility alias) with the licence files
 #
 # Usage: packaging/macos/package.sh [--arch universal|aarch64|x86_64] [--skip-build]
@@ -13,8 +13,8 @@
 set -euo pipefail
 # shellcheck source=../env.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../env.sh"
-# The same reverse-DNS id as the Linux APP_ID.
-MACOS_BUNDLE_ID=ai.storyteller.solidcraft
+# NØDE CAD's own reverse-DNS id, beside NØDE OS's fr.node-os.desktop.
+MACOS_BUNDLE_ID=fr.node-os.cad
 
 ARCH=universal
 SKIP_BUILD=0
@@ -37,11 +37,11 @@ esac
 export MACOSX_DEPLOYMENT_TARGET=11.0
 SHORT_VERSION="${VERSION%%-*}"
 WORK="$CARGO_TARGET_DIR/macos-package"
-APP="$WORK/SolidCraft.app"
-DMG="$DIST/solidcraft-$VERSION-macos-$ARCH.dmg"
-CLI_ZIP="$DIST/solidcraft-cli-$VERSION-macos-$ARCH.zip"
+APP="$WORK/NØDE CAD.app"
+DMG="$DIST/NODE-CAD-$VERSION-mac-$ARCH.dmg"
+CLI_ZIP="$DIST/node-cad-cli-$VERSION-mac-$ARCH.zip"
 
-echo "==> SolidCraft $VERSION for macOS ($ARCH)"
+echo "==> NØDE CAD $VERSION for macOS ($ARCH)"
 if [ "$SKIP_BUILD" = 0 ]; then
   args=()
   for t in "${TARGETS[@]}"; do args+=(--target "$t"); done
@@ -57,17 +57,21 @@ for bin in solidcraft solidcraft-cli solvecraft-cli; do
   lipo -info "$WORK/bin/$bin"
 done
 
-# ---- SolidCraft.app ----------------------------------------------------------------------------
+# ---- NØDE CAD.app ------------------------------------------------------------------------------
 echo "==> assembling $APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$WORK/bin/solidcraft" "$APP/Contents/MacOS/SolidCraft"
+cp "$WORK/bin/solidcraft" "$APP/Contents/MacOS/NODE-CAD"
 # solidcraft-cli next to the app, as every other package has it: the agent chat starts it as the
 # agent's MCP server (`solidcraft-cli mcp --connect`) and looks for it beside the running program.
 cp "$WORK/bin/solidcraft-cli" "$APP/Contents/MacOS/solidcraft-cli"
-# Apple-compiled layered icon and older-macOS fallback (regeneration: assets/README.md).
-# Keep compiled resources so packaging also works on runners with older Xcode versions.
-cp "$ROOT/assets/icons/app/macos/exports/Assets.car" "$APP/Contents/Resources/Assets.car"
-cp "$ROOT/assets/icons/app/macos/exports/icon.icns" "$APP/Contents/Resources/SolidCraft.icns"
+# The icon is drawn in code (assets/icons/app/shared/source/app_icon.rs); iconutil packs the sizes.
+ICONSET="$WORK/NODE-CAD.iconset"
+mkdir -p "$ICONSET"
+for s in 16 32 128 256 512; do
+  "$WORK/bin/solidcraft-cli" icon --size "$s" --out "$ICONSET/icon_${s}x${s}.png"
+  "$WORK/bin/solidcraft-cli" icon --size "$((s * 2))" --out "$ICONSET/icon_${s}x${s}@2x.png"
+done
+iconutil -c icns -o "$APP/Contents/Resources/NODE-CAD.icns" "$ICONSET"
 mkdir -p "$APP/Contents/Resources/Licenses"
 copy_docs "$APP/Contents/Resources/Licenses"
 sed -e "s/@VERSION@/$VERSION/g" -e "s/@SHORT_VERSION@/$SHORT_VERSION/g" "$ROOT/assets/platforms/macos/Info.plist.in" >"$APP/Contents/Info.plist"
@@ -84,44 +88,45 @@ test -x "$APP/Contents/MacOS/solidcraft-cli" || { echo "solidcraft-cli is missin
 echo "==> building $DMG"
 STAGE="$WORK/dmg"
 mkdir -p "$STAGE"
-ditto "$APP" "$STAGE/SolidCraft.app"
+ditto "$APP" "$STAGE/NØDE CAD.app"
 ln -s /Applications "$STAGE/Applications"
 cp "$ROOT/assets/platforms/macos/README.txt" "$STAGE/README.txt"
 rm -f "$DMG" "$WORK/raw.dmg"
 # makehybrid + convert builds the image without attaching a device, unlike `create -srcfolder`,
 # which is flaky on CI runners ("Resource busy").
-hdiutil makehybrid -hfs -hfs-volume-name "SolidCraft" -hfs-openfolder "$STAGE" -o "$WORK/raw.dmg" "$STAGE"
+hdiutil makehybrid -hfs -hfs-volume-name "NØDE CAD" -hfs-openfolder "$STAGE" -o "$WORK/raw.dmg" "$STAGE"
 hdiutil convert "$WORK/raw.dmg" -format UDZO -imagekey zlib-level=9 -o "$DMG"
 rm -f "$WORK/raw.dmg"
 
 # Check the image as a user gets it: mount it and look inside.
 MNT="$(mktemp -d)"
 hdiutil attach -readonly -nobrowse -mountpoint "$MNT" "$DMG"
-ls -la "$MNT" "$MNT/SolidCraft.app/Contents" "$MNT/SolidCraft.app/Contents/MacOS" "$MNT/SolidCraft.app/Contents/Resources"
+ls -la "$MNT" "$MNT/NØDE CAD.app/Contents" "$MNT/NØDE CAD.app/Contents/MacOS" "$MNT/NØDE CAD.app/Contents/Resources"
 test -L "$MNT/Applications" && test "$(readlink "$MNT/Applications")" = /Applications
-plutil -lint "$MNT/SolidCraft.app/Contents/Info.plist"
+plutil -lint "$MNT/NØDE CAD.app/Contents/Info.plist"
 # Check the names Finder/LaunchServices actually use, and the bundle identity.
-for key in CFBundleName CFBundleDisplayName CFBundleExecutable CFBundleIconFile CFBundleIconName; do
-  test "$(/usr/libexec/PlistBuddy -c "Print :$key" "$MNT/SolidCraft.app/Contents/Info.plist")" = SolidCraft
+for key in CFBundleName CFBundleDisplayName; do
+  test "$(/usr/libexec/PlistBuddy -c "Print :$key" "$MNT/NØDE CAD.app/Contents/Info.plist")" = "NØDE CAD"
 done
-test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$MNT/SolidCraft.app/Contents/Info.plist")" = "$MACOS_BUNDLE_ID"
-test -s "$MNT/SolidCraft.app/Contents/Resources/SolidCraft.icns"
-cmp "$ROOT/assets/icons/app/macos/exports/icon.icns" "$MNT/SolidCraft.app/Contents/Resources/SolidCraft.icns"
-cmp "$ROOT/assets/icons/app/macos/exports/Assets.car" "$MNT/SolidCraft.app/Contents/Resources/Assets.car"
+for key in CFBundleExecutable CFBundleIconFile; do
+  test "$(/usr/libexec/PlistBuddy -c "Print :$key" "$MNT/NØDE CAD.app/Contents/Info.plist")" = NODE-CAD
+done
+test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$MNT/NØDE CAD.app/Contents/Info.plist")" = "$MACOS_BUNDLE_ID"
+test -s "$MNT/NØDE CAD.app/Contents/Resources/NODE-CAD.icns"
 cmp "$ROOT/assets/platforms/macos/README.txt" "$MNT/README.txt"
 case "$ARCH" in universal) WANT=(arm64 x86_64) ;; aarch64) WANT=(arm64) ;; *) WANT=(x86_64) ;; esac
 for arch in "${WANT[@]}"; do
-  lipo "$MNT/SolidCraft.app/Contents/MacOS/SolidCraft" -verify_arch "$arch"
+  lipo "$MNT/NØDE CAD.app/Contents/MacOS/NODE-CAD" -verify_arch "$arch"
 done
-test -s "$MNT/SolidCraft.app/Contents/Resources/Licenses/THIRD-PARTY-LICENSES.txt"
+test -s "$MNT/NØDE CAD.app/Contents/Resources/Licenses/THIRD-PARTY-LICENSES.txt"
 # Not --strict: the mounted HFS volume adds Finder info, which strict verification rejects.
-codesign --verify --deep --verbose=2 "$MNT/SolidCraft.app"
-"$MNT/SolidCraft.app/Contents/MacOS/SolidCraft" --version
+codesign --verify --deep --verbose=2 "$MNT/NØDE CAD.app"
+"$MNT/NØDE CAD.app/Contents/MacOS/NODE-CAD" --version
 hdiutil detach "$MNT"
 
 # ---- CLI ---------------------------------------------------------------------------------------
 echo "==> building $CLI_ZIP"
-CLI_DIR="$WORK/solidcraft-cli-$VERSION-macos-$ARCH"
+CLI_DIR="$WORK/node-cad-cli-$VERSION-mac-$ARCH"
 mkdir -p "$CLI_DIR"
 cp "$WORK/bin/solidcraft-cli" "$CLI_DIR/"
 codesign --force --sign - --timestamp=none --identifier "$MACOS_BUNDLE_ID-cli" "$CLI_DIR/solidcraft-cli"

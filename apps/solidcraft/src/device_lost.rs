@@ -36,7 +36,7 @@ pub fn restart_on_software(after_recent_loss: bool, cpu_renderer: bool) -> bool 
 /// renderer.
 pub fn note(software: bool) -> String {
     let mut note = String::from(
-        "The graphics device was reset (the graphics driver stopped responding), so SolidCraft closed and started again. Unsaved changes were kept for recovery.",
+        "The graphics device was reset (the graphics driver stopped responding), so NØDE CAD closed and started again. Unsaved changes were kept for recovery.",
     );
     if software {
         note.push_str(" This start uses software rendering, which doesn't depend on the graphics driver.");

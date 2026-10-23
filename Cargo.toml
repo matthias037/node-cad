@@ -7,10 +7,10 @@ exclude = ["vendor"]
 [workspace.package]
 version = "0.21.0-rc.1"
 edition = "2024"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 rust-version = "1.95"
-authors = ["SolidCraft contributors"]
-repository = "https://github.com/bherbruck/solidcraft"
+authors = ["NØDE OS", "SolidCraft contributors"]
+repository = "https://github.com/matthias037/node-cad"
 
 [workspace.dependencies]
 # internal

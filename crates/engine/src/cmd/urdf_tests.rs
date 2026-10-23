@@ -89,7 +89,7 @@ fn assert_fk(m: &UrdfModel, s: &Session, what: &str) {
         }
         let Some((_, _, want)) = placements.iter().find(|p| p.1 == l.path) else { panic!("{what}: {} has no placement", l.name) };
         let got = mat_mul(f, &l.mesh_origin);
-        assert!(close(&got, want), "{what}: {} at {got:?}, SolidCraft has {want:?}", l.name);
+        assert!(close(&got, want), "{what}: {} at {got:?}, NØDE CAD has {want:?}", l.name);
         seen += 1;
     }
     assert_eq!(seen, placements.len() - 1, "{what}: a link per placement");

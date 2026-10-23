@@ -109,8 +109,10 @@ fn read_step(path: &str, names: solidcraft_io::StepNames) -> Result<solidcraft_i
 /// Y-up front view, and its name is in FILE_NAME (originating system, preprocessor version) and
 /// often FILE_DESCRIPTION. Programs we aren't sure of stay unknown, so the file is only offered.
 fn exporter_up(import: &solidcraft_kernel::StepImport) -> Option<(&'static str, &'static str)> {
-    if import.system.trim().starts_with("SolidCraft") {
-        return Some(("z", "SolidCraft"));
+    // Our own exports write NODE CAD; files from SolidCraft, the upstream project, are Z-up too.
+    let system = import.system.trim();
+    if system.starts_with("NODE CAD") || system.starts_with("SolidCraft") {
+        return Some(("z", "NØDE CAD"));
     }
     let named = [&import.system, &import.preprocessor, &import.description].iter().any(|h| h.to_ascii_lowercase().contains("solidworks"));
     named.then_some(("y", "SolidWorks"))

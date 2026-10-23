@@ -1449,7 +1449,7 @@ mod tests {
                 solidcraft_kernel::box_solid(corner, corner + Vec3::new(10.0, 10.0, 10.0)).unwrap()
             })
             .collect();
-        let step = solidcraft_kernel::step_export(&bodies.iter().collect::<Vec<_>>(), "SolidCraft storage benchmark").unwrap();
+        let step = solidcraft_kernel::step_export(&bodies.iter().collect::<Vec<_>>(), "NODE CAD storage benchmark").unwrap();
         let mut doc = Document::new("Generated STEP benchmark");
         doc.add_feature(FeatureKind::Import { file: "generated.step".into(), step: step.into(), components: Vec::new(), skip: Vec::new() }, None)
             .unwrap();

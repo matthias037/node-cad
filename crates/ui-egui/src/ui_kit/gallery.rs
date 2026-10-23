@@ -277,7 +277,7 @@ const ELEMENTS: &[Element] = &[
             "gallery:recovery",
             super::file_view::RecoveryMessage {
                 title: "1 design was recovered",
-                before_filename: " after SolidCraft closed unexpectedly: ",
+                before_filename: " after NØDE CAD closed unexpectedly: ",
                 filename: "enclosure-lid.solidcraft",
                 after_filename: ", 2 minutes ago.",
             },

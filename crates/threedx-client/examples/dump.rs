@@ -4,7 +4,7 @@
 
 fn main() {
     if let Err(error) = solidcraft_3dx_client::start(
-        "SolidCraft dump",
+        "NODE CAD dump",
         |event| println!("{event:?}"),
         |connected| {
             if let Err(error) = connected {

@@ -365,7 +365,7 @@ fn weld_eps(b: &solidcraft_kernel::Body) -> f64 {
 pub fn stl_binary(meshes: &[Mesh], name: &str) -> Vec<u8> {
     let n: usize = meshes.iter().map(|m| m.triangles.len()).sum();
     let mut out = Vec::with_capacity(84 + n * 50);
-    let mut header = format!("SolidCraft STL {name}").into_bytes();
+    let mut header = format!("NODE CAD STL {name}").into_bytes();
     header.resize(80, b' ');
     out.extend_from_slice(&header);
     out.extend_from_slice(&u32::try_from(n).unwrap_or(u32::MAX).to_le_bytes());
@@ -405,7 +405,7 @@ pub fn stl_ascii(meshes: &[Mesh], name: &str) -> String {
 
 /// Wavefront OBJ, one object per body.
 pub fn obj(meshes: &[(String, Mesh)]) -> String {
-    let mut s = String::from("# SolidCraft OBJ export (mm)\n");
+    let mut s = String::from("# NODE CAD OBJ export (mm)\n");
     let mut base = 1usize;
     for (name, m) in meshes {
         s += &format!("o {}\n", name.replace(char::is_whitespace, "_"));
@@ -776,7 +776,7 @@ mod tests {
         };
         let x = model_xml(export_with_metadata(&m.state(), &[], Format::ThreeMf, "t", &meta).unwrap());
         for want in [
-            "<metadata name=\"Application\">SolidCraft</metadata>\n <metadata name=\"Title\">ACME &lt;enclosures&gt;</metadata>",
+            "<metadata name=\"Application\">NODE CAD</metadata>\n <metadata name=\"Title\">ACME &lt;enclosures&gt;</metadata>",
             "<metadata name=\"Designer\">Jane O&apos;Brien</metadata>",
             "<metadata name=\"Description\">Vented Gehäuse\nfor a Pi</metadata>",
             "<metadata name=\"LicenseTerms\">CC-BY-4.0</metadata>",
@@ -789,7 +789,7 @@ mod tests {
         }
         // Without properties the files are as they always were.
         let plain = String::from_utf8(export(&m.state(), &[], Format::Step, "t").unwrap()).unwrap();
-        assert!(plain.contains("FILE_DESCRIPTION(('SolidCraft model'),'2;1');\nFILE_NAME('t.step','',(''),(''),"));
+        assert!(plain.contains("FILE_DESCRIPTION(('NODE CAD model'),'2;1');\nFILE_NAME('t.step','',(''),(''),"));
         assert!(!model_xml(export(&m.state(), &[], Format::ThreeMf, "t").unwrap()).contains("Title"));
     }
 

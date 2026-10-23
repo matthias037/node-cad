@@ -27,5 +27,5 @@
   "ui.space_mouse_step_pull": "Pull the cap towards you, hold it, then let go.",
   "ui.workspace_layout": "Workspace layout",
   "ui.zoom_to_cursor_tip": "The wheel zooms towards the point under the cursor (off: towards the view's centre)",
-  "update.prefs_flatpak": "Flatpak updates this copy ({version}): run {command} or use your software centre. SolidCraft doesn't check."
+  "update.prefs_flatpak": "Flatpak updates this copy ({version}): run {command} or use your software centre. NØDE CAD doesn't check."
 }

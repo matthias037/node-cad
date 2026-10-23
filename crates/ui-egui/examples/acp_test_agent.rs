@@ -132,7 +132,7 @@ fn main() {
         match msg.get("method").and_then(Value::as_str) {
             Some("initialize") => reply(json!({
                 "protocolVersion": 1,
-                "agentInfo": {"name": "acp-test-agent", "title": "SolidCraft test agent", "version": env!("CARGO_PKG_VERSION")},
+                "agentInfo": {"name": "acp-test-agent", "title": "NØDE CAD test agent", "version": env!("CARGO_PKG_VERSION")},
                 "agentCapabilities": {"promptCapabilities": {"image": true}},
                 "authMethods": [],
             })),
@@ -151,7 +151,7 @@ fn main() {
                     .to_lowercase();
                 let images = msg.pointer("/params/prompt").and_then(Value::as_array).map_or(0, |a| a.iter().filter(|b| b["type"] == "image").count());
                 let Some(m) = mcp.as_mut() else {
-                    say(session, "I have no SolidCraft tools in this session.");
+                    say(session, "I have no NØDE CAD tools in this session.");
                     reply(json!({"stopReason": "end_turn"}));
                     continue;
                 };

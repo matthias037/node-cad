@@ -117,7 +117,7 @@ pub fn opens_design(extensions: &[&str]) -> bool {
 /// The file type a Save As dialog offers for `name`: (description, MIME type, extension).
 pub fn save_type(name: &str) -> (&'static str, &'static str, &'static str) {
     let json = std::path::Path::new(name).extension().is_some_and(|e| e.eq_ignore_ascii_case("json"));
-    if json { ("Plain JSON design", "application/json", ".json") } else { ("SolidCraft design", "application/octet-stream", ".solidcraft") }
+    if json { ("Plain JSON design", "application/json", ".json") } else { ("NØDE CAD design", "application/octet-stream", ".solidcraft") }
 }
 
 /// Is this a cancelled dialog (the browser's `AbortError`)? Not an error to show.

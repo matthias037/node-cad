@@ -1,105 +1,94 @@
-//! Original SolidCraft mark, shared by desktop, packaging and CLI: the borderless mark, five
-//! faces with transparent gaps between them, drawn from the macOS icon's
-//! `macos/source/SolidCraft.icon/Assets/03-solid-blue-cutout.svg`.
+//! NØDE CAD mark, shared by desktop, packaging and CLI: the NØDE "Ø" (a ring cut by the coral
+//! bar) with the ring drawn as a hexagon, a cube's outline seen from a corner, on the NØDE
+//! night tile. Units are those of the NØDE OS app icon: a 1024 canvas, the tile 824 wide at
+//! 100, the mark in a 100-unit box placed at 262 and scaled 5.
 type P = (f32, f32);
 
-/// One face in that SVG's units: its outline, and its linear gradient from one point and
-/// colour to another.
-struct Face {
-    outline: &'static [P],
-    from: (P, [u8; 3]),
-    to: (P, [u8; 3]),
+const TILE: [u8; 3] = [0x0a, 0x0e, 0x18];
+const RING: [u8; 3] = [0xe5, 0xe5, 0xe5];
+const BAR: [u8; 3] = [0xe5, 0x6e, 0x6e];
+
+/// Tile: left/top edge, width and corner radius in canvas units.
+const TILE_EDGE: f32 = 100.0;
+const TILE_SIZE: f32 = 824.0;
+const TILE_RADIUS: f32 = 185.0;
+/// The mark's box in canvas units: origin and scale (mark units are 0..100).
+const MARK_AT: f32 = 262.0;
+const MARK_SCALE: f32 = 5.0;
+/// The bar, its stroke, and the gap it cuts in the ring (as the NØDE OS mask).
+const BAR_FROM: P = (11.0, 89.0);
+const BAR_TO: P = (89.0, 11.0);
+const BAR_HALF: f32 = 6.5;
+const GAP_HALF: f32 = 10.5;
+/// The cube outline: circumradius of the hexagon and the strokes' half widths.
+const HEX_R: f32 = 41.0;
+const LINE_HALF: f32 = 5.5;
+const INNER_HALF: f32 = 3.5;
+
+fn segment_distance(p: P, a: P, b: P) -> f32 {
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let t = (((p.0 - a.0) * dx + (p.1 - a.1) * dy) / (dx * dx + dy * dy)).clamp(0.0, 1.0);
+    ((p.0 - a.0 - t * dx).powi(2) + (p.1 - a.1 - t * dy).powi(2)).sqrt()
 }
 
-const FACES: [Face; 5] = [
-    // Inner side of the upper step.
-    Face {
-        outline: &[(547.883, 282.66), (709.797, 188.211), (709.797, 375.985)],
-        from: ((619.14, 179.734), [29, 99, 198]),
-        to: ((694.687, 396.761), [21, 73, 158]),
-    },
-    // Top of the lower step.
-    Face {
-        outline: &[(727.797, 593.626), (727.797, 407.136), (889.571, 500.381)],
-        from: ((619.14, 413.244), [69, 159, 255]),
-        to: ((790.839, 605.547), [35, 121, 231]),
-    },
-    // Right face, with the recess.
-    Face {
-        outline: &[(530.0, 521.17), (691.797, 427.912), (691.797, 655.928), (907.594, 531.545), (907.594, 740.159), (530.0, 957.8)],
-        from: ((632.876, 399.508), [27, 102, 207]),
-        to: ((783.971, 968.175), [18, 69, 150]),
-    },
-    // Left face, stepped.
-    Face {
-        outline: &[(116.406, 510.769), (116.406, 303.529), (494.0, 521.17), (494.0, 957.8), (314.203, 854.167), (314.203, 624.777)],
-        from: ((207.063, 303.357), [37, 141, 245]),
-        to: ((426.837, 968.175), [20, 97, 218]),
-    },
-    // Top of the extruded profile.
-    Face {
-        outline: &[(134.374, 272.334), (512.0, 53.364), (691.828, 157.015), (476.117, 282.846), (673.752, 396.761), (512.0, 489.993)],
-        from: ((385.63, 53.364), [81, 173, 255]),
-        to: ((522.989, 510.769), [43, 131, 241]),
-    },
-];
+/// Pointy-top hexagon around the mark's centre: top, upper right, lower right, bottom, lower
+/// left, upper left.
+fn hexagon() -> [P; 6] {
+    let (c, h) = (50.0, HEX_R * 0.5);
+    let w = HEX_R * 0.866_025_4;
+    [(c, c - HEX_R), (c + w, c - h), (c + w, c + h), (c, c + HEX_R), (c - w, c + h), (c - w, c - h)]
+}
 
-/// The mark's extent in SVG units: left, top, width, height.
-const BOUNDS: (f32, f32, f32, f32) = (116.406, 53.364, 791.188, 904.436);
+fn inside_tile(p: P) -> bool {
+    let half = TILE_SIZE / 2.0;
+    let centre = TILE_EDGE + half;
+    let (qx, qy) = ((p.0 - centre).abs() - (half - TILE_RADIUS), (p.1 - centre).abs() - (half - TILE_RADIUS));
+    let outside = (qx.max(0.0).powi(2) + qy.max(0.0).powi(2)).sqrt();
+    outside + qx.max(qy).min(0.0) <= TILE_RADIUS
+}
+
+/// The colour at one point of the canvas, or None outside the tile.
+fn colour(p: P, hex: &[P; 6]) -> Option<[u8; 3]> {
+    if !inside_tile(p) {
+        return None;
+    }
+    let m = ((p.0 - MARK_AT) / MARK_SCALE, (p.1 - MARK_AT) / MARK_SCALE);
+    let bar = segment_distance(m, BAR_FROM, BAR_TO);
+    if bar <= BAR_HALF {
+        return Some(BAR);
+    }
+    if bar > GAP_HALF {
+        let outline = (0..6).map(|i| segment_distance(m, hex[i], hex[(i + 1) % 6])).fold(f32::MAX, f32::min);
+        // The edges from the centre to the upper left corner and to the bottom: the top face.
+        let centre = (50.0, 50.0);
+        let inner = segment_distance(m, centre, hex[5]).min(segment_distance(m, centre, hex[3]));
+        if outline <= LINE_HALF || inner <= INNER_HALF {
+            return Some(RING);
+        }
+    }
+    Some(TILE)
+}
 
 /// This block is the icon image data
 pub fn rgba(size: usize) -> Result<Vec<u8>, String> {
     if !(1..=2048).contains(&size) {
         return Err("icon size must be 1..=2048".into());
     }
-    // Coverage buffer at 4x4 samples per pixel (2x2 for big sizes), averaged down at the end.
+    // 4x4 samples per pixel (2x2 for big sizes), averaged to straight alpha = covered share.
     let ss = if size > 512 { 2 } else { 4 };
-    let n = size * ss;
-    let mut buf = vec![[0u8; 4]; n * n];
-    let (bx, by, bw, bh) = BOUNDS;
-    let s = n as f32 / bh; // SVG units -> samples: the mark fills the height
-    let (ox, oy) = ((n as f32 - bw * s) / 2.0 - bx * s, -by * s); // and is centred sideways
-    // Fill each face's outline (even-odd spans per row, so concave outlines work) with its gradient.
-    for face in &FACES {
-        let v: Vec<P> = face.outline.iter().map(|p| (ox + p.0 * s, oy + p.1 * s)).collect();
-        let (((fx, fy), c0), ((tx, ty), c1)) = (face.from, face.to);
-        let (gx, gy) = (tx - fx, ty - fy);
-        let g2 = gx * gx + gy * gy;
-        let (top, bottom) = v.iter().fold((f32::MAX, f32::MIN), |(a, b), p| (a.min(p.1), b.max(p.1)));
-        let mut xs = Vec::with_capacity(v.len());
-        for y in ((top - 0.5).ceil() as i32).max(0)..=((bottom - 0.5).floor() as i32).min(n as i32 - 1) {
-            let cy = y as f32 + 0.5;
-            xs.clear();
-            for i in 0..v.len() {
-                let (a, b) = (v[i], v[(i + 1) % v.len()]);
-                if (a.1 <= cy) != (b.1 <= cy) {
-                    xs.push(a.0 + (cy - a.1) / (b.1 - a.1) * (b.0 - a.0));
-                }
-            }
-            xs.sort_by(f32::total_cmp);
-            for &[from, to] in xs.as_chunks::<2>().0 {
-                for x in ((from - 0.5).ceil() as i32).max(0)..=((to - 0.5).floor() as i32).min(n as i32 - 1) {
-                    // The sample's place along the gradient, in SVG units.
-                    let (px, py) = ((x as f32 + 0.5 - ox) / s, (cy - oy) / s);
-                    let t = (((px - fx) * gx + (py - fy) * gy) / g2).clamp(0.0, 1.0);
-                    let mix = |k: usize| (f32::from(c0[k]) + (f32::from(c1[k]) - f32::from(c0[k])) * t).round() as u8;
-                    buf[y as usize * n + x as usize] = [mix(0), mix(1), mix(2), 255];
-                }
-            }
-        }
-    }
-    // Average each ss x ss block down to one pixel (straight alpha = covered share).
+    let hex = hexagon();
+    let step = 1024.0 / (size * ss) as f32;
     let mut rgba = Vec::with_capacity(size * size * 4);
     for y in 0..size {
         for x in 0..size {
             let (mut sum, mut cnt) = ([0u32; 3], 0u32);
             for j in 0..ss {
                 for i in 0..ss {
-                    let p = buf[(y * ss + j) * n + x * ss + i];
-                    if p[3] != 0 {
+                    let p = (((x * ss + i) as f32 + 0.5) * step, ((y * ss + j) as f32 + 0.5) * step);
+                    if let Some(c) = colour(p, &hex) {
                         cnt += 1;
                         for k in 0..3 {
-                            sum[k] += u32::from(p[k]);
+                            sum[k] += u32::from(c[k]);
                         }
                     }
                 }
@@ -118,30 +107,29 @@ pub fn rgba(size: usize) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn shared_mark_has_transparency_and_original_colors_at_window_and_package_sizes() {
+    fn mark_has_transparent_corners_and_brand_colours_at_window_and_package_sizes() {
         for size in [16, 24, 32, 48, 64, 128, 256] {
             let pixels = super::rgba(size).expect("valid size");
             assert_eq!(pixels.len(), size * size * 4);
-            assert!(pixels.as_chunks::<4>().0.iter().any(|p| p[3] == 0));
-            assert!(pixels.as_chunks::<4>().0.iter().any(|p| p[3] == 255 && p[2] > p[0]));
+            let px = pixels.as_chunks::<4>().0;
+            assert_eq!(px[0][3], 0, "the tile's rounded corner leaves the canvas corner see-through");
+            assert!(px.iter().any(|p| p[3] == 255 && p[0] > 200 && p[2] < 140), "the coral bar");
+            assert!(px.iter().any(|p| p[3] == 255 && p[0] < 30 && p[2] < 40), "the night tile");
         }
         assert!(super::rgba(0).is_err());
         assert!(super::rgba(2049).is_err());
     }
 
-    /// Borderless: no white edge lines, and the gaps between faces are see-through. At 256 px
-    /// the gap between the left and right faces (SVG x 494..530) is transparent on the row
-    /// through the middle of the mark, and no opaque pixel is white.
+    /// The bar cuts the outline: where the hexagon's lower left edge meets the bar there is
+    /// bar, and away from it the edge is drawn.
     #[test]
-    fn shared_mark_is_borderless() {
-        let size = 256;
-        let pixels = super::rgba(size).expect("valid size");
-        let px = |x: usize, y: usize| pixels.as_chunks::<4>().0[y * size + x];
-        let s = size as f32 / 904.436;
-        let gap_x = ((size as f32 - 791.188 * s) / 2.0 + (512.0 - 116.406) * s) as usize;
-        let row = ((750.0 - 53.364) * s) as usize;
-        assert_eq!(px(gap_x, row)[3], 0, "the seam between the left and right faces is a gap");
-        assert!(px(gap_x - 8, row)[3] == 255 && px(gap_x + 8, row)[3] == 255, "faces on both sides of the gap");
-        assert!(pixels.as_chunks::<4>().0.iter().all(|p| p[3] == 0 || p[0] < 200), "no white edges");
+    fn bar_cuts_the_outline() {
+        let hex = super::hexagon();
+        let canvas = |m: super::P| (super::MARK_AT + m.0 * super::MARK_SCALE, super::MARK_AT + m.1 * super::MARK_SCALE);
+        let on_edge = |t: f32| (hex[3].0 + (hex[4].0 - hex[3].0) * t, hex[3].1 + (hex[4].1 - hex[3].1) * t);
+        let cross = (0..=1000).map(|i| on_edge(i as f32 / 1000.0)).min_by(|a, b| (a.0 + a.1 - 100.0).abs().total_cmp(&(b.0 + b.1 - 100.0).abs()));
+        assert_eq!(cross.and_then(|c| super::colour(canvas(c), &hex)), Some(super::BAR));
+        assert_eq!(super::colour(canvas(on_edge(0.0)), &hex), Some(super::RING), "the edge away from the bar");
+        assert_eq!(super::colour((0.0, 0.0), &hex), None);
     }
 }

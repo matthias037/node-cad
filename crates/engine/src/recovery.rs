@@ -56,9 +56,9 @@ pub fn default_dir() -> Option<PathBuf> {
 pub fn data_dir() -> Option<PathBuf> {
     let env = |k: &str| std::env::var_os(k).filter(|d| !d.is_empty()).map(PathBuf::from);
     if cfg!(windows) {
-        Some(env("LOCALAPPDATA")?.join("SolidCraft"))
+        Some(env("LOCALAPPDATA")?.join("NODE CAD"))
     } else if cfg!(target_os = "macos") {
-        Some(env("HOME")?.join("Library/Application Support/SolidCraft"))
+        Some(env("HOME")?.join("Library/Application Support/NODE CAD"))
     } else {
         Some(env("XDG_DATA_HOME").or_else(|| env("HOME").map(|h| h.join(".local/share")))?.join("solidcraft"))
     }
@@ -67,7 +67,7 @@ pub fn data_dir() -> Option<PathBuf> {
 /// The recovery folder under the per-user data `root`, and the folder earlier releases used.
 /// Windows and macOS name the app's folder in title case, other systems in lower case.
 fn dirs_under(root: &Path, title_case: bool) -> (PathBuf, PathBuf) {
-    let (name, legacy) = if title_case { ("SolidCraft", "SolveCraft") } else { ("solidcraft", "solvecraft") };
+    let (name, legacy) = if title_case { ("NODE CAD", "SolveCraft") } else { ("solidcraft", "solvecraft") };
     (root.join(name).join("recovery"), root.join(legacy).join("recovery"))
 }
 
@@ -411,7 +411,7 @@ mod tests {
         let (dir, legacy) = super::dirs_under(Path::new("/data"), false);
         assert_eq!((dir.as_path(), legacy.as_path()), (Path::new("/data/solidcraft/recovery"), Path::new("/data/solvecraft/recovery")));
         let (dir, legacy) = super::dirs_under(Path::new("/data"), true);
-        assert_eq!((dir.as_path(), legacy.as_path()), (Path::new("/data/SolidCraft/recovery"), Path::new("/data/SolveCraft/recovery")));
+        assert_eq!((dir.as_path(), legacy.as_path()), (Path::new("/data/NODE CAD/recovery"), Path::new("/data/SolveCraft/recovery")));
     }
 
     use super::*;

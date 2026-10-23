@@ -191,7 +191,7 @@ pub fn has_hardware_adapter(backends: eframe::wgpu::Backends) -> bool {
 
 /// The message shown when no window could be opened at all.
 pub fn no_window_message(error: &str, settings: Option<&Path>) -> String {
-    let folder = settings.map(|d| d.display().to_string()).unwrap_or_else(|| "the SolidCraft settings folder".into());
+    let folder = settings.map(|d| d.display().to_string()).unwrap_or_else(|| "the NØDE CAD settings folder".into());
     format!(
         "SolidCraft could not open its window.\n\n{error}\n\n\
          The software renderer was tried too. Things to try:\n\
@@ -322,8 +322,8 @@ mod tests {
 
     #[test]
     fn the_message_names_the_settings_folder_and_safe_mode() {
-        let m = no_window_message("no adapter", Some(Path::new("/x/SolidCraft")));
-        assert!(m.contains("no adapter") && m.contains("/x/SolidCraft") && m.contains("--safe-mode"));
+        let m = no_window_message("no adapter", Some(Path::new("/x/NØDE CAD")));
+        assert!(m.contains("no adapter") && m.contains("/x/NØDE CAD") && m.contains("--safe-mode"));
     }
 
     #[test]

@@ -98,60 +98,43 @@ pub(crate) fn breadcrumb(p: &egui::Painter, c: egui::Pos2, col: Color32) {
     p.line_segment([pos2(c.x + 1.5, c.y), pos2(c.x - 1.5, c.y + 3.0)], s);
 }
 
+/// The NØDE CAD mark in the application bar: the geometry of the app icon
+/// (`assets/icons/app/shared/source/app_icon.rs`) without its tile, 20 px tall.
 pub(crate) fn brand_mark(p: &egui::Painter, c: Pos2) {
-    brand_mark_styled(p, c, 20.0, crate::theme::Tokens::get().logo, true);
+    let t = crate::theme::Tokens::get();
+    brand_mark_styled(p, c, 20.0, t.app_bar_text, BRAND_BAR, Some(t.app_bar));
 }
 
-/// The same original mark as a single quiet silhouette, without face seams or outlines.
+/// The same mark as a single quiet silhouette.
 pub(crate) fn brand_mark_silhouette(p: &egui::Painter, c: Pos2, height: f32, ink: Color32) {
-    brand_mark_styled(p, c, height, [ink; 3], false);
+    brand_mark_styled(p, c, height, ink, ink, None);
 }
 
-fn brand_mark_styled(p: &egui::Painter, c: Pos2, height: f32, colours: [Color32; 3], edges: bool) {
-    let s = height / 412.217;
-    let m = |pts: &[(f32, f32)]| -> Vec<egui::Pos2> { pts.iter().map(|&(x, y)| pos2(c.x + (x - 178.5) * s, c.y + (y - 206.1) * s)).collect() };
-    // egui only fills convex shapes, so each face is a few overlapping convex pieces.
-    let face = |col: Color32, pts: &[(f32, f32)]| {
-        p.add(egui::Shape::convex_polygon(m(pts), col, Stroke::NONE));
-    };
-    // The faces are separated by gaps that show the application bar, not by white lines.
-    let [light, mid, dark] = colours;
-    let edge_col = crate::theme::Tokens::get().app_bar;
-    face(light, &[(3.5, 105.9), (177.0, 5.8), (263.4, 55.6), (263.8, 156.0), (177.0, 406.4)]);
-    face(light, &[(177.0, 206.1), (263.8, 156.0), (350.5, 206.2), (350.5, 306.3), (177.0, 406.4)]);
-    face(mid, &[(3.5, 105.9), (177.0, 206.1), (177.0, 406.4)]);
-    face(mid, &[(3.5, 105.9), (3.5, 205.7), (90.3, 256.2), (177.0, 206.1)]);
-    face(mid, &[(177.0, 206.1), (90.3, 256.2), (90.0, 356.2), (177.0, 406.4)]);
-    face(dark, &[(264.1, 155.8), (177.0, 206.1), (177.0, 406.4), (263.8, 256.2)]);
-    face(dark, &[(263.8, 256.2), (350.5, 206.2), (350.5, 306.3), (177.0, 406.4)]);
-    face(dark, &[(177.0, 206.1), (177.0, 406.4), (350.5, 306.3)]);
-    face(dark, &[(263.8, 55.9), (263.8, 156.0), (177.1, 105.9)]);
-    if !edges {
-        return;
+/// The NØDE coral of the bar.
+const BRAND_BAR: Color32 = Color32::from_rgb(0xe5, 0x6e, 0x6e);
+
+/// The hexagon (a cube seen from a corner) with two edges of its top face, cut by the bar. The
+/// cut is painted in `gap`, the colour behind the mark; without one, the bar lies on the outline.
+fn brand_mark_styled(p: &egui::Painter, c: Pos2, height: f32, ring: Color32, bar: Color32, gap: Option<Color32>) {
+    // Mark units are 0..100, as in the app icon.
+    let s = height / 100.0;
+    let m = |x: f32, y: f32| pos2(c.x + (x - 50.0) * s, c.y + (y - 50.0) * s);
+    let (r, h) = (41.0, 20.5);
+    let w = r * 0.866_025_4;
+    let hex = [m(50.0, 50.0 - r), m(50.0 + w, 50.0 - h), m(50.0 + w, 50.0 + h), m(50.0, 50.0 + r), m(50.0 - w, 50.0 + h), m(50.0 - w, 50.0 - h)];
+    p.add(egui::Shape::closed_line(hex.to_vec(), Stroke::new(11.0 * s, ring)));
+    let inner = Stroke::new(7.0 * s, ring);
+    p.line_segment([m(50.0, 50.0), hex[5]], inner);
+    p.line_segment([m(50.0, 50.0), hex[3]], inner);
+    let (from, to) = (m(11.0, 89.0), m(89.0, 11.0));
+    if let Some(gap) = gap {
+        p.line_segment([from, to], Stroke::new(21.0 * s, gap));
+        p.circle_filled(from, 10.5 * s, gap);
+        p.circle_filled(to, 10.5 * s, gap);
     }
-    // The seams between the faces and around the mark, in the bar's colour, so they read as gaps.
-    let edge = Stroke::new(10.0 * s, edge_col);
-    let line = |pts: &[(f32, f32)]| {
-        p.add(egui::Shape::line(m(pts), edge));
-    };
-    line(&[(263.8, 55.9), (177.1, 105.9), (263.8, 156.0), (263.8, 256.2), (350.6, 206.1)]);
-    line(&[(5.0, 105.9), (178.5, 206.1), (178.5, 406.4)]);
-    line(&[(177.0, 206.1), (263.8, 156.0)]);
-    p.add(egui::Shape::closed_line(
-        m(&[
-            (178.5, 5.8),
-            (5.0, 105.9),
-            (5.0, 206.1),
-            (91.7, 256.2),
-            (91.7, 356.4),
-            (178.5, 406.4),
-            (352.0, 306.3),
-            (352.0, 206.1),
-            (265.2, 156.0),
-            (265.2, 55.9),
-        ]),
-        edge,
-    ));
+    p.line_segment([from, to], Stroke::new(13.0 * s, bar));
+    p.circle_filled(from, 6.5 * s, bar);
+    p.circle_filled(to, 6.5 * s, bar);
 }
 
 pub(crate) fn cross(p: &egui::Painter, r: Rect, s: Stroke) {

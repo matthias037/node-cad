@@ -284,9 +284,9 @@ fn step_replies_include_originating_system() -> std::result::Result<(), Box<dyn 
     source.execute("solid.box", &json!({"length": 10, "width": 40, "height": 5}))?;
     source.execute("file.export", &json!({"path": path.to_string_lossy()}))?;
     let text = std::fs::read_to_string(&path)?;
-    assert!(text.contains("'SolidCraft','SolidCraft'"));
-    for system in ["SolidCraft", "Example CAD"] {
-        std::fs::write(&path, text.replace("'SolidCraft','SolidCraft'", &format!("'SolidCraft','{system}'")))?;
+    assert!(text.contains("'NØDE CAD','NØDE CAD'"));
+    for system in ["NØDE CAD", "Example CAD"] {
+        std::fs::write(&path, text.replace("'NØDE CAD','NØDE CAD'", &format!("'NØDE CAD','{system}'")))?;
         for command in ["file.insert_step", "doc.open"] {
             let reply = Session::default().execute(command, &json!({"path": path.to_string_lossy()}))?;
             assert_eq!(reply.get("system").and_then(Value::as_str), Some(system), "{command}: {reply}");
@@ -307,10 +307,10 @@ fn step_replies_name_a_y_up_exporter() -> std::result::Result<(), Box<dyn std::e
     source.execute("solid.box", &json!({"length": 10, "width": 40, "height": 5}))?;
     source.execute("file.export", &json!({"path": path.to_string_lossy()}))?;
     let text = std::fs::read_to_string(&path)?;
-    let header = "'SolidCraft','SolidCraft'";
+    let header = "'NØDE CAD','NØDE CAD'";
     assert!(text.contains(header));
     for (preprocessor, system, want) in [
-        ("SolidCraft", "SolidCraft", Some(("z", "SolidCraft"))),
+        ("NØDE CAD", "NØDE CAD", Some(("z", "NØDE CAD"))),
         ("SolidWorks 2021", "SolidWorks 2021", Some(("y", "SolidWorks"))),
         ("Example CAD", "SOLIDWORKS 2019", Some(("y", "SolidWorks"))),
         ("Example CAD", "Example CAD", None),

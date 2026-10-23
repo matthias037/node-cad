@@ -7,6 +7,13 @@ kernel, and a desktop UI that agents can drive. Projects published by
 Any code adapted from other projects (MIT OR Apache-2.0) is noted in ATTRIBUTION.md.
 
 ## Product name
+This fork ships as **NØDE CAD** (NØDE OS brand). Everything a user sees says NØDE CAD: window
+title, menus, dialogs, every locale, the MCP server (`node-cad`), the macOS bundle
+(`NØDE CAD.app`, id `fr.node-os.cad`) and the app icon (`assets/icons/app/shared/source/app_icon.rs`).
+Text written into files, folder names, user agents and driver ids uses ASCII `NODE CAD` /
+`NODE-CAD`. Crate, binary and environment names stay `solidcraft-*` / `SOLIDCRAFT_*` so upstream
+changes still merge; never put "SolidCraft" back into user-visible text. Upstream rules:
+
 SolidCraft everywhere: crates `solidcraft-*`, binaries `solidcraft` and `solidcraft-cli`,
 `.solidcraft` designs, the `solidcraft/N` format tag, `SOLIDCRAFT_*` environment variables,
 settings and recovery folders, the MCP server name, docs, CI and packaging. The old name
