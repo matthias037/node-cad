@@ -1,4 +1,29 @@
-# Licences remain covered by `cargo xtask licences --check`.
+# `cargo xtask licences --check` keeps THIRD-PARTY-LICENSES.txt current; `cargo deny check
+# licenses` refuses any dependency that is not under a permissive licence.
+[licenses]
+# Permissive licences only, so the product can be sold and shipped closed-source. Copyleft
+# (GPL, LGPL, AGPL, MPL, EUPL, EPL, CDDL, OSL, CC-BY-SA…) is refused by not being listed. A crate
+# offered under several licences ("MIT OR GPL-2.0") passes through its permissive option.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "Unlicense",
+    "BSL-1.0",
+    # Fonts bundled by egui (epaint_default_fonts): may ship inside a commercial program; only
+    # the fonts themselves stay under these licences.
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
+    # Mozilla's root certificate data (webpki-root-certs).
+    "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.93
+
 [advisories]
 # The nightly command downgrades only this diagnostic with --warn unmaintained.
 unmaintained = "all"

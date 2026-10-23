@@ -1,0 +1,26 @@
+# Refuses any dependency that is not under a permissive licence (the allow list in deny.toml), so
+# the product can be sold and shipped closed-source. Runs on GitHub's own runners, so it also runs
+# in forks that have no Blacksmith runners.
+name: Licences
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  licences:
+    name: Permissive licences only
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install licence checker
+        run: cargo install cargo-deny --version 0.20.2 --locked
+      - name: Check licences
+        run: cargo deny --locked check licenses
