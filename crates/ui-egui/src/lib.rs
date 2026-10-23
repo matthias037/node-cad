@@ -163,6 +163,7 @@ mod blend_dialog_tests;
 #[cfg(test)]
 mod boundary_dialog_tests;
 pub(crate) mod display_lod;
+pub mod drawing_workspace;
 #[cfg(test)]
 mod file_load_ui_tests;
 #[cfg(test)]
@@ -391,6 +392,7 @@ pub struct SolveApp {
     saving: Option<save_job::Saving>,
     pub viewport: viewport::ViewportState,
     pub render_workspace: render_workspace::State,
+    pub drawing_workspace: drawing_workspace::State,
     pub tool: Option<tools::Tool>,
     pub dialog: Option<dialogs::Dialog>,
     /// The Change Parameters window, when open.
@@ -561,6 +563,7 @@ impl SolveApp {
             saving: None,
             viewport: viewport::ViewportState::default(),
             render_workspace,
+            drawing_workspace: Default::default(),
             tool: None,
             dialog: None,
             params: None,
@@ -872,6 +875,7 @@ impl SolveApp {
                 }
                 if matches!(id, "file.new" | "doc.open" | "doc.recover") {
                     render_workspace::reset_document(self);
+                    drawing_workspace::reset_document(self);
                     dim_view::cancel();
                     self.menu.props = None;
                     sketch_attachment_ui::clear(self);
@@ -926,6 +930,16 @@ impl SolveApp {
         }
         // A file is loading: the design waits for it.
         if self.file_load.busy() || self.file_picker.is_some() {
+            return;
+        }
+        if drawing_workspace::start(self, id) {
+            return;
+        }
+        if drawing_workspace::active(self)
+            && !id.starts_with("drawing.")
+            && !matches!(id, "assembly.bom" | "sheet.flat_pattern" | "document.metadata" | "document.metadata.set" | "view.layout")
+        {
+            self.set_status(self.tr_label("Return to Design to use this command.").to_string(), true);
             return;
         }
         if id == "view.normal_to" {
@@ -1327,6 +1341,9 @@ impl SolveApp {
             self.flat_view.fitted = false;
             return;
         }
+        if drawing_workspace::active(self) {
+            return;
+        }
         if render_workspace::active(self) {
             self.cancel_view_animation();
             match solidcraft_engine::product_scene::extract(&self.session) {
@@ -1415,6 +1432,9 @@ impl SolveApp {
             self.animate_view("fit");
             return;
         }
+        if drawing_workspace::active(self) {
+            return;
+        }
         if render_workspace::active(self) {
             // The Render preview frames its product scene (see `fit_view`).
             self.fit_view();
@@ -1432,6 +1452,9 @@ impl SolveApp {
         // The flat pattern is a 2D view: Fit and Home frame it, and the Design camera stays put.
         if dialogs_sheet::flat_active(self) && matches!(v, "fit" | "home") {
             self.flat_view.fitted = false;
+            return;
+        }
+        if drawing_workspace::active(self) {
             return;
         }
         if render_workspace::active(self) && matches!(v, "fit" | "home") {
@@ -1682,7 +1705,7 @@ impl SolveApp {
             }
         }
         let floating = ui_kit::Container::new(ui.ctx(), ui_kit::Surface::Panel).floating();
-        let show_timeline = self.ui.show_timeline && !render_workspace::active(self);
+        let show_timeline = self.ui.show_timeline && !render_workspace::active(self) && !drawing_workspace::active(self);
         let left_timeline = show_timeline && self.preferences.timeline_left;
         timeline_left::animate_folds(self, ui.ctx());
         if !floating {
@@ -1754,8 +1777,14 @@ impl SolveApp {
         if manufacture_side::active(self) && !self.home.open {
             manufacture_side::panel(self, ui);
         }
+        if drawing_workspace::active(self) {
+            drawing_workspace::panel(self, ui);
+        }
         if self.ui.show_browser {
             browser::browser(self, ui);
+        }
+        if drawing_workspace::active(self) {
+            drawing_workspace::chrome(self, ui);
         }
         if floating {
             agent_chat::show(self, ui);
@@ -1804,7 +1833,14 @@ impl SolveApp {
     }
 
     fn show_workspace(&mut self, ui: &mut egui::Ui) {
-        if render_workspace::active(self) {
+        if drawing_workspace::active(self) {
+            if dialogs_sheet::flat_active(self) {
+                // This is the existing source manufacturing inspector, not a drawing scene.
+                viewport::show(self, ui);
+            } else {
+                drawing_workspace::show(self, ui);
+            }
+        } else if render_workspace::active(self) {
             render_workspace::show(self, ui);
         } else {
             viewport::show(self, ui);
