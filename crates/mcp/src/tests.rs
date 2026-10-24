@@ -423,7 +423,8 @@ fn batch_stops_at_first_error_and_rolls_back() {
     assert_eq!(body["failed"]["index"], 1, "{body}");
     assert_eq!(body["failed"]["command"], "solid.extrude");
     assert_eq!(body["undone"], 1, "{body}");
-    assert_eq!(body["results"].as_array().unwrap().len(), 1);
+    // Rolled back: the undone step's result is replaced by a note saying nothing was kept.
+    assert!(body.get("results").is_none() && body["note"].as_str().is_some_and(|n| n.contains("Nothing was kept")), "{body}");
     // Only the first box is left, and its undo step is intact.
     assert_eq!(tool(&mut s, "measure", json!({}))["body_count"], 1);
     assert_eq!(tool(&mut s, "inspect_design", json!({"measure": false}))["undo"], 1);
@@ -1431,7 +1432,8 @@ fn batch_reports_a_failed_engine_batch_like_before() {
     assert!(is_error);
     assert_eq!(
         body,
-        json!({"ok": false, "completed": 1, "failed": {"index": 1, "command": "a.two", "error": "boom"}, "rolled_back": true, "undone": 1, "results": [{"x": 1}]})
+        json!({"ok": false, "completed": 1, "failed": {"index": 1, "command": "a.two", "error": "boom"}, "rolled_back": true, "undone": 1,
+            "note": "Nothing was kept: the steps that had run were undone with the failure (parameters, planes and sketches included). Send the corrected batch again in full."})
     );
 }
 

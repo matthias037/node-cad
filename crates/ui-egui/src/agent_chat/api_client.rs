@@ -26,6 +26,11 @@ pub const MAX_REQUESTS_PER_TURN: usize = 24;
 const MAX_TOOL_TEXT: usize = 20_000;
 /// Messages kept in the conversation (the system note stays).
 const MAX_HISTORY: usize = 240;
+/// A tool result of an earlier message keeps this many characters: the model rarely needs a
+/// past reading again, and each request sends the whole history.
+const OLD_TOOL_TEXT: usize = 600;
+/// Tool results kept whole within a message: the most recent ones.
+const KEPT_TOOL_RESULTS: usize = 3;
 /// How long one model request may take.
 const REQUEST_TIMEOUT_S: u64 = 300;
 /// How long one tool call may take (it may wait for the user's Allow).
@@ -301,9 +306,15 @@ impl Worker {
 
     fn turn(&mut self, parts: Vec<PromptPart>) {
         let parts = self.read_documents(parts);
+        shorten_tool_results(&mut self.history, OLD_TOOL_TEXT);
         self.history.push(user_message(self.cfg.protocol, &parts));
         self.trim_history();
+        let mut failures: Vec<String> = Vec::new();
         for _ in 0..MAX_REQUESTS_PER_TURN {
+            // Within a message too, only the last results stay whole: a long turn resent every
+            // earlier design reading with each request.
+            let cut = keep_last_tool_results(&self.history, KEPT_TOOL_RESULTS);
+            shorten_tool_results(&mut self.history[..cut], OLD_TOOL_TEXT);
             // The history as of here is complete (every tool call answered): a cancelled request
             // goes back to it, so no half-finished round is left to confuse the next message.
             let sound = self.history.len();
@@ -363,6 +374,16 @@ impl Worker {
                         Ok(r) => tool_text(&r),
                         Err(e) => (e, true),
                     }
+                };
+                // The same failure again: say so, so the model changes its approach instead of
+                // looping (each retry resends the whole conversation).
+                let text = if failed && failures.contains(&text) {
+                    format!("{text}\n(The same failure as before: change your approach, or ask the person.)")
+                } else {
+                    if failed {
+                        failures.push(text.clone());
+                    }
+                    text
                 };
                 let shown: String = text.chars().take(2000).collect();
                 self.emit(Event::Tool {
@@ -828,6 +849,13 @@ fn tool_text(r: &Value) -> (String, bool) {
         })
         .unwrap_or_default();
     let mut text = parts.join("\n");
+    // Compact JSON for the model: the indentation tool servers add for people costs about half
+    // the tokens of a design reading and tells the model nothing.
+    if let Ok(v) = serde_json::from_str::<Value>(text.trim())
+        && (v.is_object() || v.is_array())
+    {
+        text = v.to_string();
+    }
     if text.len() > MAX_TOOL_TEXT {
         let mut cut = MAX_TOOL_TEXT;
         while !text.is_char_boundary(cut) {
@@ -837,6 +865,52 @@ fn tool_text(r: &Value) -> (String, bool) {
         text.push_str("\n…(cut)");
     }
     (text, failed)
+}
+
+/// Where the last `keep` messages carrying tool results begin: everything before is cut.
+fn keep_last_tool_results(history: &[Value], keep: usize) -> usize {
+    let carries = |m: &Value| {
+        m.get("role").and_then(Value::as_str) == Some("tool")
+            || m.get("content")
+                .and_then(Value::as_array)
+                .is_some_and(|b| b.iter().any(|b| b.get("type").and_then(Value::as_str) == Some("tool_result")))
+    };
+    let mut seen = 0;
+    for (i, m) in history.iter().enumerate().rev() {
+        if carries(m) {
+            seen += 1;
+            if seen == keep {
+                return i;
+            }
+        }
+    }
+    0
+}
+
+/// Cut the tool results already in `history` to `max` characters (OpenAI `tool` messages, and
+/// Anthropic `tool_result` blocks): called before a new message, they are past readings.
+fn shorten_tool_results(history: &mut [Value], max: usize) {
+    fn cut(text: &mut Value, max: usize) {
+        if let Some(s) = text.as_str()
+            && s.chars().count() > max
+        {
+            let kept: String = s.chars().take(max).collect();
+            *text = Value::String(format!("{kept}…(shortened: a result from an earlier message)"));
+        }
+    }
+    for m in history.iter_mut() {
+        if m.get("role").and_then(Value::as_str) == Some("tool") {
+            if let Some(c) = m.get_mut("content") {
+                cut(c, max);
+            }
+        } else if let Some(blocks) = m.get_mut("content").and_then(Value::as_array_mut) {
+            for b in blocks.iter_mut().filter(|b| b.get("type").and_then(Value::as_str) == Some("tool_result")) {
+                if let Some(c) = b.get_mut("content") {
+                    cut(c, max);
+                }
+            }
+        }
+    }
 }
 
 /// What a tool call card says: the tool and, for `execute` and `batch`, the commands.
@@ -902,6 +976,33 @@ pub fn test_endpoint(http: &HttpFn, base_url: &str, key: Option<&str>, model: &s
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tool_results_go_compact_and_past_ones_are_shortened() {
+        let r = json!({"content": [{"type": "text", "text": "{\n  \"bodies\": [\n    {\"name\": \"Plate\"}\n  ]\n}"}]});
+        assert_eq!(tool_text(&r).0, r#"{"bodies":[{"name":"Plate"}]}"#);
+        // Text that is not JSON stays as it is.
+        assert_eq!(tool_text(&json!({"content": [{"type": "text", "text": "done"}]})).0, "done");
+        let long = "x".repeat(900);
+        let mut history = vec![
+            json!({"role": "user", "content": "Mesure"}),
+            json!({"role": "tool", "tool_call_id": "a", "content": long.clone()}),
+            json!({"role": "user", "content": [{"type": "tool_result", "tool_use_id": "b", "content": long.clone()}]}),
+            json!({"role": "tool", "tool_call_id": "c", "content": "court"}),
+        ];
+        shorten_tool_results(&mut history, OLD_TOOL_TEXT);
+        let first = history[1]["content"].as_str().unwrap_or_default();
+        assert!(first.starts_with(&"x".repeat(OLD_TOOL_TEXT)) && first.contains("shortened") && first.chars().count() < 700);
+        assert!(history[2]["content"][0]["content"].as_str().unwrap_or_default().contains("shortened"));
+        assert_eq!(history[3]["content"], "court");
+        assert_eq!(history[0]["content"], "Mesure");
+        // Within a message, the last results stay whole.
+        let tool = |c: &str| json!({"role": "tool", "tool_call_id": "t", "content": c});
+        let h =
+            vec![json!({"role": "user", "content": "x"}), tool("a"), tool("b"), json!({"role": "assistant", "content": ""}), tool("c"), tool("d")];
+        assert_eq!(keep_last_tool_results(&h, 3), 2);
+        assert_eq!(keep_last_tool_results(&h, 9), 0);
+    }
 
     #[test]
     fn mcp_tools_become_function_tools_without_crash_reports() {

@@ -272,14 +272,20 @@ pub(super) fn operation(p: &Value, cmd: &str) -> Result<Operation> {
     }
 }
 
+/// What a wrong `sketch` is told: the names it can take instead.
+pub(super) fn sketch_names(s: &Session) -> String {
+    let names: Vec<&str> = s.doc.features.iter().filter(|f| matches!(f.kind, FeatureKind::Sketch { .. })).map(|f| f.name.as_str()).take(12).collect();
+    if names.is_empty() { "the design has no sketch yet".into() } else { format!("sketches: {}", names.join(", ")) }
+}
+
 /// The sketch a feature uses: `sketch` param, the active sketch, or the last sketch.
 pub(super) fn feature_sketch(s: &Session, p: &Value, cmd: &str) -> Result<u64> {
     if let Some(v) = p.get("sketch") {
         let key = sketch_key(Some(v)).ok_or_else(|| bad(cmd, "`sketch` must be an id or name"))?;
-        let f = s.doc.find_feature(&key).ok_or_else(|| bad(cmd, format!("no sketch `{key}`")))?;
+        let f = s.doc.find_feature(&key).ok_or_else(|| bad(cmd, format!("no sketch `{key}` ({})", sketch_names(s))))?;
         return match f.kind {
             FeatureKind::Sketch { .. } => Ok(f.id),
-            _ => Err(bad(cmd, format!("`{key}` is not a sketch"))),
+            _ => Err(bad(cmd, format!("`{key}` is not a sketch ({})", sketch_names(s)))),
         };
     }
     if let Some(a) = s.active_sketch {

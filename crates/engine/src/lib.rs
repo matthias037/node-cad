@@ -786,6 +786,18 @@ impl Session {
     /// gesture's end (`sketch.drag_end`, or whatever runs next after an abandoned gesture) brings
     /// the model up to date before anything reads it.
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
+        // Agents mix up their MCP tools and the commands: `set_parameter` in a batch means
+        // `parameters.change`, whose `expression` the tool calls `value`.
+        if id == "set_parameter" {
+            let mut p = params.clone();
+            if let Some(o) = p.as_object_mut()
+                && !o.contains_key("expression")
+                && let Some(v) = o.remove("value")
+            {
+                o.insert("expression".into(), v);
+            }
+            return self.execute("parameters.change", &p);
+        }
         let spec = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.to_string()))?;
         let host_viewport = self.render_viewport.clone();
         let host_jobs = self.render_jobs.host.clone();

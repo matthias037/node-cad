@@ -637,8 +637,8 @@ pub(super) fn plane_ref(s: &Session, p: &Value, cmd: &str) -> Result<PlaneRef> {
                     Some(o) => vec3(o)
                         .ok_or_else(|| bad(cmd, "plane `origin` must be three numbers [x, y, z] in mm (expressions are not evaluated here)"))?,
                 };
-                let x = v.get("x_dir").and_then(vec3).ok_or_else(|| bad(cmd, "plane needs x_dir"))?;
-                let y = v.get("y_dir").and_then(vec3).ok_or_else(|| bad(cmd, "plane needs y_dir"))?;
+                let (x, y) =
+                    plane_axes(v).ok_or_else(|| bad(cmd, r#"`plane` needs `normal` (or `x_dir` and `y_dir`); simplest: "XY", "XZ" or "YZ""#))?;
                 PlaneRef::Custom { plane: Plane::new(origin, x, y).ok_or_else(|| bad(cmd, "degenerate plane"))? }
             }
         }
@@ -648,6 +648,27 @@ pub(super) fn plane_ref(s: &Session, p: &Value, cmd: &str) -> Result<PlaneRef> {
         Some(d) => PlaneRef::Offset { base: Box::new(base), distance: d },
         None => base,
     })
+}
+
+/// The sketch axes of a plane object: `x_dir` and `y_dir`, or from its `normal` (with `x_dir`
+/// when given). From a normal alone the axes follow the origin planes: a normal along Z gives
+/// XY's axes, along Y XZ's (y towards −Z), along X YZ's, so `{normal: [0, 1, 0]}` sketches like
+/// "XZ". Agents often give a plane by its normal only.
+pub(super) fn plane_axes(v: &Value) -> Option<(Vec3, Vec3)> {
+    let given_x = v.get("x_dir").and_then(vec3);
+    if let (Some(x), Some(y)) = (given_x, v.get("y_dir").and_then(vec3)) {
+        return Some((x, y));
+    }
+    let n = v.get("normal").and_then(vec3).and_then(|n| n.normalized())?;
+    let x = match given_x.and_then(|x| (x - n * x.dot(n)).normalized()) {
+        Some(x) => x,
+        None => {
+            // The world axis least along the normal, made square to it.
+            let pick = if n.x.abs() >= n.y.abs().max(n.z.abs()) { Vec3::new(0.0, 1.0, 0.0) } else { Vec3::new(1.0, 0.0, 0.0) };
+            (pick - n * pick.dot(n)).normalized()?
+        }
+    };
+    Some((x, n.cross(x)))
 }
 
 /// Does triangle set of face `fi` contain point `p` (within `tol` of the face plane)?
@@ -811,10 +832,25 @@ fn draw_line(s: &mut Session, p: &Value) -> Result<Value> {
     let infer = bool_(p, "infer").unwrap_or(false);
     let ids = string_list(p, "ids");
     let ((curves, cons), info) = draw(s, p, cmd, |sk, doc| {
-        let args: Vec<PArg> = list.iter().map(|v| parg(sk, doc, v, cmd)).collect::<Result<_>>()?;
+        let all: Vec<PArg> = list.iter().map(|v| parg(sk, doc, v, cmd)).collect::<Result<_>>()?;
+        // A point repeated right after itself (an agent closing a loop by giving its first
+        // point again) would be a zero-length line: it is drawn once.
+        let mut keep: Vec<usize> = Vec::new();
+        for (i, a) in all.iter().enumerate() {
+            if keep.last().is_none_or(|&k| all[k].pos().dist(a.pos()) >= 1e-9) {
+                keep.push(i);
+            }
+        }
+        if closed && keep.len() > 2 && keep.last().is_some_and(|&k| all[k].pos().dist(all[keep[0]].pos()) < 1e-9) {
+            keep.pop();
+        }
+        let args: Vec<&PArg> = keep.iter().map(|&i| &all[i]).collect();
+        if args.len() < 2 {
+            return Err(bad(cmd, "a line needs 2 or more distinct points"));
+        }
         let n = args.len();
         let segs = if closed { n } else { n - 1 };
-        let mut pts: Vec<Option<usize>> = args.iter().map(PArg::idx).collect();
+        let mut pts: Vec<Option<usize>> = args.iter().map(|a| a.idx()).collect();
         let mut curves = Vec::new();
         let mut cons = Vec::new();
         for i in 0..segs {
@@ -1000,9 +1036,25 @@ fn rect_result(sk_out: (Vec<String>, Vec<String>), names: Value, info: Value) ->
     out
 }
 
+/// A point `[x, y]` whose coordinates are numbers in mm or expressions over the design's
+/// parameters ("L", "L / 2"), evaluated now: agents give shapes in parameters as often as in
+/// numbers. A sketch.dimension then makes a parameter drive the size.
+pub(super) fn point_arg(s: &Session, p: &Value, k: &str, cmd: &str) -> Result<Vec2> {
+    let must = || bad(cmd, format!("`{k}` must be a point [x, y] (numbers in mm or expressions)"));
+    let a = p.get(k).and_then(Value::as_array).filter(|a| a.len() == 2).ok_or_else(must)?;
+    let c = |v: &Value| -> Result<f64> {
+        match v {
+            Value::Number(n) => n.as_f64().ok_or_else(must),
+            Value::String(e) => s.doc.eval(e, Kind::Length).map_err(|err| bad(cmd, format!("`{k}`: {err}"))),
+            _ => Err(must()),
+        }
+    };
+    Ok(Vec2::new(c(&a[0])?, c(&a[1])?))
+}
+
 fn rect_two_point(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.rectangle.two_point";
-    let (a, b) = (req_vec2(cmd, p, "p0")?, req_vec2(cmd, p, "p1")?);
+    let (a, b) = (point_arg(s, p, "p0", cmd)?, point_arg(s, p, "p1", cmd)?);
     if (a.x - b.x).abs() < 1e-9 || (a.y - b.y).abs() < 1e-9 {
         return Err(bad(cmd, "the corners must differ in x and y"));
     }
@@ -1023,7 +1075,7 @@ fn rect_two_point(s: &mut Session, p: &Value) -> Result<Value> {
 /// fillet run in a scratch session that replaces the design only when both succeed.
 fn rect_rounded(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.rectangle.rounded";
-    let (a, b) = (req_vec2(cmd, p, "p0")?, req_vec2(cmd, p, "p1")?);
+    let (a, b) = (point_arg(s, p, "p0", cmd)?, point_arg(s, p, "p1", cmd)?);
     let r_expr = expr(p, "radius").ok_or_else(|| bad(cmd, "`radius` must be a number or an expression"))?;
     let r = s.doc.eval(&r_expr, Kind::Length).map_err(|e| bad(cmd, format!("radius: {e}")))?;
     if !(r > 1e-9 && r < 1e8) {
@@ -1075,7 +1127,7 @@ fn rect_rounded(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn rect_center(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.rectangle.center";
-    let (c, k) = (req_vec2(cmd, p, "center")?, req_vec2(cmd, p, "corner")?);
+    let (c, k) = (point_arg(s, p, "center", cmd)?, point_arg(s, p, "corner", cmd)?);
     let h = Vec2::new((k.x - c.x).abs(), (k.y - c.y).abs());
     if h.x < 1e-9 || h.y < 1e-9 {
         return Err(bad(cmd, "the corner must differ from the centre in x and y"));
@@ -1108,7 +1160,7 @@ fn rect_center(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn rect_three_point(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.rectangle.three_point";
-    let (a, b, c) = (req_vec2(cmd, p, "p0")?, req_vec2(cmd, p, "p1")?, req_vec2(cmd, p, "p2")?);
+    let (a, b, c) = (point_arg(s, p, "p0", cmd)?, point_arg(s, p, "p1", cmd)?, point_arg(s, p, "p2", cmd)?);
     let d = (b - a).normalized().ok_or_else(|| bad(cmd, "p0 and p1 must differ"))?;
     let n = d.perp();
     let w = (c - a).dot(n);
@@ -1138,10 +1190,31 @@ pub(super) fn radius_arg(p: &Value, cmd: &str) -> Result<f64> {
     if r > 1e-9 { Ok(r) } else { Err(bad(cmd, "radius must be positive")) }
 }
 
+/// A circle's radius from `radius` or `diameter`: a number in mm, or an expression over the
+/// design's parameters ("10 mm", "d_trou / 2") evaluated now. Agents write sizes as text and
+/// parameter names as often as numbers, and were refused for it with a message that did not say
+/// why.
+fn circle_radius(s: &Session, p: &Value, cmd: &str) -> Result<f64> {
+    let size = |key: &str| -> Result<Option<f64>> {
+        match p.get(key) {
+            None | Some(Value::Null) => Ok(None),
+            Some(Value::Number(n)) => Ok(n.as_f64()),
+            Some(Value::String(e)) => s.doc.eval(e, Kind::Length).map(Some).map_err(|err| bad(cmd, format!("`{key}`: {err}"))),
+            Some(_) => Err(bad(cmd, format!("`{key}` must be a number in mm or an expression"))),
+        }
+    };
+    let r = match (size("radius")?, size("diameter")?) {
+        (Some(r), _) => r,
+        (None, Some(d)) => d / 2.0,
+        _ => return Err(bad(cmd, "needs `radius` or `diameter` (a number in mm or an expression)")),
+    };
+    if r > 1e-9 { Ok(r) } else { Err(bad(cmd, "radius must be positive")) }
+}
+
 fn circle_center(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.circle.center";
     let p = &super::sketch_project::snap_points(s, p, cmd)?;
-    let r = radius_arg(p, cmd)?;
+    let r = circle_radius(s, p, cmd)?;
     let id = str_(p, "id").map(str::to_string);
     let (out, info) = draw(s, p, cmd, |sk, doc| {
         let c = req_parg(sk, doc, p, "center", cmd)?;
@@ -1162,7 +1235,7 @@ fn circle_center(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn circle_two(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.circle.two_point";
-    let (a, b) = (req_vec2(cmd, p, "p0")?, req_vec2(cmd, p, "p1")?);
+    let (a, b) = (point_arg(s, p, "p0", cmd)?, point_arg(s, p, "p1", cmd)?);
     let r = a.dist(b) / 2.0;
     if r < 1e-9 {
         return Err(bad(cmd, "the points must differ"));
@@ -1190,7 +1263,7 @@ pub(super) fn circumcircle(a: Vec2, b: Vec2, c: Vec2) -> Option<(Vec2, f64)> {
 
 fn circle_three(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.circle.three_point";
-    let (a, b, c) = (req_vec2(cmd, p, "p0")?, req_vec2(cmd, p, "p1")?, req_vec2(cmd, p, "p2")?);
+    let (a, b, c) = (point_arg(s, p, "p0", cmd)?, point_arg(s, p, "p1", cmd)?, point_arg(s, p, "p2", cmd)?);
     let (o, r) = circumcircle(a, b, c).ok_or_else(|| bad(cmd, "the points are collinear"))?;
     let (out, info) = draw(s, p, cmd, |sk, _| {
         let ci = sk.add_circle(o, r, None, None)?;
@@ -1310,7 +1383,7 @@ fn sides(p: &Value, cmd: &str) -> Result<usize> {
 
 fn polygon_inscribed(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.polygon.inscribed";
-    let c = req_vec2(cmd, p, "center")?;
+    let c = point_arg(s, p, "center", cmd)?;
     let r = radius_arg(p, cmd)?;
     let n = sides(p, cmd)?;
     let a = num(p, "angle").unwrap_or(90.0).to_radians();
@@ -1319,7 +1392,7 @@ fn polygon_inscribed(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn polygon_circumscribed(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.polygon.circumscribed";
-    let c = req_vec2(cmd, p, "center")?;
+    let c = point_arg(s, p, "center", cmd)?;
     let r = radius_arg(p, cmd)?;
     let n = sides(p, cmd)?;
     let a = num(p, "angle").unwrap_or(90.0).to_radians();
@@ -1328,7 +1401,7 @@ fn polygon_circumscribed(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn polygon_edge(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.polygon.edge";
-    let (a, b) = (req_vec2(cmd, p, "p0")?, req_vec2(cmd, p, "p1")?);
+    let (a, b) = (point_arg(s, p, "p0", cmd)?, point_arg(s, p, "p1", cmd)?);
     let n = sides(p, cmd)?;
     let e = a.dist(b);
     if e < 1e-9 {
@@ -1367,14 +1440,14 @@ pub(super) fn slot(s: &mut Session, p: &Value, cmd: &str, c0: Vec2, c1: Vec2, w:
 
 fn slot_c2c(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.slot.center_to_center";
-    let (a, b) = (req_vec2(cmd, p, "p0")?, req_vec2(cmd, p, "p1")?);
+    let (a, b) = (point_arg(s, p, "p0", cmd)?, point_arg(s, p, "p1", cmd)?);
     let w = num(p, "width").filter(|w| *w > 1e-9).ok_or_else(|| bad(cmd, "`width` must be positive"))?;
     slot(s, p, cmd, a, b, w)
 }
 
 fn slot_overall(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.slot.overall";
-    let (a, b) = (req_vec2(cmd, p, "p0")?, req_vec2(cmd, p, "p1")?);
+    let (a, b) = (point_arg(s, p, "p0", cmd)?, point_arg(s, p, "p1", cmd)?);
     let w = num(p, "width").filter(|w| *w > 1e-9).ok_or_else(|| bad(cmd, "`width` must be positive"))?;
     let d = (b - a).normalized().ok_or_else(|| bad(cmd, "the slot ends must differ"))?;
     if a.dist(b) <= w {

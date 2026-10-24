@@ -597,14 +597,7 @@ fn batch(b: &mut dyn Backend, a: &Map<String, Value>) -> Value {
             Ok(v) => results.push(if verbose { v } else { compact(v) }),
             Err(e) => {
                 let (rolled_back, undone) = start.rollback(b, i);
-                let reply = json!({
-                    "ok": false,
-                    "completed": i,
-                    "failed": {"index": i, "command": command, "error": e},
-                    "rolled_back": rolled_back,
-                    "undone": undone,
-                    "results": results,
-                });
+                let reply = failure_reply(json!({"index": i, "command": command, "error": e}), json!(i), rolled_back, json!(undone), results);
                 return text_result(&with_timings(reply, timed, rows, clock.ms()), true);
             }
         }
@@ -612,6 +605,21 @@ fn batch(b: &mut dyn Backend, a: &Map<String, Value>) -> Value {
     start.finish(b);
     let reply = json!({"ok": true, "completed": results.len(), "results": results});
     text_result(&with_timings(reply, timed, rows, clock.ms()), false)
+}
+
+/// A failed batch's reply. Rolled back, the steps that had run are gone with the failure: their
+/// results would only mislead (an agent went on naming the parameters and sketches they had
+/// made), so a note says so in their place.
+fn failure_reply(failed: Value, completed: Value, rolled_back: bool, undone: Value, results: Vec<Value>) -> Value {
+    let mut reply = json!({"ok": false, "completed": completed, "failed": failed, "rolled_back": rolled_back, "undone": undone});
+    if rolled_back && !results.is_empty() {
+        reply["note"] = json!(
+            "Nothing was kept: the steps that had run were undone with the failure (parameters, planes and sketches included). Send the corrected batch again in full."
+        );
+    } else {
+        reply["results"] = Value::Array(results);
+    }
+    reply
 }
 
 /// `reply` with `timings` and `total_ms` when they were asked for.
@@ -635,17 +643,7 @@ fn batch_reply(r: &Value, rollback: bool, verbose: bool) -> Value {
             // predates that field and undid none of the steps it had completed did not go back.
             let undone = r["undone"].as_u64().unwrap_or(0);
             let went_back = r.get("rolled_back").and_then(Value::as_bool).unwrap_or(undone > 0 || r["completed"].as_u64() == Some(0));
-            (
-                json!({
-                    "ok": false,
-                    "completed": r["completed"],
-                    "failed": failed,
-                    "rolled_back": rollback && went_back,
-                    "undone": r["undone"],
-                    "results": results,
-                }),
-                true,
-            )
+            (failure_reply(failed.clone(), r["completed"].clone(), rollback && went_back, r["undone"].clone(), results), true)
         }
     };
     // The app timed the steps where they ran.

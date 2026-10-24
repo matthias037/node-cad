@@ -583,10 +583,11 @@ fn infinite_line(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn ellipse(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.ellipse";
-    let (c, m) = (req_vec2(cmd, p, "center")?, req_vec2(cmd, p, "major")?);
+    let (c, m) = (super::sketch::point_arg(s, p, "center", cmd)?, super::sketch::point_arg(s, p, "major", cmd)?);
     let u = (m - c).normalized().ok_or_else(|| bad(cmd, "the major axis end must differ from the centre"))?;
     let a = c.dist(m);
-    let r = match (num(p, "minor_radius"), p.get("minor").and_then(crate::params::vec2)) {
+    // `minor` given as a number is the minor radius (as agents write it).
+    let r = match (num(p, "minor_radius").or_else(|| num(p, "minor")), p.get("minor").and_then(crate::params::vec2)) {
         (Some(r), _) => r,
         (None, Some(q)) => {
             // Minor radius so the ellipse passes through q.
@@ -921,7 +922,7 @@ fn width(p: &Value, cmd: &str) -> Result<f64> {
 
 fn slot_center_point(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.slot.center_point";
-    let (c, e) = (req_vec2(cmd, p, "center")?, req_vec2(cmd, p, "end")?);
+    let (c, e) = (super::sketch::point_arg(s, p, "center", cmd)?, super::sketch::point_arg(s, p, "end", cmd)?);
     let w = width(p, cmd)?;
     slot(s, p, cmd, c * 2.0 - e, e, w)
 }
@@ -963,7 +964,8 @@ fn arc_slot(s: &mut Session, p: &Value, cmd: &str, o: Vec2, r: f64, t0: f64, swe
 
 fn arc_slot_three(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.slot.arc_three_point";
-    let (a, t, b) = (req_vec2(cmd, p, "start")?, req_vec2(cmd, p, "through")?, req_vec2(cmd, p, "end")?);
+    let (a, t, b) =
+        (super::sketch::point_arg(s, p, "start", cmd)?, super::sketch::point_arg(s, p, "through", cmd)?, super::sketch::point_arg(s, p, "end", cmd)?);
     let w = width(p, cmd)?;
     let (o, r) = circumcircle(a, t, b).ok_or_else(|| bad(cmd, "the points are collinear"))?;
     let ang = |q: Vec2| (q - o).angle();
@@ -975,7 +977,8 @@ fn arc_slot_three(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn arc_slot_center(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.slot.arc_center";
-    let (o, a, b) = (req_vec2(cmd, p, "center")?, req_vec2(cmd, p, "start")?, req_vec2(cmd, p, "end")?);
+    let (o, a, b) =
+        (super::sketch::point_arg(s, p, "center", cmd)?, super::sketch::point_arg(s, p, "start", cmd)?, super::sketch::point_arg(s, p, "end", cmd)?);
     let w = width(p, cmd)?;
     let r = o.dist(a);
     if r < 1e-9 || o.dist(b) < 1e-9 {

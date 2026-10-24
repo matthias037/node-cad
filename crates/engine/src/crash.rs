@@ -1146,7 +1146,8 @@ pub fn read(dir: &Path, id: &str) -> std::result::Result<Value, String> {
     let mut v = read_report_file(&folder.join("report.json")).ok_or_else(|| format!("no crash report `{id}`"))?;
     v["path"] = json!(folder.to_string_lossy());
     // Reports of earlier releases hold `design.solidcraft` (compatibility shim, docs/compatibility.md).
-    let files = [("design_path", LEGACY_DESIGN_FILE), ("design_path", DESIGN_FILE), ("replay_path", "replay.json"), ("minidump_path", "minidump.dmp")];
+    let files =
+        [("design_path", LEGACY_DESIGN_FILE), ("design_path", DESIGN_FILE), ("replay_path", "replay.json"), ("minidump_path", "minidump.dmp")];
     for (k, f) in files {
         if folder.join(f).is_file() {
             v[k] = json!(folder.join(f).to_string_lossy());

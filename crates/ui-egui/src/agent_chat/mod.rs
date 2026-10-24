@@ -758,7 +758,9 @@ pub fn connect(app: &mut SolveApp, ctx: &egui::Context) {
         return;
     }
     // An API agent's key comes from the keychain for this connection only.
-    let key = if entry.kind.is_api() && entry.key {
+    let key = if let Some(t) = (entry.id == node_ia::ID).then(node_ia::env_token).flatten() {
+        Some(t)
+    } else if entry.kind.is_api() && entry.key {
         match app.services.secrets.as_ref().map(|s| s.get(&entry.id)) {
             Some(Ok(k)) => k,
             Some(Err(e)) => {

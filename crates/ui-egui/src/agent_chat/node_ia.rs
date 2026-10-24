@@ -12,7 +12,7 @@ use super::agents::{Entry, Kind};
 pub const ID: &str = "node-ia";
 pub const NAME: &str = "NØDE IA";
 /// The model a conversation starts with; the relay offers its list (`/models`).
-pub const DEFAULT_MODEL: &str = "mistral-large-latest";
+pub const DEFAULT_MODEL: &str = "mistral-medium-latest";
 const SITE: &str = "https://node-os.fr";
 
 /// The site that sells NØDE IA: node-os.fr, or `NODE_CAD_IA_SITE` to try a local copy of it.
@@ -39,9 +39,19 @@ pub fn subscribe_page() -> String {
     format!("{}/cad#ia", site())
 }
 
-/// Signed in: an address is remembered (its token is in the keychain).
+/// Signed in: an address is remembered (its token is in the keychain), or a token is given by
+/// `NODE_CAD_IA_JETON` (a test bench: the keychain asks again after every rebuild).
 pub fn signed_in(app: &crate::SolveApp) -> bool {
-    !app.preferences.node_ia_email.is_empty()
+    !app.preferences.node_ia_email.is_empty() || env_token().is_some()
+}
+
+/// The token `NODE_CAD_IA_JETON` gives instead of the keychain's.
+pub fn env_token() -> Option<String> {
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(t) = std::env::var("NODE_CAD_IA_JETON").ok().filter(|t| !t.trim().is_empty()) {
+        return Some(t.trim().to_string());
+    }
+    None
 }
 
 /// NØDE IA as the picker and the chat see it: the only agent of the official app.

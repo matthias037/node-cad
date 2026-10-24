@@ -737,7 +737,10 @@ fn picks_are_still_looked_up_one_at_a_time() {
         error(&mut s, "solid.sweep", json!({"path_sketch": "Nope", "path": ["l1"]})),
         "invalid parameters for `solid.sweep`: no sketch `Nope`"
     );
-    assert_eq!(error(&mut s, "solid.extrude", json!({"distance": 5, "sketch": "Nope"})), "invalid parameters for `solid.extrude`: no sketch `Nope`");
+    assert_eq!(
+        error(&mut s, "solid.extrude", json!({"distance": 5, "sketch": "Nope"})),
+        "invalid parameters for `solid.extrude`: no sketch `Nope` (sketches: Sketch1)"
+    );
     let r = s.execute("solid.fillet", &fillet(json!([{"body": "Body1", "index": 0}]))).unwrap_or_else(|e| panic!("{e}"));
     assert_eq!(r["changed_bodies"], json!(["Body1"]), "{r}");
 }

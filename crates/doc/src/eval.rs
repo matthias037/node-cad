@@ -2144,7 +2144,10 @@ fn refuse_loft_holes(r: &Region2) -> Result<()> {
 pub fn select_profiles(ss: &SolvedSketch, sel: &ProfileSel) -> Result<Vec<Region2>> {
     let ps = &ss.profiles;
     if ps.is_empty() {
-        return Err(DocError::Invalid(format!("{} has no closed profiles", ss.name)));
+        return Err(DocError::Invalid(format!(
+            "{} has no closed profiles (its curves do not close a loop; a section is one closed profile)",
+            ss.name
+        )));
     }
     let out: Vec<Region2> = match sel {
         // "All" means what was drawn: projected reference geometry (a face's auto-projected

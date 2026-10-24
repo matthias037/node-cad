@@ -4105,3 +4105,75 @@ fn creating_a_component_recomputes_nothing() {
         run(&mut s, "component.activate", json!({"component": "root"}));
     }
 }
+
+/// An agent's plane given by its normal only builds the axes of the matching origin plane, and a
+/// wrong `sketch` name is answered with the names there are.
+#[test]
+fn a_plane_from_its_normal_sketches_like_the_origin_plane() {
+    let centre = |plane: Value| {
+        let mut s = Session::default();
+        run(&mut s, "sketch.create", json!({"plane": plane}));
+        run(&mut s, "sketch.circle.center", json!({"center": [30, 10], "diameter": 4}));
+        run(&mut s, "sketch.finish", json!({}));
+        run(&mut s, "solid.extrude", json!({"distance": 2}));
+        let b = &run(&mut s, "inspect.measure", json!({}))["bodies"][0]["bbox"];
+        (0..3).map(|i| ((b["min"][i].as_f64().unwrap() + b["max"][i].as_f64().unwrap()) / 2.0 * 100.0).round() / 100.0).collect::<Vec<_>>()
+    };
+    for (named, normal) in [("XY", [0, 0, 1]), ("XZ", [0, 1, 0]), ("YZ", [1, 0, 0])] {
+        assert_eq!(centre(json!({"normal": normal})), centre(json!(named)), "{named}");
+    }
+    let mut s = Session::default();
+    run(&mut s, "sketch.create", json!({"plane": "XY"}));
+    run(&mut s, "sketch.circle.center", json!({"center": [0, 0], "diameter": 4}));
+    run(&mut s, "sketch.finish", json!({}));
+    let e = s.execute("solid.extrude", &json!({"sketch": "0", "distance": 2})).unwrap_err().to_string();
+    assert!(e.contains("no sketch `0`") && e.contains("sketches: Sketch1"), "{e}");
+    let e = s.execute("sketch.create", &json!({"plane": {"origin": [0, 0, 0]}})).unwrap_err().to_string();
+    assert!(e.contains("normal") && e.contains("\"XY\""), "{e}");
+}
+
+/// What agents get wrong most and the engine now takes: a polyline repeating its first point to
+/// close itself, and `set_parameter` (a tool's name) in a batch.
+#[test]
+fn a_repeated_closing_point_and_set_parameter_are_taken() {
+    let mut s = Session::default();
+    run(&mut s, "set_parameter", json!({"name": "L", "value": "100 mm"}));
+    run(&mut s, "sketch.create", json!({"plane": "XY"}));
+    let r = run(&mut s, "sketch.line", json!({"points": [[0, 0], ["L", 0], ["L", 20], [0, 20], [0, 0]], "closed": true}));
+    assert_eq!(r["created"]["curves"].as_array().map(Vec::len), Some(4), "{r}");
+    run(&mut s, "sketch.finish", json!({}));
+    run(&mut s, "solid.extrude", json!({"distance": 5}));
+    assert!(rel(volume(&mut s), 100.0 * 20.0 * 5.0) < 1e-6);
+    run(&mut s, "sketch.create", json!({"plane": "XY"}));
+    let e = s.execute("sketch.line", &json!({"points": [[1, 1], [1, 1]]})).unwrap_err().to_string();
+    assert!(e.contains("distinct"), "{e}");
+}
+
+/// A circle's size given as text or as a parameter, as agents write it.
+#[test]
+fn a_circle_takes_its_diameter_as_an_expression() {
+    let mut s = Session::default();
+    run(&mut s, "parameters.add", json!({"name": "d_trou", "expression": "10 mm"}));
+    run(&mut s, "sketch.create", json!({"plane": "XY"}));
+    for d in [json!(10), json!("10"), json!("10 mm"), json!("d_trou"), json!("d_trou * 2 / 2")] {
+        let r = run(&mut s, "sketch.circle.center", json!({"center": [0, 0], "diameter": d}));
+        assert!(r["created"]["curves"].as_array().is_some_and(|c| c.len() == 1), "{d}: {r}");
+    }
+    let e = s.execute("sketch.circle.center", &json!({"center": [0, 0], "diameter": "inconnu"})).unwrap_err().to_string();
+    assert!(e.contains("diameter") && e.contains("inconnu"), "{e}");
+}
+
+/// A rectangle given in parameters, as agents write it.
+#[test]
+fn a_rectangle_takes_its_corners_as_expressions() {
+    let mut s = Session::default();
+    run(&mut s, "parameters.add", json!({"name": "L", "expression": "100 mm"}));
+    run(&mut s, "sketch.create", json!({"plane": "XY"}));
+    run(&mut s, "sketch.rectangle.two_point", json!({"p0": [0, 0], "p1": ["L", "L / 2"]}));
+    run(&mut s, "sketch.finish", json!({}));
+    run(&mut s, "solid.extrude", json!({"distance": 2}));
+    assert!(rel(volume(&mut s), 100.0 * 50.0 * 2.0) < 1e-6);
+    run(&mut s, "sketch.create", json!({"plane": "XY"}));
+    let e = s.execute("sketch.rectangle.center", &json!({"center": [0, 0], "corner": ["W", 3]})).unwrap_err().to_string();
+    assert!(e.contains("corner") && e.contains("W"), "{e}");
+}
