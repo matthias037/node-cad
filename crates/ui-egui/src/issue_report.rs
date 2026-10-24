@@ -384,7 +384,7 @@ pub fn crash_draft(report: &serde_json::Value) -> Draft {
     let field = |o: Option<&serde_json::Value>, k: &str| o.and_then(|o| o.get(k)).and_then(serde_json::Value::as_str).unwrap_or("?").to_string();
     let system = report.get("system");
     let mut body = format!(
-        "## What happened\n{what}{}.{detection}\n\nMessage: {}\nLocation: {}\nThread: {}\nRecorded {} time(s), first recorded {}\n\n## Backtrace\n{}\n## Command\n{}\n## Recent commands\n{}\n\n## Reproduction\nCrash report `{}` on the reporter's computer holds {}. Replay it with `solidcraft-cli crashes replay {}`.\nOnly attach the design if it can be shared publicly.\n\n## Environment\n{}\n",
+        "## What happened\n{what}{}.{detection}\n\nMessage: {}\nLocation: {}\nThread: {}\nRecorded {} time(s), first recorded {}\n\n## Backtrace\n{}\n## Command\n{}\n## Recent commands\n{}\n\n## Reproduction\nCrash report `{}` on the reporter's computer holds {}. Replay it with `node-cad-cli crashes replay {}`.\nOnly attach the design if it can be shared publicly.\n\n## Environment\n{}\n",
         command.map(|c| format!(" while running `{c}`")).unwrap_or_default(),
         limited(&s("message"), 2000),
         s("location"),
@@ -396,7 +396,7 @@ pub fn crash_draft(report: &serde_json::Value) -> Draft {
         if recent.is_empty() { "(none recorded)".to_string() } else { recent.join(", ") },
         s("id"),
         match (report.get("design_path").is_some(), report.get("replay_path").is_some()) {
-            (true, true) => "the design as it was before the crash (design.solidcraft) and the commands that crash it (replay.json)",
+            (true, true) => "the design as it was before the crash (design.nodecad) and the commands that crash it (replay.json)",
             (false, true) => "the commands that crash it on a new design (replay.json)",
             _ => "no replay (see its notes)",
         },

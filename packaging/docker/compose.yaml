@@ -1,4 +1,4 @@
-# Self-host SolidCraft in the browser (see "Self-hosting with Docker" in the book's Getting started).
+# Self-host NØDE CAD in the browser (see "Self-hosting with Docker" in the book's Getting started).
 # From this folder, or from anywhere with -f packaging/docker/compose.yaml:
 #
 #   docker compose up -d             the published image from GitHub's container registry
@@ -7,10 +7,10 @@
 #
 # SOLIDCRAFT_PORT picks the host port (default 8080). Saving designs needs HTTPS or localhost:
 # on a server, put a TLS reverse proxy (Caddy, Traefik, nginx) in front of it.
-name: solidcraft
+name: node-cad
 services:
-  solidcraft:
-    image: ghcr.io/tangency-labs/solidcraft-web:latest
+  node-cad:
+    image: ghcr.io/matthias037/node-cad-web:latest
     build:
       context: ../..
       dockerfile: packaging/docker/Dockerfile

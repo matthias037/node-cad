@@ -14,7 +14,7 @@
 set -e
 DISP=${1:-:0}; PORT=${2:-7878}; OUT=$(cd "${3:-.}" && pwd); STORY=${4:-pi}; RATE=${5:-1}
 HERE=$(cd "$(dirname "$0")" && pwd)
-CLI=${SOLIDCRAFT_CLI:-solidcraft-cli}
+CLI=${SOLIDCRAFT_CLI:-node-cad-cli}
 NAME=${SOLIDCRAFT_DEMO_NAME:-enclosure-demo-$STORY}
 PAUSE=${SOLIDCRAFT_DEMO_PAUSE:-0.55}
 CAPTION=${SOLIDCRAFT_DEMO_CAPTION:-1.4}
@@ -43,7 +43,7 @@ FF=$!
 # Waiting lets ffmpeg write the MP4 index so the failed take remains inspectable.
 trap 'kill -INT $FF 2>/dev/null || true; wait $FF 2>/dev/null || true' EXIT
 sleep 1
-python3 "$HERE/enclosure_ui_mcp.py" --port "$PORT" --cli "$CLI" --story "$STORY" --speed "$PAUSE" --minimum-caption "$CAPTION" --log "$OUT/steps.log" --save "$OUT/enclosure-$STORY.solidcraft"
+python3 "$HERE/enclosure_ui_mcp.py" --port "$PORT" --cli "$CLI" --story "$STORY" --speed "$PAUSE" --minimum-caption "$CAPTION" --log "$OUT/steps.log" --save "$OUT/enclosure-$STORY.nodecad"
 sleep "$HOLD"
 kill -INT $FF; wait $FF || true
 START=$(grep -o "start: [0-9.]*" "$OUT/ffmpeg.log" | head -1 | cut -d" " -f2)

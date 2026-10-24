@@ -299,7 +299,7 @@ def c43():
 
 def c44():
     # L (x 0..60, y 0..8 and x 0..8, y 0..40) x 20; shell 2 inward, top open.
-    # SolidCraft's shell convention (intersection join): the inner walls are the outer faces
+    # NODE CAD's shell convention (intersection join): the inner walls are the outer faces
     # offset by 2 and extended until they meet, so the cavity is the L shrunk by 2 with a sharp
     # corner at (6,6) opposite the reflex edge.  Floor at z=2, open at z=20.
     Lpts = [(0, 0), (60, 0), (60, 8), (8, 8), (8, 40), (0, 40)]
@@ -312,7 +312,7 @@ def c44():
     # Rounded (constant-distance, arc) join instead: cavity gains (4-pi) x 18.
     rv, ra = mp.v - (4 - PI) * 18, area - (4 - PI) * 18
     write("44-shell-l-bracket",
-          "L prism (area 736, perimeter 200) x 20 minus cavity = L shrunk by 2 (SolidCraft's intersection-join "
+          "L prism (area 736, perimeter 200) x 20 minus cavity = L shrunk by 2 (NODE CAD's intersection-join "
           "shell convention: inner faces offset by 2 and extended to meet, sharp inner corner at (6,6); area 352) "
           f"from z=2 to 20. A rounded (arc) join would give V {rv:.4f}, A {ra:.4f}, 16 faces",
           1, mp, area, [(0, 0, 0), (60, 40, 20)], faces=15)
@@ -338,7 +338,7 @@ def c45():
     rv = mp.v - revolve(ring).v
     ra = (area - 2 * PI * 10 * 2 - PI * (144 - 100) + 2 * PI * PI * (12 - 4 / PI))
     write("45-shell-boss-plate",
-          "plate 60x60x10 + boss r12 h20 minus cavity (box 56x56x8 + cylinder r10 z8..28) under SolidCraft's "
+          "plate 60x60x10 + boss r12 h20 minus cavity (box 56x56x8 + cylinder r10 z8..28) under NODE CAD's "
           "intersection-join shell convention (offset faces extended to meet: sharp circular inner edge at r10, "
           f"z8). A rounded (arc) join would give V {rv:.4f}, A {ra:.4f}, 16 faces (torus round r2)",
           1, mp, area, [(-30, -30, 0), (30, 30, 30)], faces=15)

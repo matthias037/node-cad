@@ -53,13 +53,14 @@ jobs:
       - name: XML, desktop entry, AppStream, Flatpak manifest
         run: |
           xmllint --noout assets/platforms/windows/solidcraft.wxs assets/platforms/windows/solidcraft.en-us.wxl assets/platforms/macos/*.plist* assets/platforms/linux/*.xml*
-          desktop-file-validate assets/platforms/linux/ai.storyteller.solidcraft.desktop
-          # The window's X11 class is its app id; the old id stays only as the rename shims.
-          grep -qx 'StartupWMClass=ai.storyteller.solidcraft' assets/platforms/linux/ai.storyteller.solidcraft.desktop
-          grep -q '<id>ai.storyteller.solvecraft</id>' assets/platforms/linux/ai.storyteller.solidcraft.metainfo.xml.in
+          desktop-file-validate assets/platforms/linux/fr.node_os.cad.desktop
+          # The window's X11 class is its app id; designs with the earlier extensions still open.
+          grep -qx 'StartupWMClass=fr.node_os.cad' assets/platforms/linux/fr.node_os.cad.desktop
+          grep -q '<glob pattern="\*.nodecad"/>' assets/platforms/linux/fr.node_os.cad.mime.xml
+          grep -q '<glob pattern="\*.solidcraft"/>' assets/platforms/linux/fr.node_os.cad.mime.xml
           grep -qF -e '--end-of-life-rebase=' packaging/flatpak-site.sh
-          sed -e 's/@VERSION@/0.0.0/' -e 's/@DATE@/2026-01-01/' assets/platforms/linux/ai.storyteller.solidcraft.metainfo.xml.in >"$RUNNER_TEMP/ai.storyteller.solidcraft.metainfo.xml"
-          appstreamcli validate --no-net --explain "$RUNNER_TEMP/ai.storyteller.solidcraft.metainfo.xml"
-          python3 -c "import yaml; m = yaml.safe_load(open('packaging/linux/flatpak/ai.storyteller.solidcraft.bundle.yml')); assert m['id'] == 'ai.storyteller.solidcraft' and m['command'] == 'solidcraft'"
-          python3 -c "import yaml; m = yaml.safe_load(open('packaging/linux/snap/snapcraft.yaml')); assert m['name'] == 'solidcraft' and m['confinement'] == 'strict' and m['apps']['solidcraft']['command'] == 'usr/bin/solidcraft'"
+          sed -e 's/@VERSION@/0.0.0/' -e 's/@DATE@/2026-01-01/' assets/platforms/linux/fr.node_os.cad.metainfo.xml.in >"$RUNNER_TEMP/fr.node_os.cad.metainfo.xml"
+          appstreamcli validate --no-net --explain "$RUNNER_TEMP/fr.node_os.cad.metainfo.xml"
+          python3 -c "import yaml; m = yaml.safe_load(open('packaging/linux/flatpak/fr.node_os.cad.bundle.yml')); assert m['id'] == 'fr.node_os.cad' and m['command'] == 'node-cad'"
+          python3 -c "import yaml; m = yaml.safe_load(open('packaging/linux/snap/snapcraft.yaml')); assert m['name'] == 'node-cad' and m['confinement'] == 'strict' and m['apps']['node-cad']['command'] == 'usr/bin/node-cad'"
           python3 -m py_compile packaging/linux/snap-smoke.py

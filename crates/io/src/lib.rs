@@ -1,4 +1,4 @@
-//! File formats. Designs use JSON or versioned containers (`.solidcraft`); the authoritative
+//! File formats. Designs use JSON or versioned containers (`.nodecad`); the authoritative
 //! document rebuilds on load and optional display caches remain provisional. Bodies export
 //! as STL (binary or ASCII), OBJ, STEP and 3MF, and assemblies as URDF ([`urdf()`]); STEP, IGES,
 //! FreeCAD and Rhino files import as a base feature (see [`step_import_feature`]), 3MF and
@@ -46,14 +46,14 @@ use solidcraft_doc::{Document, Metadata, ModelState};
 use solidcraft_geom::{Mesh, Vec3};
 
 /// Design file extension.
-pub const DESIGN_EXT: &str = "solidcraft";
-/// The design extension of earlier releases. Compatibility shim (docs/compatibility.md): such
+pub const DESIGN_EXT: &str = "nodecad";
+/// The design extensions of earlier releases. Compatibility shim (docs/compatibility.md): such
 /// files still open everywhere a design opens; new designs are saved as [`DESIGN_EXT`].
-pub const LEGACY_DESIGN_EXT: &str = "solvecraft";
+pub const LEGACY_DESIGN_EXTS: [&str; 2] = ["solidcraft", "solvecraft"];
 /// Every extension a design file may have, current first.
-pub const DESIGN_EXTS: [&str; 2] = [DESIGN_EXT, LEGACY_DESIGN_EXT];
+pub const DESIGN_EXTS: [&str; 3] = [DESIGN_EXT, LEGACY_DESIGN_EXTS[0], LEGACY_DESIGN_EXTS[1]];
 
-/// Is this a design file name (`.solidcraft`, or the legacy extension), any case?
+/// Is this a design file name (`.nodecad`, or a legacy extension), any case?
 pub fn is_design_path(path: &str) -> bool {
     std::path::Path::new(path)
         .extension()
@@ -65,7 +65,7 @@ pub const MAX_DESIGN_BYTES: usize = 256 << 20;
 
 #[derive(Debug, thiserror::Error)]
 pub enum IoError {
-    #[error("unsupported format `{0}` (use stl, obj, step, 3mf, urdf or solidcraft)")]
+    #[error("unsupported format `{0}` (use stl, obj, step, 3mf, urdf or nodecad)")]
     Format(String),
     #[error("nothing to export: the design has no bodies")]
     Empty,
@@ -345,7 +345,7 @@ impl Format {
             "3mf" => Format::ThreeMf,
             "3mf-tagged" => Format::ThreeMfTagged,
             "urdf" => Format::Urdf,
-            "solidcraft" | "solvecraft" | "json" => Format::Design,
+            "nodecad" | "solidcraft" | "solvecraft" | "json" => Format::Design,
             _ => return Err(IoError::Format(ext)),
         })
     }
@@ -495,7 +495,7 @@ pub fn export_with_metadata(state: &ModelState, bodies: &[String], format: Forma
             let objs: Vec<MeshObject> = sel.iter().map(|b| mesh_object(b, format == Format::ThreeMfTagged)).collect::<Result<_>>()?;
             write_3mf_with(&objs, &threemf_metadata(meta))?
         }
-        Format::Design => return Err(IoError::Format("solidcraft (save the document instead)".into())),
+        Format::Design => return Err(IoError::Format("nodecad (save the document instead)".into())),
         Format::Urdf => return Err(IoError::Format("urdf (an assembly package; use file.export)".into())),
     })
 }
@@ -844,10 +844,12 @@ mod tests {
         assert!(step_import_feature(b"ISO-10303-21;", "x.step").is_err());
         assert!(step_import_feature(&[0xff, 0xfe, 0x00], "x.step").is_err());
         assert!(Format::from_name("a.dwg").is_err());
-        // Compatibility shim: the legacy design extension is still a design.
+        // Compatibility shim: the legacy design extensions are still designs.
         assert_eq!(Format::from_name("old.solvecraft").unwrap(), Format::Design);
-        assert_eq!(Format::from_name("new.solidcraft").unwrap(), Format::Design);
-        assert!(is_design_path("/d/old.SOLVECRAFT") && is_design_path("new.solidcraft") && !is_design_path("a.step"));
+        assert_eq!(Format::from_name("old.solidcraft").unwrap(), Format::Design);
+        assert_eq!(Format::from_name("new.nodecad").unwrap(), Format::Design);
+        assert!(is_design_path("/d/old.SOLVECRAFT") && is_design_path("old.solidcraft") && is_design_path("new.nodecad"));
+        assert!(!is_design_path("a.step"));
         assert!(read_stl(&[0u8; 10]).is_err());
         let mut fake = vec![0u8; 84];
         fake[80..84].copy_from_slice(&u32::MAX.to_le_bytes());

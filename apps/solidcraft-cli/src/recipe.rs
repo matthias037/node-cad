@@ -1,4 +1,4 @@
-//! Reference-test recipes (`tests/oracle/*/recipe.json`) → SolidCraft command scripts.
+//! Reference-test recipes (`tests/oracle/*/recipe.json`) → NØDE CAD command scripts.
 //!
 //! A recipe lists features with sketch entities in sketch-local coordinates; point references
 //! (`l1.end`) share points. Each feature becomes one or more commands.

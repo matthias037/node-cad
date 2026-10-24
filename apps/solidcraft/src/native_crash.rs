@@ -268,7 +268,8 @@ mod tests {
         let v: serde_json::Value = serde_json::from_slice(&std::fs::read(info).unwrap()).unwrap();
         assert_eq!(v["code"], "0xC0000005", "{v}");
         assert_eq!(v["detail"], "read of 0x0000000000000010", "{v}");
-        assert!(v["module"].as_str().unwrap().to_lowercase().contains("solidcraft"), "the fault is in the test binary: {v}");
+        // The test binary is named after the `node-cad` target (`node_cad-<hash>.exe`).
+        assert!(v["module"].as_str().unwrap().to_lowercase().replace('-', "_").contains("node_cad"), "the fault is in the test binary: {v}");
         let dump = sessions.iter().find(|p| p.extension().is_some_and(|e| e == "dmp")).expect("a minidump");
         assert_eq!(std::fs::read(dump).unwrap().get(..4), Some(&b"MDMP"[..]));
         // The next start reports it.
@@ -277,7 +278,8 @@ mod tests {
         let reports = solidcraft_engine::crash::list(&dir);
         assert_eq!(reports.len(), 1, "{reports:?}");
         let r = solidcraft_engine::crash::read(&dir, &reports[0].id).unwrap();
-        assert!(r["message"].as_str().unwrap().contains("EXCEPTION_ACCESS_VIOLATION (0xC0000005) in solidcraft"), "{r}");
+        let message = r["message"].as_str().unwrap().to_lowercase().replace('-', "_");
+        assert!(message.contains("exception_access_violation (0xc0000005) in node_cad"), "{r}");
         assert!(r["message"].as_str().unwrap().contains("during startup (device creation"), "{r}");
         assert!(r.get("minidump_path").is_some(), "{r}");
         let _ = std::fs::remove_dir_all(&dir);

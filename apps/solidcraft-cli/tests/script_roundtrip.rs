@@ -92,7 +92,7 @@ fn a_design_naming_a_sketch_and_its_extrude_alike_replays_from_its_script() {
     let dir = std::env::temp_dir().join(format!("solidcraft-shared-names-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let cli = |args: &[&std::ffi::OsStr]| {
-        let out = std::process::Command::new(env!("CARGO_BIN_EXE_solidcraft-cli")).args(args).output().unwrap();
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_node-cad-cli")).args(args).output().unwrap();
         assert!(
             out.status.success(),
             "{}: {}",

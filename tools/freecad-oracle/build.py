@@ -1,4 +1,4 @@
-# FreeCAD oracle builder for SolidCraft reference cases (tests/oracle/<case>/recipe.json).
+# FreeCAD oracle builder for NODE CAD reference cases (tests/oracle/<case>/recipe.json).
 #
 # Run under FreeCAD's interpreter (freecadcmd); see run.sh. FreeCAD is used only as an external
 # program through its public Python scripting API (Part, PartDesign, Sketcher, Mesh/MeshPart).
@@ -8,7 +8,7 @@
 #   ORACLE_OUT    path of a JSON file to write the measured result to
 #   ORACLE_STL    optional: path of a binary STL to write (reference.stl)
 #
-# The recipe format and its meaning are SolidCraft's (apps/solidcraft-cli/src/recipe.rs and the
+# The recipe format and its meaning are NODE CAD's (apps/solidcraft-cli/src/recipe.rs and the
 # engine in crates/); this file re-implements that meaning with FreeCAD's modelling operations.
 
 import json
@@ -26,7 +26,7 @@ TOL = 1e-7
 BIG = 1000.0
 
 # Per-case additions to expected.json: "compare", "tolerance", "note", "method_extra".
-# (Empty: every case written so far is built by the generic mapping and agrees with SolidCraft
+# (Empty: every case written so far is built by the generic mapping and agrees with NODE CAD
 # within the default tolerances, so no comparison is relaxed.)
 CASE_META = {}
 
@@ -869,7 +869,7 @@ class Model:
         return tools
 
     def helix_sweep(self, faces, pts):
-        # The fitted 3D spline of the recipe is read as the helix it samples (as SolidCraft does).
+        # The fitted 3D spline of the recipe is read as the helix it samples (as NODE CAD does).
         n = len(pts)
         # least squares circle in xy
         sx = sy = sxx = syy = sxy = sxz = syz = sz = 0.0
@@ -1061,7 +1061,7 @@ class Model:
         self.bodies[name] = as_solid_shape(out)
 
     def _draft_partdesign(self, s, pts, origin, pull, ang):
-        # SolidCraft: faces lean in (toward the material) by `ang` going along `pull`, pivoting on
+        # NODE CAD: faces lean in (toward the material) by `ang` going along `pull`, pivoting on
         # their line in the neutral plane. FreeCAD's PartDesign Draft does the same tilt; which
         # of its two senses matches is checked on the result below.
         doc = App.newDocument("dr")

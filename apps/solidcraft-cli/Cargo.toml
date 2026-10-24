@@ -1,23 +1,29 @@
 [package]
 name = "solidcraft-cli"
-description = "SolidCraft headless CLI: run command scripts, measure, export, render snapshots, replay oracle recipes"
+description = "NØDE CAD headless CLI: run command scripts, measure, export, render snapshots, replay oracle recipes"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-default-run = "solidcraft-cli"
+default-run = "node-cad-cli"
 
 [lints]
 workspace = true
 
+# The executable is `node-cad-cli`; the package keeps its upstream name so `cargo -p solidcraft-cli` works.
 [[bin]]
-name = "solidcraft-cli"
+name = "node-cad-cli"
 path = "src/main.rs"
 
-# Compatibility alias for the CLI's former name: forwards to solidcraft-cli with a deprecation
-# note on stderr. Shipped in every package for at least one release.
+# Compatibility aliases for the CLI's former names (docs/compatibility.md): each forwards to
+# node-cad-cli with a deprecation note on stderr, so existing scripts and MCP client setups keep
+# working. Shipped in every package for at least one release.
+[[bin]]
+name = "solidcraft-cli"
+path = "src/alias_solidcraft.rs"
+
 [[bin]]
 name = "solvecraft-cli"
-path = "src/alias.rs"
+path = "src/alias_solvecraft.rs"
 
 [dependencies]
 solidcraft-engine = { workspace = true }

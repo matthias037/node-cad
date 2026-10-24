@@ -1,5 +1,5 @@
 {
-  description = "SolidCraft — native app development shell and package for Linux and macOS";
+  description = "NØDE CAD — native app development shell and package for Linux and macOS";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -60,11 +60,11 @@
       shellHook = pkgs: ''
         ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
           if [ ! -d ${driverLibDir pkgs} ]; then
-            echo "SolidCraft: ${driverLibDir pkgs} is missing — on NixOS enable hardware.graphics; on other distributions use a matching nixGL driver wrapper." >&2
+            echo "NØDE CAD: ${driverLibDir pkgs} is missing — on NixOS enable hardware.graphics; on other distributions use a matching nixGL driver wrapper." >&2
           fi
         ''}
-        command -v cc >/dev/null || echo "solidcraft: no C linker on PATH, cargo cannot link — use nix develop .#rust" >&2
-        echo "solidcraft: cargo run --release -p solidcraft -- --sample"
+        command -v cc >/dev/null || echo "node-cad: no C linker on PATH, cargo cannot link — use nix develop .#rust" >&2
+        echo "node-cad: cargo run --release -p solidcraft -- --sample"
         ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
           export XDG_DATA_DIRS="${driverShareDir pkgs}:''${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
         ''}
@@ -77,7 +77,7 @@
         # second rustc — or mkShell's second gcc, with another glibc behind it — would make every
         # `cargo build` produce binaries from somewhere else.
         default = pkgs.mkShellNoCC {
-          name = "solidcraft";
+          name = "node-cad";
           LD_LIBRARY_PATH = libraryPath pkgs;
           shellHook = shellHook pkgs;
         };
@@ -85,7 +85,7 @@
         # For a machine with no Rust at all: `nix develop .#rust`. Its own target directory, so
         # switching between this toolchain and the system one does not thrash the cache.
         rust = pkgs.mkShell {
-          name = "solidcraft-rust";
+          name = "node-cad-rust";
           packages = [
             pkgs.cargo
             pkgs.rustc
@@ -97,18 +97,18 @@
           CARGO_TARGET_DIR = "target/nix";
           shellHook = ''
             ${shellHook pkgs}
-            echo "solidcraft: $(rustc --version), building into target/nix"
+            echo "node-cad: $(rustc --version), building into target/nix"
           '';
         };
       });
 
       packages = forAllSystems (pkgs: rec {
-        default = solidcraft;
-        solidcraft = assert pkgs.lib.assertMsg
+        default = node-cad;
+        node-cad = assert pkgs.lib.assertMsg
           (pkgs.lib.versionAtLeast pkgs.rustc.version (pkgs.lib.importTOML ./Cargo.toml).workspace.package.rust-version)
-          "SolidCraft requires the Rust version advertised in Cargo.toml; update the pinned nixpkgs input.";
+          "NØDE CAD requires the Rust version advertised in Cargo.toml; update the pinned nixpkgs input.";
           pkgs.rustPlatform.buildRustPackage {
-          pname = "solidcraft";
+          pname = "node-cad";
           version = (pkgs.lib.importTOML ./Cargo.toml).workspace.package.version;
           src = self;
 
@@ -135,14 +135,14 @@
 
           postInstall = ''
             ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
-              install -Dm644 assets/platforms/linux/ai.storyteller.solidcraft.desktop \
-                $out/share/applications/ai.storyteller.solidcraft.desktop
-              install -Dm644 assets/platforms/linux/ai.storyteller.solidcraft.mime.xml \
-                $out/share/mime/packages/ai.storyteller.solidcraft.xml
+              install -Dm644 assets/platforms/linux/fr.node_os.cad.desktop \
+                $out/share/applications/fr.node_os.cad.desktop
+              install -Dm644 assets/platforms/linux/fr.node_os.cad.mime.xml \
+                $out/share/mime/packages/fr.node_os.cad.xml
               for size in 16 24 32 48 64 128 256 512; do
-                icon=$out/share/icons/hicolor/''${size}x''${size}/apps/ai.storyteller.solidcraft.png
+                icon=$out/share/icons/hicolor/''${size}x''${size}/apps/fr.node_os.cad.png
                 mkdir -p "$(dirname "$icon")"
-                cp assets/icons/app/linux/exports/hicolor/''${size}x''${size}/apps/ai.storyteller.solidcraft.png "$icon" >/dev/null
+                cp assets/icons/app/linux/exports/hicolor/''${size}x''${size}/apps/fr.node_os.cad.png "$icon" >/dev/null
               done
             ''}
           '';
@@ -150,7 +150,7 @@
           # Linux only: the app reaches the window through dlopen'd libraries, so the packaged
           # binary needs the same LD_LIBRARY_PATH the shell exports. macOS needs no wrapper.
           postFixup = pkgs.lib.optionalString pkgs.stdenv.isLinux ''
-            wrapProgram $out/bin/solidcraft \
+            wrapProgram $out/bin/node-cad \
               --prefix LD_LIBRARY_PATH : "${libraryPath pkgs}" \
               --set-default XDG_DATA_DIRS /usr/local/share:/usr/share \
               --prefix XDG_DATA_DIRS : "$out/share:${driverShareDir pkgs}"
@@ -158,23 +158,20 @@
 
           meta = {
             description = "Rust-native parametric 3D CAD app";
-            homepage = "https://github.com/bherbruck/solidcraft";
-            license = with pkgs.lib.licenses; [
-              mit
-              asl20
-            ];
-            mainProgram = "solidcraft";
+            homepage = "https://node-os.fr/cad";
+            license = pkgs.lib.licenses.asl20;
+            mainProgram = "node-cad";
           };
         };
       });
 
       apps = forAllSystems (pkgs: let
-        package = self.packages.${pkgs.stdenv.hostPlatform.system}.solidcraft;
-        desktop = { type = "app"; program = "${package}/bin/solidcraft"; };
+        package = self.packages.${pkgs.stdenv.hostPlatform.system}.node-cad;
+        desktop = { type = "app"; program = "${package}/bin/node-cad"; };
       in {
         default = desktop;
-        solidcraft = desktop;
-        cli = { type = "app"; program = "${package}/bin/solidcraft-cli"; };
+        node-cad = desktop;
+        cli = { type = "app"; program = "${package}/bin/node-cad-cli"; };
       });
     };
 }

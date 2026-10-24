@@ -1,14 +1,13 @@
 # .deb and .rpm packages (nfpm: https://nfpm.goreleaser.com). Run by package.sh, which stages
 # the file tree, substitutes its path for ${STAGE} (nfpm doesn't expand env vars in `src`) and
 # exports VERSION and NFPM_ARCH. Adapted from PhotoCraft's (storytold/photocraft, Apache-2.0).
-name: solidcraft
-# Compatibility shim (docs/compatibility.md): releases before the rename were packaged as `solvecraft`.
-# Installing this package replaces that one (Debian Replaces/Conflicts, set under overrides.deb;
-# nfpm writes `replaces` as RPM Obsoletes), so `apt install ./solidcraft-….deb` or `dnf install ./solidcraft-….rpm`
-# upgrades an old install instead of failing on the shared desktop and icon files.
+name: node-cad
+# Compatibility shim (docs/compatibility.md): this package ships the CLI's former names
+# (/usr/bin/solidcraft-cli, /usr/bin/solvecraft-cli), which the `solidcraft` and `solvecraft`
+# packages also install. Installing it replaces them (Debian Replaces/Conflicts, set under
+# overrides.deb; nfpm writes `replaces` as RPM Obsoletes) instead of failing on the shared files.
 replaces:
-  - solvecraft
-provides:
+  - solidcraft
   - solvecraft
 arch: ${NFPM_ARCH}
 platform: linux
@@ -19,13 +18,13 @@ release: 1
 section: graphics
 priority: optional
 maintainer: ${SOLIDCRAFT_MAINTAINER}
-vendor: SolidCraft contributors
-homepage: https://docs.solidcraft.io/
-license: MIT OR Apache-2.0
+vendor: NODE CAD
+homepage: https://node-os.fr/cad
+license: Apache-2.0
 description: |-
-  Open-source, independent parametric 3D CAD
+  NODE CAD: open-source parametric 3D CAD
   Sketches with a constraint solver, a parametric feature timeline, components and
-  joints, sheet metal; STEP, IGES, 3MF, STL and OBJ. Includes solidcraft-cli, a
+  joints, sheet metal; STEP, IGES, 3MF, STL and OBJ. Includes node-cad-cli, a
   headless command runner and MCP server for AI agents.
 
 # The binaries link only glibc and libgcc_s directly. Windowing (X11/Wayland, xkbcommon) and the
@@ -33,8 +32,9 @@ description: |-
 # the package tools can't find them: list them here.
 overrides:
   deb:
-    # Debian's rename pattern: Replaces + Conflicts + Provides (docs/compatibility.md).
+    # Debian's takeover pattern: Replaces + Conflicts (docs/compatibility.md).
     conflicts:
+      - solidcraft
       - solvecraft
     depends:
       - libc6 (>= 2.35)
@@ -70,13 +70,16 @@ overrides:
       - xdg-desktop-portal
 
 contents:
-  - src: ${STAGE}/usr/bin/solidcraft
-    dst: /usr/bin/solidcraft
+  - src: ${STAGE}/usr/bin/node-cad
+    dst: /usr/bin/node-cad
     file_info: { mode: 0755 }
+  - src: ${STAGE}/usr/bin/node-cad-cli
+    dst: /usr/bin/node-cad-cli
+    file_info: { mode: 0755 }
+  # Compatibility shim (docs/compatibility.md): the CLI's former names forward to node-cad-cli.
   - src: ${STAGE}/usr/bin/solidcraft-cli
     dst: /usr/bin/solidcraft-cli
     file_info: { mode: 0755 }
-  # Compatibility shim (docs/compatibility.md): the old CLI name forwards to solidcraft-cli.
   - src: ${STAGE}/usr/bin/solvecraft-cli
     dst: /usr/bin/solvecraft-cli
     file_info: { mode: 0755 }

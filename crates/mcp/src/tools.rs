@@ -241,11 +241,11 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "crash_reports",
             "Crash reports",
-            "SolidCraft's crash reports on this computer (the app's when connected to it). Without `id`: the list, newest \
+            "NØDE CAD's crash reports on this computer (the app's when connected to it). Without `id`: the list, newest \
              first (id, kind, time, message, command, count, version, path, replayable). With `id`: the whole report: \
              message, location, backtrace, app version and commit, system, the command that crashed and the recent ones, \
-             and design_path / replay_path when it can be replayed: `solidcraft-cli crashes replay <id>`, or \
-             `solidcraft-cli run <replay_path> --in <design_path>`. Reports never leave this computer.",
+             and design_path / replay_path when it can be replayed: `node-cad-cli crashes replay <id>`, or \
+             `node-cad-cli run <replay_path> --in <design_path>`. Reports never leave this computer.",
             obj(
                 json!({
                     "id": string("A report id from the list"),
@@ -277,7 +277,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "open",
             "Open a design",
-            "Open a .solidcraft design file, a STEP file (.step/.stp: a new design whose bodies come from the file, as an \
+            "Open a .nodecad design file, a STEP file (.step/.stp: a new design whose bodies come from the file, as an \
              Import base feature in a component named after the file; an assembly's parts become nested components) or a \
              mesh (.3mf/.stl/.obj/.glb/.gltf: mesh bodies in such a component; a glTF file's nodes become nested components and its \
              materials appearances); the result reports the component (id, component_name). Replaces the current design; insert into it \
@@ -286,7 +286,7 @@ pub fn tool_definitions() -> Vec<Value> {
              so it is turned by default (`up: \"z\"` keeps its axes). `names` picks what the bodies are named after when the solids' own names say nothing useful.",
             obj(
                 json!({
-                    "path": string("Path to a .solidcraft, .step/.stp, .3mf, .stl, .obj, .glb or .gltf file"),
+                    "path": string("Path to a .nodecad, .step/.stp, .3mf, .stl, .obj, .glb or .gltf file"),
                     "up": {"type": "string", "enum": ["z", "y"], "description": "STEP and glTF only. z keeps the file's axes; y: the file has Y up, so its bodies are turned to stand Z up. Default: z for STEP, y for glTF"},
                     "names": {"type": "string", "enum": ["auto", "solid", "product", "instance"], "description": "STEP, IGES, FreeCAD and Rhino. auto (default): keep meaningful solid names, replace placeholders with the nearest named product, else instance; solid: the solid's own name; product: the part's name; instance: the occurrence's name, else the product's"},
                 }),

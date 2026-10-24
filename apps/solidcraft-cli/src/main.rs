@@ -1,24 +1,24 @@
-//! SolidCraft headless command line.
+//! NØDE CAD headless command line.
 //!
 //! ```text
-//! solidcraft-cli run <script.json|design.solidcraft|part.step|mesh.3mf> [--in design|part.step|mesh.3mf] [--out FILE]... [--save FILE] [--quiet] [--results] [--timings] [--profile] [--json-out FILE] [--allow-errors]
-//! solidcraft-cli eval <script.json|design.solidcraft|part.step> [--json-out FILE] (alias: inspect) measurements as JSON
-//! solidcraft-cli script <design.solidcraft> [--out script.json]     the design's history as a command script
-//! solidcraft-cli bench-open <design.solidcraft | part.step> [--parse-only] [--save OUT.solidcraft] [--display LEVEL [--edit NAME EXPR]] [--ops script.json] loading timings as JSON lines
-//! solidcraft-cli bench-agent [--scale F] [--save F] [--script-out F] a ~1,300-body design built command by command, timed
-//! solidcraft-cli snapshot <script|design> [--in design|part.step] --out shot.png [--width W] [--height H] [--view iso|front|top|…|NAME | --camera JSON] [--no-grid] [--no-axes]
+//! node-cad-cli run <script.json|design.nodecad|part.step|mesh.3mf> [--in design|part.step|mesh.3mf] [--out FILE]... [--save FILE] [--quiet] [--results] [--timings] [--profile] [--json-out FILE] [--allow-errors]
+//! node-cad-cli eval <script.json|design.nodecad|part.step> [--json-out FILE] (alias: inspect) measurements as JSON
+//! node-cad-cli script <design.nodecad> [--out script.json]     the design's history as a command script
+//! node-cad-cli bench-open <design.nodecad | part.step> [--parse-only] [--save OUT.nodecad] [--display LEVEL [--edit NAME EXPR]] [--ops script.json] loading timings as JSON lines
+//! node-cad-cli bench-agent [--scale F] [--save F] [--script-out F] a ~1,300-body design built command by command, timed
+//! node-cad-cli snapshot <script|design> [--in design|part.step] --out shot.png [--width W] [--height H] [--view iso|front|top|…|NAME | --camera JSON] [--no-grid] [--no-axes]
 //!                                                             [--body NAME:opacity=0.3,color=#rrggbb]... [--tool NAME]... [--section z=27]
-//! solidcraft-cli exec <command> [json-params]                 run one command on an empty design
-//! solidcraft-cli commands                                     the command registry as JSON
-//! solidcraft-cli recipe <recipe.json>                         translate an oracle recipe to a script
-//! solidcraft-cli oracle <case-dir>...                         replay recipes and compare with expected.json
-//! solidcraft-cli mcp [--in design|script] [--connect HOST:PORT [--token T]] [--allow-path DIR]... [--allow-any-path]
+//! node-cad-cli exec <command> [json-params]                 run one command on an empty design
+//! node-cad-cli commands                                     the command registry as JSON
+//! node-cad-cli recipe <recipe.json>                         translate an oracle recipe to a script
+//! node-cad-cli oracle <case-dir>...                         replay recipes and compare with expected.json
+//! node-cad-cli mcp [--in design|script] [--connect HOST:PORT [--token T]] [--allow-path DIR]... [--allow-any-path]
 //!                    [--param-check off|warn|strict]
 //!                                                             MCP server on stdio (docs/mcp.md)
-//! solidcraft-cli licences                                     SolidCraft's licence and the third-party licences
-//! solidcraft-cli icon --out F.png|F.ico [--size N]             the app icon (packaging; drawn, not a file)
+//! node-cad-cli licences                                     NØDE CAD's licence and the third-party licences
+//! node-cad-cli icon --out F.png|F.ico [--size N]             the app icon (packaging; drawn, not a file)
 //!
-//! --debug (with any command)                                  SolidCraft's debug log on stderr (or RUST_LOG=LEVEL)
+//! --debug (with any command)                                  NØDE CAD's debug log on stderr (or RUST_LOG=LEVEL)
 //! ```
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
@@ -43,23 +43,23 @@ use solidcraft_engine::Session;
 use solidcraft_engine::view::Guides;
 
 const USAGE: &str = "usage:
-  solidcraft-cli run <script.json|design.solidcraft|part.step> [--in design.solidcraft|part.step] [--out FILE]... [--save FILE] [--quiet] [--results] [--timings] [--profile] [--json-out FILE] [--allow-errors]
-  solidcraft-cli run --in <design.solidcraft|part.step> [--out FILE]...
+  node-cad-cli run <script.json|design.nodecad|part.step> [--in design.nodecad|part.step] [--out FILE]... [--save FILE] [--quiet] [--results] [--timings] [--profile] [--json-out FILE] [--allow-errors]
+  node-cad-cli run --in <design.nodecad|part.step> [--out FILE]...
       (a timeline feature that fails fails the run and nothing is written; --allow-errors writes anyway)
       (--timings prints {timings: [{index, command, ms}], total_ms} for a script, with --results its results too;
        --profile adds each command's profile: {boolean_ms, tessellate_ms, other_ms}, the kernel's share)
-  solidcraft-cli eval <script.json|design.solidcraft|part.step> [--json-out FILE]     (alias: inspect; or --in FILE)
+  node-cad-cli eval <script.json|design.nodecad|part.step> [--json-out FILE]     (alias: inspect; or --in FILE)
       (--json-out FILE writes the JSON that run (with --results, else the measurement) and eval print to FILE instead of stdout,
        as plain UTF-8: a shell's > can re-encode it, e.g. Windows PowerShell adds a byte-order mark)
-  solidcraft-cli script <design.solidcraft|script.json> [--out script.json]
+  node-cad-cli script <design.nodecad|script.json> [--out script.json]
       (the design's history as a command script that eval and run replay)
-  solidcraft-cli bench-open <design.solidcraft | part.step> [--parse-only] [--save OUT.solidcraft] [--display LEVEL [--edit NAME EXPR]] [--ops script.json]
+  node-cad-cli bench-open <design.nodecad | part.step> [--parse-only] [--save OUT.nodecad] [--display LEVEL [--edit NAME EXPR]] [--ops script.json]
       (--ops: after opening, run each command of the script and undo it, timing the command, the
        evaluations it caused and the view it leaves: placing and meshing what changed)
-  solidcraft-cli bench-agent [--scale F] [--save design.solidcraft] [--script-out script.json]
-  solidcraft-cli snapshot <script|design> [--in design.solidcraft|part.step] --out shot.png [--width W] [--height H] [--view NAME | --camera JSON] [--no-grid] [--no-axes]
+  node-cad-cli bench-agent [--scale F] [--save design.nodecad] [--script-out script.json]
+  node-cad-cli snapshot <script|design> [--in design.nodecad|part.step] --out shot.png [--width W] [--height H] [--view NAME | --camera JSON] [--no-grid] [--no-axes]
       [--body NAME:opacity=0.3,color=#rrggbb]... [--tool NAME]... [--section z=27]
-  solidcraft-cli snapshot --in <design.solidcraft|part.step> --out shot.png ...
+  node-cad-cli snapshot --in <design.nodecad|part.step> --out shot.png ...
       (as with run, --in starts from a design and the script runs on top of it; an option snapshot doesn't take is an error;
        --view: iso, front, back, top, bottom, left, right, or the name of a view saved in the design with view.save;
        --camera: {target: [x,y,z], yaw, pitch, distance, fov?} in mm and radians, as the MCP screenshot takes it (docs/mcp.md);
@@ -70,22 +70,22 @@ const USAGE: &str = "usage:
          is visible inside the material it meets; a later --body overrides it;
        --section: cut the model as inspect.section does, so the inside shows: z=27 (the plane through that world
          coordinate, keeping the smaller side), add ,flip to keep the other side, or XY, XZ, YZ, or its own JSON)
-  solidcraft-cli render <script|design> --out image.png [--setup NAME] [--width W] [--height H] [--transparent] [--overwrite] [--timeout SECONDS]
-  solidcraft-cli exec <command> [json-params]
-  solidcraft-cli commands
-  solidcraft-cli recipe <recipe.json>
-  solidcraft-cli oracle <case-dir>... [--json]
-  solidcraft-cli fuzz [--from N] [--count N] [--jobs J] [--timeout S] [--steps N] [--minimise] [--out DIR] [--report FILE]
-  solidcraft-cli mcp [--in design.solidcraft|script.json] [--connect 127.0.0.1:PORT [--token T]] [--allow-path DIR]... [--allow-any-path]
+  node-cad-cli render <script|design> --out image.png [--setup NAME] [--width W] [--height H] [--transparent] [--overwrite] [--timeout SECONDS]
+  node-cad-cli exec <command> [json-params]
+  node-cad-cli commands
+  node-cad-cli recipe <recipe.json>
+  node-cad-cli oracle <case-dir>... [--json]
+  node-cad-cli fuzz [--from N] [--count N] [--jobs J] [--timeout S] [--steps N] [--minimise] [--out DIR] [--report FILE]
+  node-cad-cli mcp [--in design.nodecad|script.json] [--connect 127.0.0.1:PORT [--token T]] [--allow-path DIR]... [--allow-any-path]
                      [--param-check off|warn|strict]
-  solidcraft-cli crashes [list [--json] | show <id> | replay <id> | dir | clear [<id>]]
-  solidcraft-cli licences
-  solidcraft-cli gpu [--policy auto|hardware|software|cpu]
+  node-cad-cli crashes [list [--json] | show <id> | replay <id> | dir | clear [<id>]]
+  node-cad-cli licences
+  node-cad-cli gpu [--policy auto|hardware|software|cpu]
       (the GPU adapters a headless render can open, best first, the one the policy picks and the tier it
        lands on: gpu, gpu-software, or the CPU rasterizer (auto with no adapter, or cpu); the policy defaults
        to SOLIDCRAFT_GPU, else auto; exits with an error when hardware or software finds no such adapter)
-  solidcraft-cli icon --out icon.png [--size 256] | --out icon.ico
-  --debug, with any command: what SolidCraft logs (why a body has no display plan, why a save left its
+  node-cad-cli icon --out icon.png [--size 256] | --out icon.ico
+  --debug, with any command: what NØDE CAD logs (why a body has no display plan, why a save left its
       model cache out), on stderr; RUST_LOG=error|warn|info|debug|trace sets one level for every crate
 ";
 
@@ -137,7 +137,7 @@ fn main() -> ExitCode {
         // A ~1,300-body design built command by command, as an agent builds one over MCP.
         Some("bench-agent") => bench_agent::run(&args[1..]),
         Some("--version" | "-V") => {
-            println!("solidcraft-cli {}", env!("CARGO_PKG_VERSION"));
+            println!("node-cad-cli {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
         // Asked-for help is not an error: usage on stdout, exit 0.
@@ -402,7 +402,7 @@ fn cmd_gpu(args: &[String]) -> Result<(), String> {
     let policy = match args {
         [] => Policy::from_env()?,
         [flag, v] if flag == "--policy" => Policy::parse(v).ok_or_else(|| format!("--policy must be auto, hardware, software or cpu, not `{v}`"))?,
-        _ => return Err("usage: solidcraft-cli gpu [--policy auto|hardware|software|cpu]".into()),
+        _ => return Err("usage: node-cad-cli gpu [--policy auto|hardware|software|cpu]".into()),
     };
     let s = survey(policy);
     let chosen = s.chosen.and_then(|i| s.adapters.get(i)).cloned();
@@ -491,7 +491,7 @@ fn cmd_snapshot(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// The app icon: the SolidCraft logo, drawn in code on a transparent background
+/// The app icon: the NØDE CAD logo, drawn in code on a transparent background
 /// (so packages need no committed image). `.ico` holds the Windows sizes as PNGs.
 fn cmd_icon(args: &[String]) -> Result<(), String> {
     let out = flag(args, "--out").ok_or("icon needs --out FILE.png or FILE.ico")?;
@@ -555,14 +555,14 @@ fn cmd_mcp(args: &[String]) -> Result<(), String> {
     if let Some(s) = &scope {
         let roots: Vec<String> = s.roots().iter().map(|r| r.display().to_string()).collect();
         eprintln!(
-            "solidcraft mcp: files limited to {} and the open design's folder (--allow-path DIR adds one, --allow-any-path lifts the limit)",
+            "node-cad-cli mcp: files limited to {} and the open design's folder (--allow-path DIR adds one, --allow-any-path lifts the limit)",
             roots.join(", ")
         );
         let design_dir = flag(args, "--in")
             .and_then(|p| std::path::Path::new(p).parent())
             .map(|d| if d.as_os_str().is_empty() { std::path::Path::new(".") } else { d });
         if let Some(why) = design_dir.and_then(solidcraft_engine::io::vfs::design_folder_refusal) {
-            eprintln!("solidcraft mcp: the design's folder is left out because {why}; add it with --allow-path if you mean it");
+            eprintln!("node-cad-cli mcp: the design's folder is left out because {why}; add it with --allow-path if you mean it");
         }
     }
     // How a headless session treats calls that break a command's parameter contract (docs/mcp.md).
@@ -574,7 +574,7 @@ fn cmd_mcp(args: &[String]) -> Result<(), String> {
         }
     };
     if param_check != solidcraft_engine::schema::ParamCheck::Off && flag(args, "--connect").is_some() {
-        eprintln!("solidcraft mcp: --param-check applies to headless sessions; calls to the app are not checked yet");
+        eprintln!("node-cad-cli mcp: --param-check applies to headless sessions; calls to the app are not checked yet");
     }
     let backend: Box<dyn solidcraft_mcp::Backend> = match (flag(args, "--connect"), flag(args, "--in")) {
         (Some(_), Some(_)) => return Err("mcp: use either --connect or --in, not both".into()),
@@ -586,7 +586,7 @@ fn cmd_mcp(args: &[String]) -> Result<(), String> {
             let mut remote = solidcraft_mcp::Remote::new(addr, flag(args, "--token"));
             if let Err(e) = remote.try_connect() {
                 eprintln!(
-                    "solidcraft mcp: no SolidCraft app at {addr} yet ({e}); start it with `solidcraft --control {port}` \
+                    "node-cad-cli mcp: no NØDE CAD app at {addr} yet ({e}); start it with `node-cad --control {port}` \
                      (or SOLIDCRAFT_CONTROL_PORT={port}), tool calls connect once it runs"
                 );
             }
@@ -608,7 +608,7 @@ fn cmd_mcp(args: &[String]) -> Result<(), String> {
 /// parameter `save_round` set to the round number each time.
 fn cmd_save_stress(args: &[String]) -> Result<(), String> {
     let (Some(path), Some(rounds)) = (args.first(), args.get(1).and_then(|n| n.parse::<u64>().ok())) else {
-        return Err("usage: solidcraft-cli save-stress <path> <rounds>".into());
+        return Err("usage: node-cad-cli save-stress <path> <rounds>".into());
     };
     let mut s = Session::default();
     let filler = (0..3000).map(|i| solidcraft_engine::doc::Param {
@@ -630,7 +630,7 @@ fn cmd_save_stress(args: &[String]) -> Result<(), String> {
 /// parameter edit, setting it back, undo and redo (ms and features recomputed each).
 fn cmd_bench_edit(args: &[String]) -> Result<(), String> {
     let (Some(path), Some(param), Some(expr)) = (args.first(), args.get(1), args.get(2)) else {
-        return Err("usage: solidcraft-cli bench-edit <script.json|recipe.json> <param> <expr>".into());
+        return Err("usage: node-cad-cli bench-edit <script.json|recipe.json> <param> <expr>".into());
     };
     let v = read_json(path)?;
     let script = if v.get("features").is_some() { recipe::to_script(&v)? } else { v };
@@ -688,7 +688,7 @@ fn bench_ops(mut s: Session, script: &str) -> Result<Session, String> {
 
 /// Separate file reading, JSON decoding/repair, timeline evaluation and display meshing.
 pub(crate) fn cmd_bench_open(args: &[String]) -> Result<(), String> {
-    let path = args.first().ok_or("usage: solidcraft-cli bench-open <design.solidcraft | part.step> [--parse-only]")?;
+    let path = args.first().ok_or("usage: node-cad-cli bench-open <design.nodecad | part.step> [--parse-only]")?;
     let t = std::time::Instant::now();
     let step = solidcraft_engine::io::is_step_path(path);
     let limit = if step { solidcraft_engine::io::MAX_STEP_BYTES } else { solidcraft_engine::io::MAX_DESIGN_BYTES };
@@ -733,13 +733,13 @@ pub(crate) fn cmd_bench_open(args: &[String]) -> Result<(), String> {
         json!({"step": "mesh", "ms": t.elapsed().as_secs_f64() * 1000.0, "place_ms": place_ms, "bodies": st.bodies.len(), "triangles": triangles})
     );
     let flag = |name: &str| args.iter().position(|a| a == name);
-    // `--save PATH`: save the opened design without its model cache (to PATH.plain.solidcraft) and
+    // `--save PATH`: save the opened design without its model cache (to PATH.plain.nodecad) and
     // as the app does, with it, then read the cache back.
     let s = match flag("--save").and_then(|i| args.get(i + 1)) {
         Some(out) => {
             let mut s = s;
             // Without the cache first, for comparison.
-            let plain = format!("{out}.plain.solidcraft");
+            let plain = format!("{out}.plain.nodecad");
             let t = std::time::Instant::now();
             s.execute("file.save_as", &json!({"path": plain, "cache": false})).map_err(|e| e.to_string())?;
             let plain_ms = t.elapsed().as_secs_f64() * 1000.0;

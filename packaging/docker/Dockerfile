@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
-# SolidCraft in the browser as a container: the static site (the one packaging/web/package.sh
+# NØDE CAD in the browser as a container: the static site (the one packaging/web/package.sh
 # zips) served by nginx on port 8080, as an unprivileged user. From the repository root:
 #
-#   docker build -f packaging/docker/Dockerfile -t solidcraft-web .
-#   docker run --rm -p 8080:8080 solidcraft-web          then open http://localhost:8080/
+#   docker build -f packaging/docker/Dockerfile -t node-cad-web .
+#   docker run --rm -p 8080:8080 node-cad-web            then open http://localhost:8080/
 #
 # Or `docker compose up` with packaging/docker/compose.yaml. Saving designs needs HTTPS or
 # localhost (the browser's private file storage), so put a TLS reverse proxy in front of it on a
@@ -38,7 +38,7 @@ COPY --from=build /src/dist/web/ /
 
 FROM nginxinc/nginx-unprivileged:1.29-alpine
 COPY packaging/docker/nginx.conf /etc/nginx/conf.d/default.conf
-COPY LICENSE-MIT LICENSE-APACHE NOTICE THIRD-PARTY-LICENSES.txt /usr/share/doc/solidcraft/
-COPY --from=site / /srv/solidcraft/
+COPY LICENSE-MIT LICENSE-APACHE NOTICE THIRD-PARTY-LICENSES.txt /usr/share/doc/node-cad/
+COPY --from=site / /srv/node-cad/
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s CMD wget -q --spider http://127.0.0.1:8080/ || exit 1

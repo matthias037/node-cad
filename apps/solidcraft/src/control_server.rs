@@ -46,7 +46,7 @@ pub fn start(port: u16, ctx: egui::Context) -> Receiver<ControlRequest> {
         Some(token) => {
             listen(port, token, tx, ctx, false);
         }
-        None => eprintln!("solidcraft: control server not started: no random token available"),
+        None => eprintln!("node-cad: control server not started: no random token available"),
     }
     rx
 }
@@ -57,7 +57,7 @@ pub fn start(port: u16, ctx: egui::Context) -> Receiver<ControlRequest> {
 /// requests go to `tx`, where the chat's gate reads them; one may wait long for the user's Allow.
 pub fn listen_agent(tx: Sender<ControlRequest>, ctx: egui::Context) -> Option<u16> {
     let Some(token) = new_token() else {
-        eprintln!("solidcraft: agent chat endpoint not started: no random token available");
+        eprintln!("node-cad: agent chat endpoint not started: no random token available");
         return None;
     };
     listen(0, token, tx, ctx, true)
@@ -69,7 +69,7 @@ fn listen(port: u16, token: String, tx: Sender<ControlRequest>, ctx: egui::Conte
     let listener = match TcpListener::bind(("127.0.0.1", port)) {
         Ok(l) => l,
         Err(e) => {
-            eprintln!("solidcraft: control server failed to bind 127.0.0.1:{port}: {e}");
+            eprintln!("node-cad: control server failed to bind 127.0.0.1:{port}: {e}");
             return None;
         }
     };
@@ -77,19 +77,19 @@ fn listen(port: u16, token: String, tx: Sender<ControlRequest>, ctx: egui::Conte
     match control_auth::token_path(port) {
         Some(path) => match control_auth::write_token_file(&path, &token) {
             Ok(()) => {
-                eprintln!("solidcraft: control server listening on 127.0.0.1:{port} (token in {})", path.display());
+                eprintln!("node-cad: control server listening on 127.0.0.1:{port} (token in {})", path.display());
                 if let Ok(mut files) = TOKEN_FILES.lock() {
                     files.push(path);
                 }
             }
             Err(e) => eprintln!(
-                "solidcraft: control server listening on 127.0.0.1:{port}, but its token file {} could not be written ({e}); \
+                "node-cad: control server listening on 127.0.0.1:{port}, but its token file {} could not be written ({e}); \
                  clients need SOLIDCRAFT_CONTROL_TOKEN",
                 path.display()
             ),
         },
         None => {
-            eprintln!("solidcraft: control server listening on 127.0.0.1:{port}; no data folder for its token, clients need SOLIDCRAFT_CONTROL_TOKEN")
+            eprintln!("node-cad: control server listening on 127.0.0.1:{port}; no data folder for its token, clients need SOLIDCRAFT_CONTROL_TOKEN")
         }
     }
     let token = std::sync::Arc::new(token);

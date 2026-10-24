@@ -2,17 +2,17 @@
 <!-- AppStream metadata (software centres, Flathub). Template: package.sh substitutes @VERSION@
      and @DATE@ from Cargo.toml and the build date. -->
 <component type="desktop-application">
-  <id>ai.storyteller.solidcraft</id>
+  <id>fr.node_os.cad</id>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>MIT OR Apache-2.0</project_license>
-  <name>SolidCraft</name>
-  <summary>Independent parametric 3D CAD</summary>
-  <developer id="io.github.bherbruck">
-    <name>SolidCraft contributors</name>
+  <project_license>Apache-2.0</project_license>
+  <name>NØDE CAD</name>
+  <summary>Parametric 3D CAD, with an AI assistant</summary>
+  <developer id="fr.node_os">
+    <name>NØDE</name>
   </developer>
   <description>
     <p>
-      SolidCraft is an open-source parametric 3D CAD application written in Rust. Sketch on a
+      NØDE CAD is an open-source parametric 3D CAD application written in Rust. Sketch on a
       plane, constrain and dimension the sketch, turn profiles into solids on a feature
       timeline, and change a parameter to watch the timeline rebuild.
     </p>
@@ -24,11 +24,11 @@
       <li>Every action is a command, scriptable from a CLI, a JSON control channel and an MCP server</li>
     </ul>
   </description>
-  <launchable type="desktop-id">ai.storyteller.solidcraft.desktop</launchable>
-  <icon type="stock">ai.storyteller.solidcraft</icon>
-  <url type="homepage">https://docs.solidcraft.io/</url>
-  <url type="bugtracker">https://github.com/bherbruck/solidcraft/issues</url>
-  <url type="help">https://docs.solidcraft.io/</url>
+  <launchable type="desktop-id">fr.node_os.cad.desktop</launchable>
+  <icon type="stock">fr.node_os.cad</icon>
+  <url type="homepage">https://node-os.fr/cad</url>
+  <url type="bugtracker">https://github.com/matthias037/node-cad/issues</url>
+  <url type="help">https://node-os.fr/cad</url>
   <categories>
     <category>Graphics</category>
     <category>3DGraphics</category>
@@ -42,7 +42,7 @@
   <screenshots>
     <screenshot type="default">
       <caption>A sample part with its sketches and feature timeline</caption>
-      <image>https://raw.githubusercontent.com/bherbruck/solidcraft/main/docs/screenshots/sample-plate.png</image>
+      <image>https://raw.githubusercontent.com/matthias037/node-cad/main/docs/screenshots/sample-plate.png</image>
     </screenshot>
   </screenshots>
   <requires>
@@ -53,16 +53,10 @@
     <control>pointing</control>
   </supports>
   <provides>
-    <binary>solidcraft</binary>
-    <binary>solidcraft-cli</binary>
-    <mediatype>application/x-solidcraft</mediatype>
-    <!-- The desktop id of releases before 0.8 (docs/compatibility.md). -->
-    <id>ai.storyteller.solvecraft.desktop</id>
+    <binary>node-cad</binary>
+    <binary>node-cad-cli</binary>
+    <mediatype>application/x-nodecad</mediatype>
   </provides>
-  <!-- Releases before 0.8 used the app id ai.storyteller.solvecraft (docs/compatibility.md). -->
-  <replaces>
-    <id>ai.storyteller.solvecraft</id>
-  </replaces>
   <content_rating type="oars-1.1"/>
   <releases>
     <release version="@VERSION@" date="@DATE@"/>

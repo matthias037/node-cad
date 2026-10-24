@@ -37,122 +37,122 @@ fn probe(os: &str, release: bool, env: &[(&str, &str)], exe: &str, files: &[&str
 
 #[test]
 fn install_kinds_are_told_apart() {
-    let home = "/home/me/Apps/solidcraft";
+    let home = "/home/me/Apps/node-cad";
     assert_eq!(probe("linux", false, &[("APPIMAGE", "/x.AppImage")], home, &[]), InstallKind::Dev, "dev builds never check");
-    assert_eq!(probe("linux", true, &[("FLATPAK_ID", APP_ID)], "/app/bin/solidcraft", &[]), InstallKind::Flatpak(APP_ID.into()));
+    assert_eq!(probe("linux", true, &[("FLATPAK_ID", APP_ID)], "/app/bin/node-cad", &[]), InstallKind::Flatpak(APP_ID.into()));
     let snap = |rev: &str| {
         probe(
             "linux",
             true,
-            &[("SNAP", "/snap/solidcraft/12"), ("SNAP_NAME", "solidcraft"), ("SNAP_REVISION", rev)],
-            "/snap/solidcraft/12/usr/bin/solidcraft",
+            &[("SNAP", "/snap/node-cad/12"), ("SNAP_NAME", "node-cad"), ("SNAP_REVISION", rev)],
+            "/snap/node-cad/12/usr/bin/node-cad",
             &[],
         )
     };
     assert_eq!(snap("12"), InstallKind::Snap { store: true });
     assert_eq!(snap("x3"), InstallKind::Snap { store: false }, "installed from a file with --dangerous");
     assert_eq!(
-        probe("linux", true, &[("APPIMAGE", "/home/me/SolidCraft.AppImage")], "/tmp/.mount_SolidXYZ/usr/bin/solidcraft", &[]),
-        InstallKind::AppImage("/home/me/SolidCraft.AppImage".into())
+        probe("linux", true, &[("APPIMAGE", "/home/me/NODE-CAD.AppImage")], "/tmp/.mount_NodeXYZ/usr/bin/node-cad", &[]),
+        InstallKind::AppImage("/home/me/NODE-CAD.AppImage".into())
     );
     // An empty variable doesn't count.
-    assert_eq!(probe("linux", true, &[("APPIMAGE", "")], "/opt/sc/bin/solidcraft", &[]), InstallKind::LinuxTarball);
-    assert_eq!(probe("linux", true, &[], "/usr/bin/solidcraft", &["/var/lib/dpkg/info/solidcraft.list", "/var/lib/rpm"]), InstallKind::Deb);
-    assert_eq!(probe("linux", true, &[], "/usr/bin/solidcraft", &["/var/lib/rpm"]), InstallKind::Rpm);
-    assert_eq!(probe("linux", true, &[], "/usr/bin/solidcraft", &["/usr/lib/sysimage/rpm"]), InstallKind::Rpm);
-    assert_eq!(probe("linux", true, &[], "/usr/bin/solidcraft", &[]), InstallKind::Other);
+    assert_eq!(probe("linux", true, &[("APPIMAGE", "")], "/opt/sc/bin/node-cad", &[]), InstallKind::LinuxTarball);
+    assert_eq!(probe("linux", true, &[], "/usr/bin/node-cad", &["/var/lib/dpkg/info/node-cad.list", "/var/lib/rpm"]), InstallKind::Deb);
+    assert_eq!(probe("linux", true, &[], "/usr/bin/node-cad", &["/var/lib/rpm"]), InstallKind::Rpm);
+    assert_eq!(probe("linux", true, &[], "/usr/bin/node-cad", &["/usr/lib/sysimage/rpm"]), InstallKind::Rpm);
+    assert_eq!(probe("linux", true, &[], "/usr/bin/node-cad", &[]), InstallKind::Other);
     assert_eq!(probe("linux", true, &[], home, &[]), InstallKind::LinuxTarball);
 
     let pf = [("ProgramFiles", "C:\\Program Files"), ("ProgramFiles(x86)", "C:\\Program Files (x86)")];
-    assert_eq!(probe("windows", true, &pf, "C:\\Program Files\\SolidCraft\\solidcraft.exe", &[]), InstallKind::WindowsMsi);
-    assert_eq!(probe("windows", true, &pf, "c:\\program files\\SolidCraft\\solidcraft.exe", &[]), InstallKind::WindowsMsi, "case-insensitive");
+    assert_eq!(probe("windows", true, &pf, "C:\\Program Files\\NODE CAD\\node-cad.exe", &[]), InstallKind::WindowsMsi);
+    assert_eq!(probe("windows", true, &pf, "c:\\program files\\node cad\\node-cad.exe", &[]), InstallKind::WindowsMsi, "case-insensitive");
     // "C:\Program Files Extra" is not under "C:\Program Files".
-    assert_eq!(probe("windows", true, &pf, "C:\\Program Files Extra\\solidcraft.exe", &[]), InstallKind::WindowsExe);
-    let portable = "C:\\Users\\me\\solidcraft-0.10.0-windows-x64-portable\\solidcraft.exe";
-    let cli = "C:\\Users\\me\\solidcraft-0.10.0-windows-x64-portable\\solidcraft-cli.exe";
+    assert_eq!(probe("windows", true, &pf, "C:\\Program Files Extra\\node-cad.exe", &[]), InstallKind::WindowsExe);
+    let portable = "C:\\Users\\me\\node-cad-0.10.0-windows-x64-portable\\node-cad.exe";
+    let cli = "C:\\Users\\me\\node-cad-0.10.0-windows-x64-portable\\node-cad-cli.exe";
     // Path::parent splits on `\` only on Windows; this test describes the layout either way.
     if cfg!(windows) {
         assert_eq!(probe("windows", true, &pf, portable, &[cli]), InstallKind::WindowsPortable);
     }
-    assert_eq!(probe("windows", true, &pf, "C:\\Users\\me\\Downloads\\SolidCraft-0.10.0-windows-x64.exe", &[]), InstallKind::WindowsExe);
+    assert_eq!(probe("windows", true, &pf, "C:\\Users\\me\\Downloads\\NODE-CAD-0.10.0-windows-x64.exe", &[]), InstallKind::WindowsExe);
 
     assert_eq!(
-        probe("macos", true, &[], "/Applications/SolidCraft.app/Contents/MacOS/solidcraft", &[]),
-        InstallKind::MacApp("/Applications/SolidCraft.app".into())
+        probe("macos", true, &[], "/Applications/NØDE CAD.app/Contents/MacOS/NODE-CAD", &[]),
+        InstallKind::MacApp("/Applications/NØDE CAD.app".into())
     );
-    assert_eq!(probe("macos", true, &[], "/usr/local/bin/solidcraft", &[]), InstallKind::Other);
-    assert_eq!(probe("macos", false, &[], "/Applications/SolidCraft.app/Contents/MacOS/solidcraft", &[]), InstallKind::Dev);
-    assert_eq!(probe("freebsd", true, &[], "/usr/local/bin/solidcraft", &[]), InstallKind::Other);
+    assert_eq!(probe("macos", true, &[], "/usr/local/bin/node-cad", &[]), InstallKind::Other);
+    assert_eq!(probe("macos", false, &[], "/Applications/NØDE CAD.app/Contents/MacOS/NODE-CAD", &[]), InstallKind::Dev);
+    assert_eq!(probe("freebsd", true, &[], "/usr/local/bin/node-cad", &[]), InstallKind::Other);
     assert!(!InstallKind::Dev.checks() && !InstallKind::Web.checks() && InstallKind::Snap { store: true }.checks());
     assert!(!InstallKind::Flatpak(APP_ID.into()).checks(), "the Flatpak has no network permission; Flatpak updates it");
 }
 
 #[test]
 fn portable_windows_layout_is_recognised() {
-    let exe = PathBuf::from("/portable/solidcraft.exe");
+    let exe = PathBuf::from("/portable/node-cad.exe");
     let get = |k: &str| (k == "ProgramFiles").then(|| "C:\\Program Files".to_string());
-    let exists = |p: &Path| p == Path::new("/portable/solidcraft-cli.exe");
+    let exists = |p: &Path| p == Path::new("/portable/node-cad-cli.exe");
     assert_eq!(
         detect(&Probe { os: "windows", release_build: true, env: &get, exe: Some(exe), exists: &exists, msi_dir: None }),
         InstallKind::WindowsPortable
     );
 }
 
-/// #1870: the installer's wizard can put SolidCraft anywhere, and it puts solidcraft-cli.exe
+/// #1870: the installer's wizard can put NØDE CAD anywhere, and it puts node-cad-cli.exe
 /// beside it as the portable zip does. The folder it recorded is what tells its copy apart.
 #[test]
 fn an_msi_install_outside_program_files_is_recognised() {
-    let exe = PathBuf::from(r"D:\Program Files\SolidCraft\solidcraft.exe");
+    let exe = PathBuf::from(r"D:\Program Files\NODE CAD\node-cad.exe");
     let get = |k: &str| match k {
         "ProgramFiles" | "ProgramW6432" => Some(r"C:\Program Files".to_string()),
         "ProgramFiles(x86)" => Some(r"C:\Program Files (x86)".to_string()),
         _ => None,
     };
-    // solidcraft-cli.exe is beside it.
+    // node-cad-cli.exe is beside it.
     let exists = |_: &Path| true;
     let kind = |msi_dir: Option<&str>| {
         detect(&Probe { os: "windows", release_build: true, env: &get, exe: Some(exe.clone()), exists: &exists, msi_dir: msi_dir.map(PathBuf::from) })
     };
     // The installer records [INSTALLFOLDER], which ends in a backslash; Windows paths ignore case.
-    assert_eq!(kind(Some(r"D:\Program Files\SolidCraft\")), InstallKind::WindowsMsi);
-    assert_eq!(kind(Some(r"d:\program files\solidcraft")), InstallKind::WindowsMsi);
+    assert_eq!(kind(Some(r"D:\Program Files\NODE CAD\")), InstallKind::WindowsMsi);
+    assert_eq!(kind(Some(r"d:\program files\node cad")), InstallKind::WindowsMsi);
     // No installer copy here: the portable zip, as before.
     assert_eq!(kind(None), InstallKind::WindowsPortable);
     assert_eq!(kind(Some("")), InstallKind::WindowsPortable);
-    assert_eq!(kind(Some(r"D:\Program Files\SolidCraft2\")), InstallKind::WindowsPortable, "a folder whose name only starts the same");
+    assert_eq!(kind(Some(r"D:\Program Files\NODE CAD2\")), InstallKind::WindowsPortable, "a folder whose name only starts the same");
 }
 
 /// The assets of v0.10.0, as published.
 fn release() -> Release {
     let names = [
         "SHA256SUMS.txt",
-        "solidcraft-0.10.0-linux-x86_64.AppImage",
-        "solidcraft-0.10.0-linux-x86_64.AppImage.zsync",
-        "solidcraft-0.10.0-linux-x86_64.tar.gz",
-        "solidcraft-0.10.0-linux-aarch64.tar.gz",
-        "SolidCraft-0.10.0-windows-x64.exe",
-        "solidcraft-linux-aarch64.AppImage",
-        "solidcraft-linux-aarch64.deb",
-        "solidcraft-linux-x86_64.AppImage",
-        "solidcraft-linux-x86_64.deb",
-        "solidcraft-linux-x86_64.flatpak",
-        "solidcraft-linux-x86_64.rpm",
-        "solidcraft-linux-x86_64.snap",
-        "solidcraft-macos-universal.dmg",
-        "solidcraft-windows-arm64-portable.zip",
-        "solidcraft-windows-arm64.msi",
-        "solidcraft-windows-x64-portable.zip",
-        "solidcraft-windows-x64.msi",
-        "solidcraft-windows-x86-portable.zip",
-        "solidcraft-windows-x86.msi",
+        "node-cad-0.10.0-linux-x86_64.AppImage",
+        "node-cad-0.10.0-linux-x86_64.AppImage.zsync",
+        "node-cad-0.10.0-linux-x86_64.tar.gz",
+        "node-cad-0.10.0-linux-aarch64.tar.gz",
+        "NODE-CAD-0.10.0-windows-x64.exe",
+        "node-cad-linux-aarch64.AppImage",
+        "node-cad-linux-aarch64.deb",
+        "node-cad-linux-x86_64.AppImage",
+        "node-cad-linux-x86_64.deb",
+        "node-cad-linux-x86_64.flatpak",
+        "node-cad-linux-x86_64.rpm",
+        "node-cad-linux-x86_64.snap",
+        "node-cad-macos-universal.dmg",
+        "node-cad-windows-arm64-portable.zip",
+        "node-cad-windows-arm64.msi",
+        "node-cad-windows-x64-portable.zip",
+        "node-cad-windows-x64.msi",
+        "node-cad-windows-x86-portable.zip",
+        "node-cad-windows-x86.msi",
     ];
     let assets: Vec<Value> = names
         .iter()
-        .map(|n| json!({"name": n, "size": 10, "browser_download_url": format!("https://github.com/bherbruck/solidcraft/releases/download/v0.10.0/{n}")}))
+        .map(|n| json!({"name": n, "size": 10, "browser_download_url": format!("https://github.com/matthias037/node-cad/releases/download/v0.10.0/{n}")}))
         .collect();
     let body = json!({
-        "tag_name": "v0.10.0", "name": "SolidCraft v0.10.0", "body": "**What's new**\n\n- Surface tools.",
-        "html_url": "https://github.com/bherbruck/solidcraft/releases/tag/v0.10.0", "draft": false, "prerelease": false, "assets": assets,
+        "tag_name": "v0.10.0", "name": "NØDE CAD v0.10.0", "body": "**What's new**\n\n- Surface tools.",
+        "html_url": "https://github.com/matthias037/node-cad/releases/tag/v0.10.0", "draft": false, "prerelease": false, "assets": assets,
     });
     Release::parse(body.to_string().as_bytes()).unwrap()
 }
@@ -161,40 +161,40 @@ fn release() -> Release {
 fn each_installation_gets_its_own_file() {
     let r = release();
     let name = |k: InstallKind, arch: &str| r.asset_for(&k, arch).map(|a| a.name.clone());
-    assert_eq!(name(InstallKind::AppImage("/a".into()), "x86_64").as_deref(), Some("solidcraft-linux-x86_64.AppImage"));
-    assert_eq!(name(InstallKind::AppImage("/a".into()), "aarch64").as_deref(), Some("solidcraft-linux-aarch64.AppImage"));
-    assert_eq!(name(InstallKind::Deb, "x86_64").as_deref(), Some("solidcraft-linux-x86_64.deb"));
-    assert_eq!(name(InstallKind::Rpm, "x86_64").as_deref(), Some("solidcraft-linux-x86_64.rpm"));
-    assert_eq!(name(InstallKind::LinuxTarball, "aarch64").as_deref(), Some("solidcraft-0.10.0-linux-aarch64.tar.gz"));
-    assert_eq!(name(InstallKind::WindowsMsi, "x86_64").as_deref(), Some("solidcraft-windows-x64.msi"));
-    assert_eq!(name(InstallKind::WindowsMsi, "aarch64").as_deref(), Some("solidcraft-windows-arm64.msi"));
-    assert_eq!(name(InstallKind::WindowsMsi, "x86").as_deref(), Some("solidcraft-windows-x86.msi"));
-    assert_eq!(name(InstallKind::WindowsPortable, "x86_64").as_deref(), Some("solidcraft-windows-x64-portable.zip"));
-    assert_eq!(name(InstallKind::WindowsExe, "x86_64").as_deref(), Some("SolidCraft-0.10.0-windows-x64.exe"));
-    assert_eq!(name(InstallKind::WindowsExe, "aarch64").as_deref(), Some("solidcraft-windows-arm64-portable.zip"));
-    assert_eq!(name(InstallKind::MacApp("/A.app".into()), "aarch64").as_deref(), Some("solidcraft-macos-universal.dmg"));
+    assert_eq!(name(InstallKind::AppImage("/a".into()), "x86_64").as_deref(), Some("node-cad-linux-x86_64.AppImage"));
+    assert_eq!(name(InstallKind::AppImage("/a".into()), "aarch64").as_deref(), Some("node-cad-linux-aarch64.AppImage"));
+    assert_eq!(name(InstallKind::Deb, "x86_64").as_deref(), Some("node-cad-linux-x86_64.deb"));
+    assert_eq!(name(InstallKind::Rpm, "x86_64").as_deref(), Some("node-cad-linux-x86_64.rpm"));
+    assert_eq!(name(InstallKind::LinuxTarball, "aarch64").as_deref(), Some("node-cad-0.10.0-linux-aarch64.tar.gz"));
+    assert_eq!(name(InstallKind::WindowsMsi, "x86_64").as_deref(), Some("node-cad-windows-x64.msi"));
+    assert_eq!(name(InstallKind::WindowsMsi, "aarch64").as_deref(), Some("node-cad-windows-arm64.msi"));
+    assert_eq!(name(InstallKind::WindowsMsi, "x86").as_deref(), Some("node-cad-windows-x86.msi"));
+    assert_eq!(name(InstallKind::WindowsPortable, "x86_64").as_deref(), Some("node-cad-windows-x64-portable.zip"));
+    assert_eq!(name(InstallKind::WindowsExe, "x86_64").as_deref(), Some("NODE-CAD-0.10.0-windows-x64.exe"));
+    assert_eq!(name(InstallKind::WindowsExe, "aarch64").as_deref(), Some("node-cad-windows-arm64-portable.zip"));
+    assert_eq!(name(InstallKind::MacApp("/A.app".into()), "aarch64").as_deref(), Some("node-cad-macos-universal.dmg"));
     assert_eq!(name(InstallKind::Other, "x86_64"), None);
     assert_eq!(name(InstallKind::Deb, "riscv64"), None);
     // Download: the file, or the page when there is none or a package manager updates it.
     assert_eq!(
         r.download_url(&InstallKind::WindowsMsi, "x86_64"),
-        "https://github.com/bherbruck/solidcraft/releases/download/v0.10.0/solidcraft-windows-x64.msi"
+        "https://github.com/matthias037/node-cad/releases/download/v0.10.0/node-cad-windows-x64.msi"
     );
-    assert_eq!(r.download_url(&InstallKind::Other, "x86_64"), "https://github.com/bherbruck/solidcraft/releases/tag/v0.10.0");
+    assert_eq!(r.download_url(&InstallKind::Other, "x86_64"), "https://github.com/matthias037/node-cad/releases/tag/v0.10.0");
     assert_eq!(r.download_url(&InstallKind::Flatpak(APP_ID.into()), "x86_64"), r.page);
     assert_eq!(r.download_url(&InstallKind::Snap { store: true }, "x86_64"), r.page);
     assert_eq!(
         r.download_url(&InstallKind::Snap { store: false }, "x86_64"),
-        "https://github.com/bherbruck/solidcraft/releases/download/v0.10.0/solidcraft-linux-x86_64.snap"
+        "https://github.com/matthias037/node-cad/releases/download/v0.10.0/node-cad-linux-x86_64.snap"
     );
     assert_eq!(
-        InstallKind::Snap { store: false }.update_command(Some("solidcraft-linux-x86_64.snap")).as_deref(),
-        Some("sudo snap install --dangerous ./solidcraft-linux-x86_64.snap")
+        InstallKind::Snap { store: false }.update_command(Some("node-cad-linux-x86_64.snap")).as_deref(),
+        Some("sudo snap install --dangerous ./node-cad-linux-x86_64.snap")
     );
-    assert_eq!(InstallKind::Flatpak(APP_ID.into()).update_command(None).as_deref(), Some("flatpak update ai.storyteller.solidcraft"));
+    assert_eq!(InstallKind::Flatpak(APP_ID.into()).update_command(None).as_deref(), Some("flatpak update fr.node_os.cad"));
     assert_eq!(
-        InstallKind::Deb.update_command(Some("solidcraft-linux-x86_64.deb")).as_deref(),
-        Some("sudo apt install ./solidcraft-linux-x86_64.deb")
+        InstallKind::Deb.update_command(Some("node-cad-linux-x86_64.deb")).as_deref(),
+        Some("sudo apt install ./node-cad-linux-x86_64.deb")
     );
     assert_eq!(InstallKind::WindowsMsi.update_command(None), None);
 }
@@ -211,8 +211,8 @@ fn release_answers_are_checked() {
     // Links elsewhere are dropped: the page falls back to the releases page, foreign assets go.
     let r = Release::parse(
         json!({"tag_name": "v1.0.0", "html_url": "https://evil.example/x", "assets": [
-            {"name": "solidcraft-windows-x64.msi", "browser_download_url": "https://evil.example/a.msi"},
-            {"name": "solidcraft-windows-x86.msi", "browser_download_url": "https://github.com/bherbruck/solidcraft/releases/download/v1.0.0/solidcraft-windows-x86.msi"},
+            {"name": "node-cad-windows-x64.msi", "browser_download_url": "https://evil.example/a.msi"},
+            {"name": "node-cad-windows-x86.msi", "browser_download_url": "https://github.com/matthias037/node-cad/releases/download/v1.0.0/node-cad-windows-x86.msi"},
         ]})
         .to_string()
         .as_bytes(),
@@ -220,7 +220,7 @@ fn release_answers_are_checked() {
     .unwrap();
     assert_eq!(r.page, RELEASES_PAGE);
     assert_eq!(r.assets.len(), 1);
-    assert_eq!(r.name, "SolidCraft v1.0.0");
+    assert_eq!(r.name, "NØDE CAD v1.0.0");
     // Huge notes are cut (on a character boundary).
     let r = Release::parse(json!({"tag_name": "v1.0.0", "body": "é".repeat(MAX_NOTES)}).to_string().as_bytes()).unwrap();
     assert!(r.notes.len() <= MAX_NOTES + 8 && r.notes.ends_with('…'));
@@ -305,9 +305,9 @@ fn next_release_feed(dir: &Path) -> (PathBuf, String) {
     let path = dir.join("latest.json");
     let body = json!({
         "tag_name": format!("v{v}"),
-        "name": format!("SolidCraft {v}"),
+        "name": format!("NØDE CAD {v}"),
         "body": "## What's new\n\n- Faster rebuilds.",
-        "html_url": format!("https://github.com/bherbruck/solidcraft/releases/tag/v{v}"),
+        "html_url": format!("https://github.com/matthias037/node-cad/releases/tag/v{v}"),
         "assets": []
     });
     std::fs::write(&path, body.to_string()).unwrap();
@@ -442,7 +442,7 @@ fn the_memo_survives_with_the_preferences() {
 
 #[test]
 fn release_notes_read_as_markdown() {
-    let md = "## What's new\n\n**Why 0.10:** a minor\nbump.\n\n- **Surface tools.** Revolve and `solidcraft-cli mcp`\n  continued ([#925](https://x/925)).\n  - nested\n* Fix by @a in https://github.com/bherbruck/solidcraft/pull/1064\n\nSee https://example.com/x.";
+    let md = "## What's new\n\n**Why 0.10:** a minor\nbump.\n\n- **Surface tools.** Revolve and `node-cad-cli mcp`\n  continued ([#925](https://x/925)).\n  - nested\n* Fix by @a in https://github.com/matthias037/node-cad/pull/1064\n\nSee https://example.com/x.";
     let b = parse_markdown(md);
     assert_eq!(b.first(), Some(&Block::Heading(vec![Span::Text("What's new".into())])));
     assert_eq!(b.get(1), Some(&Block::Paragraph(vec![Span::Strong("Why 0.10:".into()), Span::Text(" a minor bump.".into())])));
@@ -453,7 +453,7 @@ fn release_notes_read_as_markdown() {
             vec![
                 Span::Strong("Surface tools.".into()),
                 Span::Text(" Revolve and ".into()),
-                Span::Code("solidcraft-cli mcp".into()),
+                Span::Code("node-cad-cli mcp".into()),
                 Span::Text(" continued (".into()),
                 Span::Link { text: "#925".into(), url: Some("https://x/925".into()) },
                 Span::Text(").".into()),
@@ -467,7 +467,7 @@ fn release_notes_read_as_markdown() {
             0,
             vec![
                 Span::Text("Fix by @a in ".into()),
-                Span::Link { text: "#1064".into(), url: Some("https://github.com/bherbruck/solidcraft/pull/1064".into()) }
+                Span::Link { text: "#1064".into(), url: Some("https://github.com/matthias037/node-cad/pull/1064".into()) }
             ]
         ))
     );
@@ -483,10 +483,10 @@ fn release_notes_read_as_markdown() {
 /// addresses are kept (a relative or other link shows as text that opens nothing).
 #[test]
 fn release_note_links_keep_their_web_targets() {
-    let spans = inline("[guide](https://docs.solidcraft.io/guide) and [file](file:///etc/passwd) and [rel](../x)");
+    let spans = inline("[guide](https://node-os.fr/cad/guide) and [file](file:///etc/passwd) and [rel](../x)");
     let links: Vec<(String, Option<String>)> =
         spans.into_iter().filter_map(|s| if let Span::Link { text, url } = s { Some((text, url)) } else { None }).collect();
-    assert_eq!(links, vec![("guide".into(), Some("https://docs.solidcraft.io/guide".into())), ("file".into(), None), ("rel".into(), None)]);
+    assert_eq!(links, vec![("guide".into(), Some("https://node-os.fr/cad/guide".into())), ("file".into(), None), ("rel".into(), None)]);
 }
 
 #[test]
@@ -495,25 +495,23 @@ fn releases_under_either_owner_are_accepted() {
         let base = format!("https://github.com/{owner}/releases");
         Release::parse(
             json!({"tag_name": "v1.0.0", "html_url": format!("{base}/tag/v1.0.0"), "assets": [
-                {"name": "solidcraft-windows-x64.msi", "browser_download_url": format!("{base}/download/v1.0.0/solidcraft-windows-x64.msi")},
+                {"name": "node-cad-windows-x64.msi", "browser_download_url": format!("{base}/download/v1.0.0/node-cad-windows-x64.msi")},
             ]})
             .to_string()
             .as_bytes(),
         )
         .unwrap()
     };
-    for owner in ["bherbruck/solidcraft", "tangency-labs/solidcraft"] {
-        let r = parse(owner);
-        assert_eq!(r.page, format!("https://github.com/{owner}/releases/tag/v1.0.0"));
-        assert_eq!(r.assets.len(), 1, "{owner}");
-    }
-    // Any other owner, repository, host or scheme is dropped.
-    for owner in ["evil/solidcraft", "tangency-labs/solidcraft-evil", "tangency-labs.evil/solidcraft", "bherbruck/other"] {
+    let r = parse(REPO);
+    assert_eq!(r.page, format!("https://github.com/{REPO}/releases/tag/v1.0.0"));
+    assert_eq!(r.assets.len(), 1);
+    // Any other owner (upstream's included), repository, host or scheme is dropped.
+    for owner in ["evil/node-cad", "matthias037/node-cad-evil", "matthias037.evil/node-cad", "matthias037/other", "tangency-labs/solidcraft"] {
         let r = parse(owner);
         assert_eq!(r.page, RELEASES_PAGE, "{owner}");
         assert!(r.assets.is_empty(), "{owner}");
     }
-    assert!(!is_release_url("http://github.com/tangency-labs/solidcraft/releases/x"));
-    assert!(!is_release_url("https://github.com.evil.example/tangency-labs/solidcraft/releases/x"));
-    assert!(!is_release_url("https://github.com/tangency-labs/solidcraft/issues/1"));
+    assert!(!is_release_url("http://github.com/matthias037/node-cad/releases/x"));
+    assert!(!is_release_url("https://github.com.evil.example/matthias037/node-cad/releases/x"));
+    assert!(!is_release_url("https://github.com/matthias037/node-cad/issues/1"));
 }

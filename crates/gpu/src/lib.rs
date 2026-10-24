@@ -66,7 +66,7 @@ fn open_headless() -> Result<(wgpu::Adapter, wgpu::Device, wgpu::Queue)> {
     let policy = select::Policy::from_env().map_err(GpuError::Policy)?;
     let (adapter, _) = select::pick(policy).ok_or(GpuError::NoAdapter(policy.name()))?;
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        label: Some("solidcraft headless"),
+        label: Some("node-cad headless"),
         required_features: depth_features(&adapter),
         required_limits: wgpu::Limits::downlevel_defaults().using_resolution(adapter.limits()),
         ..Default::default()
@@ -81,7 +81,7 @@ const WORKGROUP: u32 = 64;
 
 #[derive(Debug, thiserror::Error)]
 pub enum GpuError {
-    #[error("no GPU adapter qualifies under the `{0}` policy (SOLIDCRAFT_GPU); `solidcraft-cli gpu` lists the adapters this machine offers")]
+    #[error("no GPU adapter qualifies under the `{0}` policy (SOLIDCRAFT_GPU); `node-cad-cli gpu` lists the adapters this machine offers")]
     NoAdapter(&'static str),
     #[error("{0}")]
     Policy(String),
@@ -184,7 +184,7 @@ impl TessGpu {
 
     fn build(device: &wgpu::Device, shader: &str) -> (wgpu::ComputePipeline, wgpu::BindGroupLayout) {
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("solidcraft tessellation"),
+            label: Some("node-cad tessellation"),
             source: wgpu::ShaderSource::Wgsl(shader.into()),
         });
         let entry = |binding: u32, ty: wgpu::BufferBindingType| wgpu::BindGroupLayoutEntry {
@@ -195,7 +195,7 @@ impl TessGpu {
         };
         let storage = |read_only| wgpu::BufferBindingType::Storage { read_only };
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("solidcraft tessellation"),
+            label: Some("node-cad tessellation"),
             entries: &[
                 entry(0, wgpu::BufferBindingType::Uniform),
                 entry(1, storage(true)),
@@ -205,12 +205,12 @@ impl TessGpu {
             ],
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("solidcraft tessellation"),
+            label: Some("node-cad tessellation"),
             bind_group_layouts: &[Some(&layout)],
             immediate_size: 0,
         });
         let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("solidcraft tessellation"),
+            label: Some("node-cad tessellation"),
             layout: Some(&pipeline_layout),
             module: &module,
             entry_point: Some("main"),

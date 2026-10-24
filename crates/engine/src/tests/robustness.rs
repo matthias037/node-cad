@@ -1,4 +1,4 @@
-//! Cases found by the robustness runs (`solidcraft-cli fuzz`, docs/robustness.md), cut down to
+//! Cases found by the robustness runs (`node-cad-cli fuzz`, docs/robustness.md), cut down to
 //! the steps that matter, and a fixed set of seeds that must keep running clean.
 
 use std::f64::consts::PI;

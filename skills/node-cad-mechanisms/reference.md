@@ -1,4 +1,4 @@
-# SolidCraft mechanism reference for agents
+# NØDE CAD mechanism reference for agents
 
 These are the shapes of the commands an assembly needs, so an agent rarely has to call `list_commands`. All of them run through the `execute` tool or a `batch`. The worked example below runs in CI (`mechanisms_skill_example_moves_as_documented` in `crates/mcp/src/tests.rs`).
 
@@ -110,7 +110,7 @@ A frame holds a panel on a hinge along X at the origin. An actuator runs from a 
 
 ## At scale: SELENE
 
-The same pattern moved the solar wings of the SELENE rover (`Rover-v7.solidcraft` by 0xlillith, 36 occurrences, 1353 features):
+The same pattern moved the solar wings of the SELENE rover (`Rover-v7.nodecad` by 0xlillith, 36 occurrences, 1353 features):
 - **Actuators split:** each of the four actuators was one component. Its barrel and its rod (with the eyes and pins that move with them) went into components of their own with `component.create` and `component.move_bodies`.
 - **Loops:** per actuator, a revolute root pin (structure and barrel), a slider with the stroke as its limits, `[[-6, 0.4]]` mm, and a revolute wing pin (rod and wing). All `flip: true`, origins by world point, with z along X for the pins and along the actuator (root to tip) for the slider.
 - **Links:** the six wheels follow the first (`ratio: 1`); the starboard tilt mirrors the port one (`ratio: -1`).
@@ -138,7 +138,7 @@ The same pattern moved the solar wings of the SELENE rover (`Rover-v7.solidcraft
 | `a joint needs two different occurrences` | Both origins found the same part. Give `occurrence` on both. If the parts are bodies of one component (an imported STEP file often brings them so), run `component.from_bodies {"bodies": [...]}` first. |
 | "unknown command" for `file.open` | Open a design with the `open` tool or `doc.open {path}`. |
 | Rigid hoses, cables or springs drift as the mechanism moves | Bodies don't bend. Hide them with `browser.visibility`, or model them per link. |
-| `solidcraft-cli snapshot SCRIPT --in design` runs on an empty design | `snapshot` ignores `--in`. Run `solidcraft-cli run SCRIPT --in design --save out.solidcraft` first. |
+| `node-cad-cli snapshot SCRIPT --in design` runs on an empty design | `snapshot` ignores `--in`. Run `node-cad-cli run SCRIPT --in design --save out.nodecad` first. |
 | A URDF export lacks a joint | `export` to `.urdf` leaves out each joint that closes a loop, with a warning, because URDF is a tree. |
 
 ## Reply cost

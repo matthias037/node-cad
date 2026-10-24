@@ -278,7 +278,7 @@ const ELEMENTS: &[Element] = &[
             super::file_view::RecoveryMessage {
                 title: "1 design was recovered",
                 before_filename: " after NØDE CAD closed unexpectedly: ",
-                filename: "enclosure-lid.solidcraft",
+                filename: "enclosure-lid.nodecad",
                 after_filename: ", 2 minutes ago.",
             },
             "Recover",
@@ -296,7 +296,7 @@ const ELEMENTS: &[Element] = &[
                     id,
                     RecentRow {
                         title: "Sample Plate",
-                        path: "Designs/sample-plate.solidcraft",
+                        path: "Designs/sample-plate.nodecad",
                         when: "Open now",
                         workspace: "Design",
                         thumbnail: None,
@@ -309,7 +309,7 @@ const ELEMENTS: &[Element] = &[
         FileView::recent_row(
             ui,
             "gallery:file:recent",
-            RecentRow { title: "Sample Plate", path: "Designs/sample-plate.solidcraft", when: "Open now", workspace: "Design", thumbnail: None },
+            RecentRow { title: "Sample Plate", path: "Designs/sample-plate.nodecad", when: "Open now", workspace: "Design", thumbnail: None },
         );
     }),
     element!("file_sample", |ui, _| {
@@ -1869,7 +1869,7 @@ fn file_view_application_evidence_in_both_themes_and_widths() {
     std::fs::create_dir_all(&output_dir).unwrap();
     let fixture_dir = std::env::temp_dir().join(format!("solidcraft-file-evidence-{}", std::process::id()));
     std::fs::create_dir_all(&fixture_dir).unwrap();
-    let path = fixture_dir.join("sample-plate.solidcraft");
+    let path = fixture_dir.join("sample-plate.nodecad");
     let fixture = path.to_string_lossy().to_string();
     let mut sample = crate::test_support::sample_app();
     sample.session.execute("file.save_as", &serde_json::json!({"path":fixture})).unwrap();
@@ -1888,7 +1888,7 @@ fn file_view_application_evidence_in_both_themes_and_widths() {
             app.ui.dark = dark;
             app.recoverable.push(solidcraft_engine::recovery::Entry {
                 id: "public-evidence".into(),
-                path: Some("enclosure-lid.solidcraft".into()),
+                path: Some("enclosure-lid.nodecad".into()),
                 name: "Enclosure lid".into(),
                 saved_at: web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).unwrap().as_secs().saturating_sub(120),
                 features: 14,

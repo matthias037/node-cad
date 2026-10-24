@@ -37,6 +37,7 @@ const AMBIGUOUS_KEYS: &[&str] = &["path", "paths", "source"];
 
 /// File extensions that make a bare word a file name.
 const FILE_EXTENSIONS: &[&str] = &[
+    "nodecad",
     "solidcraft",
     "json",
     "csv",
@@ -241,6 +242,7 @@ mod tests {
     #[test]
     fn files_and_replacing_the_design_ask_first() {
         assert!(matches!(exec("file.save", json!({"path": "/tmp/a.solidcraft"})), Verdict::Ask(a) if a.contains("/tmp/a.solidcraft")));
+        assert!(matches!(exec("file.save", json!({"path": "/tmp/a.nodecad"})), Verdict::Ask(a) if a.contains("/tmp/a.nodecad")));
         assert!(matches!(exec("file.new", json!({})), Verdict::Ask(_)));
         assert!(matches!(exec("doc.open", json!({"path": "x.step"})), Verdict::Ask(_)));
         assert!(matches!(exec("file.export", json!({"path": "x.stl"})), Verdict::Ask(_)));

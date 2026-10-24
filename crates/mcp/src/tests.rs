@@ -10,7 +10,7 @@ fn server() -> Server {
     Server::new(Box::new(Headless::default()))
 }
 
-/// Screenshots are drawn on the GPU by the renderer the host installs (`solidcraft-cli mcp`); the
+/// Screenshots are drawn on the GPU by the renderer the host installs (`node-cad-cli mcp`); the
 /// tests install the same one. `false`, with the reason printed, on a machine without a GPU
 /// adapter: the screenshots are then left out of the test.
 fn renders() -> bool {
@@ -125,6 +125,10 @@ fn handshake_and_tools_list() {
     assert_eq!(call(&mut s, 3, "ping", json!({}))["result"], json!({}));
 
     let tools = call(&mut s, 4, "tools/list", json!({}));
+    // What the client sees names the product as it ships, never the project it was forked from.
+    for shown in [init["result"].to_string(), tools["result"].to_string(), call(&mut s, 9, "resources/list", json!({}))["result"].to_string()] {
+        assert!(!shown.to_lowercase().contains("solidcraft"), "{shown}");
+    }
     let names: Vec<&str> = tools["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
     for want in [
         "list_commands",
@@ -160,9 +164,9 @@ fn handshake_and_tools_list() {
 
     let res = call(&mut s, 5, "resources/list", json!({}));
     assert_eq!(res["result"]["resources"].as_array().unwrap().len(), 2);
-    let d = call(&mut s, 6, "resources/read", json!({"uri": "solidcraft://design"}));
+    let d = call(&mut s, 6, "resources/read", json!({"uri": "nodecad://design"}));
     assert!(d["result"]["contents"][0]["text"].as_str().unwrap().contains("timeline"));
-    assert_eq!(call(&mut s, 7, "resources/read", json!({"uri": "solidcraft://nope"}))["error"]["code"], -32002);
+    assert_eq!(call(&mut s, 7, "resources/read", json!({"uri": "nodecad://nope"}))["error"]["code"], -32002);
     assert_eq!(call(&mut s, 8, "nope/nope", json!({}))["error"]["code"], -32601);
 }
 
@@ -641,8 +645,10 @@ fn legacy_design_files_and_resource_uris() {
     std::fs::write(&path, legacy).unwrap();
     tool(&mut s, "open", json!({"path": path.to_string_lossy()}));
     let _ = std::fs::remove_file(&path);
-    let d = call(&mut s, 1, "resources/read", json!({"uri": "solvecraft://design"}));
-    assert!(d["result"]["contents"][0]["text"].as_str().unwrap().contains("timeline"));
+    for (id, uri) in [(1, "solvecraft://design"), (2, "solidcraft://design")] {
+        let d = call(&mut s, id, "resources/read", json!({"uri": uri}));
+        assert!(d["result"]["contents"][0]["text"].as_str().unwrap().contains("timeline"), "{uri}");
+    }
 }
 
 /// The default folders (#205): the recovery folder works out of the box, `screenshot` without a
@@ -1169,11 +1175,11 @@ fn compact_execute_uses_one_backend_call_and_keeps_removed_bodies() {
     assert_eq!(v, json!({"feature": 7, "name": "Combine1", "created_bodies": [], "changed_bodies": ["Base"], "removed_bodies": ["Tool"]}));
 }
 
-/// The worked example in `skills/solidcraft-modeling/reference.md` is what agents copy, so it has
+/// The worked example in `skills/node-cad-modeling/reference.md` is what agents copy, so it has
 /// to keep building with the volume the file documents, and follow a parameter change.
 #[test]
 fn skill_reference_example_builds_as_documented() {
-    let doc = include_str!("../../../skills/solidcraft-modeling/reference.md");
+    let doc = include_str!("../../../skills/node-cad-modeling/reference.md");
     let start = doc.find("{\"commands\":[").expect("the reference has a worked example");
     let end = start + doc[start..].find("```").expect("the example's code block ends");
     let example: Value = serde_json::from_str(&doc[start..end]).expect("the example is JSON");
@@ -1243,12 +1249,12 @@ fn sketch_plane_axes_match_the_skill_reference() {
     }
 }
 
-/// The worked example in `skills/solidcraft-mechanisms/reference.md` is what agents copy: the
+/// The worked example in `skills/node-cad-mechanisms/reference.md` is what agents copy: the
 /// actuator has to follow the hinge with the stroke the file computes, the mirrored panel its link,
 /// and the drive has to stop where the rod reaches its limit.
 #[test]
 fn mechanisms_skill_example_moves_as_documented() {
-    let doc = include_str!("../../../skills/solidcraft-mechanisms/reference.md");
+    let doc = include_str!("../../../skills/node-cad-mechanisms/reference.md");
     let start = doc.find("{\"commands\":[").expect("the reference has a worked example");
     let end = start + doc[start..].find("```").expect("the example's code block ends");
     let example: Value = serde_json::from_str(&doc[start..end]).expect("the example is JSON");
@@ -1300,13 +1306,13 @@ fn mechanisms_skill_example_moves_as_documented() {
 #[test]
 fn skills_name_only_real_tools_and_commands() {
     let docs = [
-        include_str!("../../../skills/solidcraft-modeling/SKILL.md"),
-        include_str!("../../../skills/solidcraft-modeling/reference.md"),
-        include_str!("../../../skills/solidcraft-editing/SKILL.md"),
-        include_str!("../../../skills/solidcraft-checking/SKILL.md"),
-        include_str!("../../../skills/solidcraft-checking/reference/porting.md"),
-        include_str!("../../../skills/solidcraft-mechanisms/SKILL.md"),
-        include_str!("../../../skills/solidcraft-mechanisms/reference.md"),
+        include_str!("../../../skills/node-cad-modeling/SKILL.md"),
+        include_str!("../../../skills/node-cad-modeling/reference.md"),
+        include_str!("../../../skills/node-cad-editing/SKILL.md"),
+        include_str!("../../../skills/node-cad-checking/SKILL.md"),
+        include_str!("../../../skills/node-cad-checking/reference/porting.md"),
+        include_str!("../../../skills/node-cad-mechanisms/SKILL.md"),
+        include_str!("../../../skills/node-cad-mechanisms/reference.md"),
     ];
     let mut s = server();
     let tools: Vec<String> = tool_definitions().iter().filter_map(|t| t["name"].as_str()).map(str::to_owned).collect();
@@ -1549,10 +1555,10 @@ fn a_bridge_made_before_the_app_runs_connects_once_it_does() {
     let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
     let addr = format!("127.0.0.1:{port}");
     let mut remote = crate::Remote::new(&addr, Some("0123456789abcdef0123456789abcdef"));
-    // Still "connected to the SolidCraft app", which the skills read as bridged.
+    // Still "connected to the NØDE CAD app", which the skills read as bridged.
     assert!(remote.describe().starts_with("connected to the NØDE CAD app") && remote.describe().contains("not running"), "{}", remote.describe());
     let e = remote.call("engine.execute", json!({"command": "inspect.measure"})).unwrap_err();
-    assert!(e.starts_with(crate::backend::NOT_RUNNING) && e.contains(&format!("solidcraft --control {port}")), "{e}");
+    assert!(e.starts_with(crate::backend::NOT_RUNNING) && e.contains(&format!("node-cad --control {port}")), "{e}");
     let batch = crate::call_tool(&mut remote, "batch", &json!({"commands": [{"command": "solid.box"}]}));
     let text = batch["content"][0]["text"].as_str().unwrap_or_default();
     assert_eq!(batch["isError"], true);

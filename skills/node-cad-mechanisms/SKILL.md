@@ -1,14 +1,14 @@
 ---
-name: solidcraft-mechanisms
-description: Use when building, driving or animating an assembly or mechanism in SolidCraft through its MCP server - components, grounding, joints and joint origins, rigid groups, motion links, closed loops such as an actuator on a hinged panel or a linkage, contact sets, motion studies, degrees of freedom - or when a drive moves nothing, stops early or a part jumps when it is joined. To model the parts themselves, use solidcraft-modeling.
+name: node-cad-mechanisms
+description: Use when building, driving or animating an assembly or mechanism in NØDE CAD through its MCP server - components, grounding, joints and joint origins, rigid groups, motion links, closed loops such as an actuator on a hinged panel or a linkage, contact sets, motion studies, degrees of freedom - or when a drive moves nothing, stops early or a part jumps when it is joined. To model the parts themselves, use node-cad-modeling.
 ---
 
-# SolidCraft mechanisms
+# NØDE CAD mechanisms
 
 ## Overview
-An assembly is components placed by joints. Work the mechanism out as world points and axes first: every pin, slide and hinge, which part each one joins, and the value you expect at each pose. Then give every joint origin by those coordinates, and check each step against a number you computed yourself. A drive that reports success can still have moved nothing. Command shapes, a worked example, the traps and reply sizes are in `reference.md` next to this file. To build the parts themselves, use `solidcraft-modeling`.
+An assembly is components placed by joints. Work the mechanism out as world points and axes first: every pin, slide and hinge, which part each one joins, and the value you expect at each pose. Then give every joint origin by those coordinates, and check each step against a number you computed yourself. A drive that reports success can still have moved nothing. Command shapes, a worked example, the traps and reply sizes are in `reference.md` next to this file. To build the parts themselves, use `node-cad-modeling`.
 
-Written against SolidCraft `main` after 0.11.1, which counts the degrees of freedom of closed loops, carries motion links through chains made in any order, and answers drives in degrees with `moved` (and a `reason` when nothing could move).
+Written against NØDE CAD `main` after 0.11.1, which counts the degrees of freedom of closed loops, carries motion links through chains made in any order, and answers drives in degrees with `moved` (and a `reason` when nothing could move).
 
 ## Before the first call
 1. Read `reference.md`.

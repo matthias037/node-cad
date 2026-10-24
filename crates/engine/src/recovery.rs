@@ -1,6 +1,6 @@
 //! Autosave and crash recovery.
 //!
-//! Each open design keeps its own recovery entry in the recovery folder: `<id>.solidcraft` (the design
+//! Each open design keeps its own recovery entry in the recovery folder: `<id>.nodecad` (the design
 //! as of the last autosave), `<id>.json` (its file path, name and time) and `<id>.lock`, which
 //! the app holds locked while it runs. Autosaves are written atomically, only when the design
 //! has unsaved changes it hasn't written yet; a design with nothing unsaved has no entry. An
@@ -49,9 +49,9 @@ pub fn default_dir() -> Option<PathBuf> {
     Some(dir)
 }
 
-/// SolidCraft's per-user data folder (the recovery folder's parent unless
-/// `SOLIDCRAFT_RECOVERY_DIR` moves that): `%LOCALAPPDATA%\SolidCraft`,
-/// `~/Library/Application Support/SolidCraft`, or `$XDG_DATA_HOME/solidcraft`
+/// The app's per-user data folder (the recovery folder's parent unless
+/// `SOLIDCRAFT_RECOVERY_DIR` moves that): `%LOCALAPPDATA%\NODE CAD`,
+/// `~/Library/Application Support/NODE CAD`, or `$XDG_DATA_HOME/solidcraft`
 /// (`~/.local/share/solidcraft`).
 pub fn data_dir() -> Option<PathBuf> {
     let env = |k: &str| std::env::var_os(k).filter(|d| !d.is_empty()).map(PathBuf::from);
@@ -91,12 +91,15 @@ fn valid_id(id: &str) -> bool {
     !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
 }
 
-/// An entry's design: `<id>.solidcraft`, or `<id>.solvecraft` for an autosave copied from a
-/// pre-rename recovery folder (compatibility shim, docs/compatibility.md).
+/// An entry's design: `<id>.nodecad`, or `<id>.solidcraft` / `<id>.solvecraft` for an autosave
+/// an earlier release wrote or one copied from a pre-rename recovery folder (compatibility shim,
+/// docs/compatibility.md).
 fn design_file(dir: &Path, id: &str) -> PathBuf {
     let current = file(dir, id, solidcraft_io::DESIGN_EXT);
-    let legacy = file(dir, id, solidcraft_io::LEGACY_DESIGN_EXT);
-    if !current.is_file() && legacy.is_file() { legacy } else { current }
+    if current.is_file() {
+        return current;
+    }
+    solidcraft_io::LEGACY_DESIGN_EXTS.iter().map(|ext| file(dir, id, ext)).find(|p| p.is_file()).unwrap_or(current)
 }
 
 fn file(dir: &Path, id: &str, ext: &str) -> PathBuf {
@@ -149,7 +152,7 @@ pub fn load(dir: &Path, id: &str) -> Result<(Document, Entry)> {
 }
 
 /// Delete an entry. Only a real one: `<id>.json` must describe entry `id` and its design must
-/// be there, so a folder and id that merely name someone's `part.solidcraft` delete nothing.
+/// be there, so a folder and id that merely name someone's `part.nodecad` delete nothing.
 pub fn remove(dir: &Path, id: &str) -> Result<()> {
     let is_entry = valid_id(id)
         && fs::read(file(dir, id, "json")).ok().and_then(|b| serde_json::from_slice::<Entry>(&b).ok()).is_some_and(|e| e.id == id)
@@ -157,7 +160,7 @@ pub fn remove(dir: &Path, id: &str) -> Result<()> {
     if !is_entry {
         return Err(EngineError::Other(format!("no recovered design `{id}`")));
     }
-    for ext in ["json", solidcraft_io::DESIGN_EXT, solidcraft_io::LEGACY_DESIGN_EXT, "lock"] {
+    for ext in solidcraft_io::DESIGN_EXTS.iter().chain(&["json", "lock"]) {
         let _ = fs::remove_file(file(dir, id, ext));
     }
     Ok(())
@@ -312,7 +315,7 @@ impl Autosaver {
         self.last_at = Instant::now();
         if !s.is_dirty() {
             if self.has_entry {
-                for ext in ["json", "solidcraft"] {
+                for ext in solidcraft_io::DESIGN_EXTS.iter().chain(&["json"]) {
                     let _ = fs::remove_file(file(&self.dir, &self.id, ext));
                 }
                 self.has_entry = false;
@@ -368,7 +371,7 @@ impl Autosaver {
         if let Some(w) = self.writing.take() {
             let _ = w.done.recv();
         }
-        for ext in ["json", solidcraft_io::DESIGN_EXT] {
+        for ext in solidcraft_io::DESIGN_EXTS.iter().chain(&["json"]) {
             let _ = fs::remove_file(file(&self.dir, &self.id, ext));
         }
         self.lock = None;
@@ -403,6 +406,24 @@ mod tests {
         assert_eq!(loaded, entry);
         remove(&d, id).unwrap();
         assert!(orphans(&d).is_empty() && !d.join(format!("{id}.solvecraft")).exists());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    /// An autosave an earlier release wrote as `<id>.solidcraft` is still offered, opens, and goes.
+    #[test]
+    fn autosave_with_the_previous_extension_is_listed_and_loads() {
+        let d = std::env::temp_dir().join(format!("solidcraft-recovery-previous-ext-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        let id = "4-5-6";
+        fs::write(d.join(format!("{id}.solidcraft")), solidcraft_io::write_design(&Document::default())).unwrap();
+        let entry = Entry { id: id.into(), path: Some("/d/part.solidcraft".into()), name: "part".into(), saved_at: 1, features: 0 };
+        fs::write(d.join(format!("{id}.json")), serde_json::to_vec(&entry).unwrap()).unwrap();
+        assert_eq!(design_file(&d, id), d.join(format!("{id}.solidcraft")));
+        assert_eq!(orphans(&d).iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), [id]);
+        assert_eq!(load(&d, id).unwrap().1, entry);
+        remove(&d, id).unwrap();
+        assert!(orphans(&d).is_empty() && !d.join(format!("{id}.solidcraft")).exists());
         let _ = fs::remove_dir_all(&d);
     }
 
@@ -532,7 +553,7 @@ mod tests {
         let mut t = Session::default();
         let r = t.execute("doc.recover", &json!({"dir": d.to_string_lossy(), "id": id, "discard": true})).unwrap();
         assert_eq!(r["features"], 1, "{r}");
-        assert!(orphans(&d).is_empty() && !file(&d, &id, "json").exists() && !file(&d, &id, "solidcraft").exists());
+        assert!(orphans(&d).is_empty() && !file(&d, &id, "json").exists() && !file(&d, &id, solidcraft_io::DESIGN_EXT).exists());
         let part = d.join("part.solidcraft");
         fs::write(&part, solidcraft_io::write_design(&Document::default())).unwrap();
         assert!(t.execute("doc.recover", &json!({"dir": d.to_string_lossy(), "id": "part", "discard": true})).is_err());
@@ -549,7 +570,7 @@ mod tests {
         assert!(a.tick(&s, false).unwrap());
         s.mark_saved();
         a.tick(&s, false).unwrap();
-        assert!(!file(&d, &a.id, "solidcraft").exists());
+        assert!(!file(&d, &a.id, solidcraft_io::DESIGN_EXT).exists());
         a.close(&s);
         assert_eq!(fs::read_dir(&d).unwrap().count(), 0);
         // Closing with unsaved changes keeps them for the next launch.

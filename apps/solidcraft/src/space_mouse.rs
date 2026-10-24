@@ -177,7 +177,7 @@ fn load_driver_mapping() -> Option<DriverMapping> {
     let cfg = std::path::PathBuf::from(std::env::var_os("APPDATA")?).join("3Dconnexion").join("3DxWare").join("Cfg");
     // The driver names the profile after the executable; one made for the pre-rename executable
     // still applies until the driver writes a new one (compatibility shim).
-    let profile = ["solidcraft-KMJ.xml", "solvecraft-KMJ.xml"].into_iter().map(|n| cfg.join(n)).find(|p| p.is_file())?;
+    let profile = ["node-cad-KMJ.xml", "solidcraft-KMJ.xml", "solvecraft-KMJ.xml"].into_iter().map(|n| cfg.join(n)).find(|p| p.is_file())?;
     if std::fs::metadata(&profile).ok()?.len() > MAX_PROFILE_BYTES {
         log::warn!("3D mouse: ignoring oversized 3DxWare profile {}", profile.display());
         return None;
@@ -629,7 +629,7 @@ impl SpaceMouse {
         let drivers = Arc::new(Drivers::default());
         #[cfg(target_os = "linux")]
         let worker_drivers = Arc::clone(&drivers);
-        let spawned = std::thread::Builder::new().name("solidcraft-3d-mouse".into()).spawn(move || {
+        let spawned = std::thread::Builder::new().name("node-cad-3d-mouse".into()).spawn(move || {
             #[cfg(target_os = "linux")]
             reader(worker_ctx, worker_state, worker_drivers);
             #[cfg(not(target_os = "linux"))]

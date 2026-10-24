@@ -1,6 +1,6 @@
 //! A scripted ACP agent for trying the agent chat without an account (docs/agent-chat.md):
 //! it speaks the Agent Client Protocol on stdin and stdout like the real adapters, starts the MCP
-//! server the chat gives it (`solidcraft-cli mcp --connect …`) and models through it. No model
+//! server the chat gives it (`node-cad-cli mcp --connect …`) and models through it. No model
 //! runs: what it does is fixed.
 //!
 //! ```text
@@ -177,7 +177,7 @@ fn main() {
                     send(&json!({"jsonrpc": "2.0", "id": 900, "method": "session/request_permission", "params": {
                         "sessionId": session,
                         // Named as the Claude Code adapter names an MCP tool.
-                        "toolCall": {"toolCallId": "t1", "title": "mcp__solidcraft__batch"},
+                        "toolCall": {"toolCallId": "t1", "title": "mcp__node-cad-app__batch"},
                         "options": [{"optionId": "allow", "name": "Allow", "kind": "allow_once"}, {"optionId": "reject", "name": "Reject", "kind": "reject_once"}],
                     }}));
                     // Wait for the answer (other lines are not expected meanwhile).

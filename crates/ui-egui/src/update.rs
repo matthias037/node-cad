@@ -25,18 +25,16 @@ use crate::theme::Tokens;
 use crate::ui_kit;
 
 /// The repository releases come from.
-pub const REPO: &str = "bherbruck/solidcraft";
+pub const REPO: &str = "matthias037/node-cad";
 /// The one request an update check makes.
-pub const LATEST_API: &str = "https://api.github.com/repos/bherbruck/solidcraft/releases/latest";
+pub const LATEST_API: &str = "https://api.github.com/repos/matthias037/node-cad/releases/latest";
 /// Where Download goes when no package fits this installation.
-pub const RELEASES_PAGE: &str = "https://github.com/bherbruck/solidcraft/releases/latest";
-/// Release pages and assets must be on GitHub, under this repository. The repository is moving
-/// to the `tangency-labs` organisation, so releases may name either owner (the API request stays
-/// on the old name, which GitHub redirects after a transfer).
-const RELEASE_PREFIXES: [&str; 2] = ["https://github.com/bherbruck/solidcraft/releases/", "https://github.com/tangency-labs/solidcraft/releases/"];
+pub const RELEASES_PAGE: &str = "https://github.com/matthias037/node-cad/releases/latest";
+/// Release pages and assets must be on GitHub, under this repository.
+const RELEASE_PREFIXES: [&str; 1] = ["https://github.com/matthias037/node-cad/releases/"];
 
-/// A release page or asset URL: github.com, one of the two owners, exactly `solidcraft`, then
-/// `/releases/` (the trailing slash rules out look-alike names such as `solidcraft-evil`).
+/// A release page or asset URL: github.com, the owner, exactly `node-cad`, then `/releases/`
+/// (the trailing slash rules out look-alike names such as `node-cad-evil`).
 fn is_release_url(url: &str) -> bool {
     RELEASE_PREFIXES.iter().any(|p| url.starts_with(p))
 }
@@ -56,7 +54,7 @@ const MAX_ASSETS: usize = 400;
 const TAB_ROOM: f32 = 300.0;
 
 /// The Linux app ID (Flatpak, desktop files).
-pub const APP_ID: &str = "ai.storyteller.solidcraft";
+pub const APP_ID: &str = solidcraft_engine::io::APP_ID;
 
 /// Why a check failed. Automatic checks never show it; Check now does.
 #[derive(Clone, Debug, PartialEq)]
@@ -83,7 +81,7 @@ pub type HttpGet = Arc<dyn Fn(&str) -> Result<Vec<u8>, FetchError> + Send + Sync
 
 // ---- versions ---------------------------------------------------------------------------------
 
-/// A version as SolidCraft's tags and builds spell it: `0.10.0`, `v0.11.0-rc.1`,
+/// A version as NØDE CAD's tags and builds spell it: `0.10.0`, `v0.11.0-rc.1`,
 /// `0.9.0-nightly.20261014.36.1`.
 pub fn parse_version(v: &str) -> Option<semver::Version> {
     let v = v.trim();
@@ -122,7 +120,7 @@ pub fn release_build() -> bool {
 
 // ---- installations ----------------------------------------------------------------------------
 
-/// How this copy of SolidCraft was installed: decides which file Download fetches and whether
+/// How this copy of NØDE CAD was installed: decides which file Download fetches and whether
 /// the system's package manager is the way to update.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InstallKind {
@@ -146,9 +144,9 @@ pub enum InstallKind {
     WindowsMsi,
     /// The portable `.zip`, unpacked somewhere.
     WindowsPortable,
-    /// The lone `SolidCraft-<version>-windows-x64.exe`.
+    /// The lone `NODE-CAD-<version>-windows-x64.exe`.
     WindowsExe,
-    /// `SolidCraft.app`, at this path (the bundle).
+    /// `NØDE CAD.app`, at this path (the bundle).
     MacApp(PathBuf),
     /// A release build in a place none of the above explains (FreeBSD, a copied binary).
     Other,
@@ -163,7 +161,7 @@ pub struct Probe<'a> {
     /// The running executable.
     pub exe: Option<PathBuf>,
     pub exists: &'a dyn Fn(&Path) -> bool,
-    /// Where the Windows installer put SolidCraft (`HKLM\Software\SolidCraft`, `InstallDir`): a
+    /// Where the Windows installer put NØDE CAD (`HKLM\Software\NODE CAD`, `InstallDir`): a
     /// folder chosen in its wizard can be anywhere, not only under Program Files (#1870).
     pub msi_dir: Option<PathBuf>,
 }
@@ -182,7 +180,7 @@ pub fn detect(p: &Probe) -> InstallKind {
             if let Some(id) = env("FLATPAK_ID") {
                 return InstallKind::Flatpak(id);
             }
-            if env("SNAP").is_some() && env("SNAP_NAME").is_none_or(|n| n.starts_with("solidcraft")) {
+            if env("SNAP").is_some() && env("SNAP_NAME").is_none_or(|n| n.starts_with("node-cad")) {
                 // Locally installed (unasserted) snaps have revisions x1, x2, …
                 return InstallKind::Snap { store: !env("SNAP_REVISION").is_some_and(|r| r.starts_with('x')) };
             }
@@ -191,7 +189,7 @@ pub fn detect(p: &Probe) -> InstallKind {
             }
             if exe.starts_with("/usr") {
                 // nfpm installs both packages under /usr; dpkg keeps a file list per package.
-                if (p.exists)(Path::new("/var/lib/dpkg/info/solidcraft.list")) {
+                if (p.exists)(Path::new("/var/lib/dpkg/info/node-cad.list")) {
                     return InstallKind::Deb;
                 }
                 if (p.exists)(Path::new("/var/lib/rpm")) || (p.exists)(Path::new("/usr/lib/sysimage/rpm")) {
@@ -207,7 +205,7 @@ pub fn detect(p: &Probe) -> InstallKind {
             if installed || under("ProgramFiles") || under("ProgramW6432") || under("ProgramFiles(x86)") {
                 return InstallKind::WindowsMsi;
             }
-            if exe.parent().is_some_and(|d| (p.exists)(&d.join("solidcraft-cli.exe"))) {
+            if exe.parent().is_some_and(|d| (p.exists)(&d.join("node-cad-cli.exe"))) {
                 return InstallKind::WindowsPortable;
             }
             InstallKind::WindowsExe
@@ -254,10 +252,11 @@ pub fn this_install() -> InstallKind {
     }
 }
 
-/// The folder the Windows installer recorded (solidcraft.wxs writes it for upgrades), if any.
+/// The folder the Windows installer recorded (assets/platforms/windows/solidcraft.wxs writes it
+/// for upgrades), if any.
 #[cfg(windows)]
 fn msi_install_dir() -> Option<PathBuf> {
-    let key = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE).open_subkey(r"Software\SolidCraft").ok()?;
+    let key = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE).open_subkey(r"Software\NODE CAD").ok()?;
     key.get_value::<String, _>("InstallDir").ok().map(PathBuf::from)
 }
 
@@ -302,19 +301,19 @@ impl InstallKind {
     pub fn update_command(&self, asset: Option<&str>) -> Option<String> {
         match self {
             InstallKind::Flatpak(id) => Some(format!("flatpak update {id}")),
-            InstallKind::Snap { store: true } => Some("sudo snap refresh solidcraft".into()),
+            InstallKind::Snap { store: true } => Some("sudo snap refresh node-cad".into()),
             InstallKind::Snap { store: false } => {
-                Some(format!("sudo snap install --dangerous ./{}", asset.unwrap_or("solidcraft-linux-x86_64.snap")))
+                Some(format!("sudo snap install --dangerous ./{}", asset.unwrap_or("node-cad-linux-x86_64.snap")))
             }
-            InstallKind::Deb => Some(format!("sudo apt install ./{}", asset.unwrap_or("solidcraft-linux-x86_64.deb"))),
-            InstallKind::Rpm => Some(format!("sudo dnf install ./{}", asset.unwrap_or("solidcraft-linux-x86_64.rpm"))),
+            InstallKind::Deb => Some(format!("sudo apt install ./{}", asset.unwrap_or("node-cad-linux-x86_64.deb"))),
+            InstallKind::Rpm => Some(format!("sudo dnf install ./{}", asset.unwrap_or("node-cad-linux-x86_64.rpm"))),
             _ => None,
         }
     }
 }
 
 /// The release asset that installs or replaces this installation, by its fixed name
-/// (docs/releasing.md: `solidcraft-windows-x64.msi`, `solidcraft-linux-x86_64.AppImage`, …), or
+/// (docs/releasing.md: `node-cad-windows-x64.msi`, `node-cad-linux-x86_64.AppImage`, …), or
 /// the versioned name for the packages without one. `arch` is `std::env::consts::ARCH`.
 pub fn asset_name(kind: &InstallKind, arch: &str, version: &str) -> Option<String> {
     let linux = match arch {
@@ -329,18 +328,18 @@ pub fn asset_name(kind: &InstallKind, arch: &str, version: &str) -> Option<Strin
     };
     let version = version.trim_start_matches('v');
     Some(match kind {
-        InstallKind::AppImage(_) => format!("solidcraft-linux-{}.AppImage", linux?),
-        InstallKind::Flatpak(_) => format!("solidcraft-linux-{}.flatpak", linux?),
-        InstallKind::Snap { .. } => format!("solidcraft-linux-{}.snap", linux?),
-        InstallKind::Deb => format!("solidcraft-linux-{}.deb", linux?),
-        InstallKind::Rpm => format!("solidcraft-linux-{}.rpm", linux?),
-        InstallKind::LinuxTarball => format!("solidcraft-{version}-linux-{}.tar.gz", linux?),
-        InstallKind::WindowsMsi => format!("solidcraft-windows-{}.msi", windows?),
-        InstallKind::WindowsPortable => format!("solidcraft-windows-{}-portable.zip", windows?),
+        InstallKind::AppImage(_) => format!("node-cad-linux-{}.AppImage", linux?),
+        InstallKind::Flatpak(_) => format!("node-cad-linux-{}.flatpak", linux?),
+        InstallKind::Snap { .. } => format!("node-cad-linux-{}.snap", linux?),
+        InstallKind::Deb => format!("node-cad-linux-{}.deb", linux?),
+        InstallKind::Rpm => format!("node-cad-linux-{}.rpm", linux?),
+        InstallKind::LinuxTarball => format!("node-cad-{version}-linux-{}.tar.gz", linux?),
+        InstallKind::WindowsMsi => format!("node-cad-windows-{}.msi", windows?),
+        InstallKind::WindowsPortable => format!("node-cad-windows-{}-portable.zip", windows?),
         // Only x64 has the lone .exe; elsewhere the portable zip is the same thing.
-        InstallKind::WindowsExe if windows == Some("x64") => format!("SolidCraft-{version}-windows-x64.exe"),
-        InstallKind::WindowsExe => format!("solidcraft-windows-{}-portable.zip", windows?),
-        InstallKind::MacApp(_) => "solidcraft-macos-universal.dmg".into(),
+        InstallKind::WindowsExe if windows == Some("x64") => format!("NODE-CAD-{version}-windows-x64.exe"),
+        InstallKind::WindowsExe => format!("node-cad-windows-{}-portable.zip", windows?),
+        InstallKind::MacApp(_) => "node-cad-macos-universal.dmg".into(),
         InstallKind::Dev | InstallKind::Web | InstallKind::Other => return None,
     })
 }
@@ -402,7 +401,7 @@ impl Release {
             })
             .collect();
         Ok(Release {
-            name: Some(s("name")).filter(|n| !n.trim().is_empty()).unwrap_or_else(|| format!("SolidCraft {tag}")),
+            name: Some(s("name")).filter(|n| !n.trim().is_empty()).unwrap_or_else(|| format!("NØDE CAD {tag}")),
             tag,
             notes,
             page,
@@ -451,7 +450,7 @@ pub struct Memo {
 }
 
 impl Memo {
-    /// An automatic check is due. `launch`: no automatic check has run since SolidCraft started,
+    /// An automatic check is due. `launch`: no automatic check has run since NØDE CAD started,
     /// so one is due whatever the daily schedule says (someone who started yesterday's version
     /// this morning hears about today's release at the next start). GitHub's rate limit always
     /// holds. A clock set back by more than a day counts as due.
@@ -533,7 +532,7 @@ pub struct Updater {
     job: Option<(Receiver<Result<install::Outcome, String>>, Arc<install::Progress>)>,
     /// The last one-click update's result.
     pub installed: Option<Result<install::Outcome, String>>,
-    /// A program for the host to start as SolidCraft exits (restart, installer).
+    /// A program for the host to start as NØDE CAD exits (restart, installer).
     launch: Option<(PathBuf, Vec<String>)>,
 }
 
@@ -550,8 +549,8 @@ pub fn offered(app: &SolveApp) -> Option<&Release> {
     app.preferences.update.offers(r, current_version(), unix_now()).then_some(r)
 }
 
-/// Whether release builds look for new releases. Off: NØDE CAD has no release feed of its own yet,
-/// and the upstream feed (LATEST_API) would offer SolidCraft builds in place of NØDE CAD.
+/// Whether release builds look for new releases. Off: NØDE CAD publishes no signed releases on
+/// its repository's feed (LATEST_API) yet, and no update signing key is built in ([`install::PUBLIC_KEY`]).
 const RELEASE_CHECKS: bool = false;
 
 /// Checks may run here: a release build with the host's HTTP client, or a test feed.
@@ -703,7 +702,7 @@ pub fn start_install(app: &mut SolveApp, ctx: &egui::Context) {
     #[cfg(not(target_arch = "wasm32"))]
     {
         let ctx = ctx.clone();
-        let staging = std::env::temp_dir().join("solidcraft-update");
+        let staging = std::env::temp_dir().join("node-cad-update");
         let net = install::Net { get, download };
         let spawned = std::thread::Builder::new().name("update-install".into()).spawn(move || {
             let result = install::run(&release, &kind, &method, std::env::consts::ARCH, &net, &staging, &progress);
@@ -732,7 +731,7 @@ fn poll_install(app: &mut SolveApp) {
     app.updater.job = None;
     match &result {
         Ok(install::Outcome::Installer(program, args)) => {
-            // The installer replaces this program: start it once SolidCraft has closed. On
+            // The installer replaces this program: start it once NØDE CAD has closed. On
             // Windows the installer is followed by the new version (see install::relaunch_after).
             app.updater.launch = Some(match std::env::current_exe() {
                 #[cfg(windows)]
@@ -762,7 +761,7 @@ pub fn restart(app: &mut SolveApp) {
     }
 }
 
-/// For the host, as SolidCraft exits: the program to start (the new version, an installer).
+/// For the host, as NØDE CAD exits: the program to start (the new version, an installer).
 pub fn take_launch(app: &mut SolveApp) -> Option<(PathBuf, Vec<String>)> {
     app.updater.launch.take()
 }

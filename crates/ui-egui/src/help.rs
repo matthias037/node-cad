@@ -1,5 +1,5 @@
 //! The Help menu (the ? button on the application bar): Documentation (the online book), About
-//! SolidCraft (version, commit, build date, licences, attributions, fonts), the keyboard shortcuts
+//! NØDE CAD (version, commit, build date, licences, attributions, fonts), the keyboard shortcuts
 //! (read only), Messages (every status message of the run, #2763), and Report an Issue, which
 //! opens a local editable report draft.
 

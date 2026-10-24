@@ -1,17 +1,17 @@
-//! `solvecraft-cli`: the CLI's former name, kept for at least one release so existing scripts
-//! and MCP client setups (`claude mcp add solvecraft -- solvecraft-cli mcp`) keep working.
-//! Compatibility shim: it runs `solidcraft-cli` (next to this executable, else on PATH) with the
-//! same arguments and standard streams, after a one-line deprecation note on stderr (stdout
-//! stays clean for MCP's JSON-RPC), and exits with its status.
-#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
-#![forbid(unsafe_code)]
+//! The CLI's former names (`solidcraft-cli`, `solvecraft-cli`), kept so existing scripts and MCP
+//! client setups (`claude mcp add solidcraft -- solidcraft-cli mcp`) keep working. Compatibility
+//! shim (docs/compatibility.md): each runs `node-cad-cli` (next to this executable, else on PATH)
+//! with the same arguments and standard streams, after a one-line deprecation note on stderr
+//! (stdout stays clean for MCP's JSON-RPC), and exits with its status.
 
 use std::process::{Command, ExitCode};
 
-const TARGET: &str = "solidcraft-cli";
+const TARGET: &str = "node-cad-cli";
 
-fn main() -> ExitCode {
-    eprintln!("solvecraft-cli is deprecated and will be removed in a later release: use solidcraft-cli");
+/// Run `node-cad-cli` in place of this alias (named by its binary target).
+pub fn forward() -> ExitCode {
+    let name = env!("CARGO_BIN_NAME");
+    eprintln!("{name} is deprecated and will be removed in a later release: use {TARGET}");
     let sibling = std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(|dir| dir.join(format!("{TARGET}{}", std::env::consts::EXE_SUFFIX))))
@@ -23,7 +23,7 @@ fn main() -> ExitCode {
             None => ExitCode::FAILURE,
         },
         Err(e) => {
-            eprintln!("solvecraft-cli: could not run {}: {e}", program.to_string_lossy());
+            eprintln!("{name}: could not run {}: {e}", program.to_string_lossy());
             ExitCode::FAILURE
         }
     }

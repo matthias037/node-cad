@@ -4,7 +4,7 @@ use std::process::{Command, Stdio};
 
 #[test]
 fn registry_output_is_complete_json() {
-    let output = Command::new(env!("CARGO_BIN_EXE_solidcraft-cli")).arg("commands").output().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_node-cad-cli")).arg("commands").output().unwrap();
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     let registry: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     let commands = registry.as_array().unwrap();
@@ -16,7 +16,7 @@ fn registry_output_is_complete_json() {
 
 #[test]
 fn closed_registry_pipe_exits_without_panicking() {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_solidcraft-cli")).arg("commands").stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_node-cad-cli")).arg("commands").stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
     // Close our read end before waiting. No sleeps or timing threshold are needed:
     // the registry is larger than the pipe buffer, so it cannot all be written first.
     drop(child.stdout.take());

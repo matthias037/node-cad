@@ -1,4 +1,4 @@
-// SolidCraft's service worker: the web app keeps working offline and updates itself.
+// NØDE CAD's service worker: the web app keeps working offline and updates itself.
 //
 // `cargo xtask web-offline` (Trunk's post_build hook) writes the build into the line below: the
 // version (workspace version + a hash of every built file) and the files to keep, each with its

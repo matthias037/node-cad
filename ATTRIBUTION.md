@@ -101,14 +101,14 @@ Editable drawing code, native projects and shipped exports are collected under `
 | assets/fonts/ibm-plex-mono/OFL.txt | IBM Corp. | Unmodified accompanying font licence | SIL OFL 1.1 |
 | assets/fonts/ibm-plex-sans/OFL.txt | IBM Corp. | Unmodified accompanying font licence | SIL OFL 1.1 |
 | assets/fonts/liberation-sans/OFL.txt | Red Hat, Inc.; Liberation Fonts contributors | Unmodified accompanying font licence | SIL OFL 1.1 |
-| assets/icons/app/linux/exports/hicolor/128x128/apps/ai.storyteller.solidcraft.png | SolidCraft contributors | Generated from assets/icons/app/shared/source/app_icon.rs with the original CLI/ICO encoders | MIT OR Apache-2.0 |
-| assets/icons/app/linux/exports/hicolor/16x16/apps/ai.storyteller.solidcraft.png | SolidCraft contributors | Generated from assets/icons/app/shared/source/app_icon.rs with the original CLI/ICO encoders | MIT OR Apache-2.0 |
-| assets/icons/app/linux/exports/hicolor/24x24/apps/ai.storyteller.solidcraft.png | SolidCraft contributors | Generated from assets/icons/app/shared/source/app_icon.rs with the original CLI/ICO encoders | MIT OR Apache-2.0 |
-| assets/icons/app/linux/exports/hicolor/256x256/apps/ai.storyteller.solidcraft.png | SolidCraft contributors | Generated from assets/icons/app/shared/source/app_icon.rs with the original CLI/ICO encoders | MIT OR Apache-2.0 |
-| assets/icons/app/linux/exports/hicolor/32x32/apps/ai.storyteller.solidcraft.png | SolidCraft contributors | Generated from assets/icons/app/shared/source/app_icon.rs with the original CLI/ICO encoders | MIT OR Apache-2.0 |
-| assets/icons/app/linux/exports/hicolor/48x48/apps/ai.storyteller.solidcraft.png | SolidCraft contributors | Generated from assets/icons/app/shared/source/app_icon.rs with the original CLI/ICO encoders | MIT OR Apache-2.0 |
-| assets/icons/app/linux/exports/hicolor/512x512/apps/ai.storyteller.solidcraft.png | SolidCraft contributors | Generated from assets/icons/app/shared/source/app_icon.rs with the original CLI/ICO encoders | MIT OR Apache-2.0 |
-| assets/icons/app/linux/exports/hicolor/64x64/apps/ai.storyteller.solidcraft.png | SolidCraft contributors | Generated from assets/icons/app/shared/source/app_icon.rs with the original CLI/ICO encoders | MIT OR Apache-2.0 |
+| assets/icons/app/linux/exports/hicolor/128x128/apps/fr.node_os.cad.png | SolidCraft contributors | Generated from assets/icons/app/shared/source/app_icon.rs with the original CLI/ICO encoders | MIT OR Apache-2.0 |
+| assets/icons/app/linux/exports/hicolor/16x16/apps/fr.node_os.cad.png | SolidCraft contributors | Generated from assets/icons/app/shared/source/app_icon.rs with the original CLI/ICO encoders | MIT OR Apache-2.0 |
+| assets/icons/app/linux/exports/hicolor/24x24/apps/fr.node_os.cad.png | SolidCraft contributors | Generated from assets/icons/app/shared/source/app_icon.rs with the original CLI/ICO encoders | MIT OR Apache-2.0 |
+| assets/icons/app/linux/exports/hicolor/256x256/apps/fr.node_os.cad.png | SolidCraft contributors | Generated from assets/icons/app/shared/source/app_icon.rs with the original CLI/ICO encoders | MIT OR Apache-2.0 |
+| assets/icons/app/linux/exports/hicolor/32x32/apps/fr.node_os.cad.png | SolidCraft contributors | Generated from assets/icons/app/shared/source/app_icon.rs with the original CLI/ICO encoders | MIT OR Apache-2.0 |
+| assets/icons/app/linux/exports/hicolor/48x48/apps/fr.node_os.cad.png | SolidCraft contributors | Generated from assets/icons/app/shared/source/app_icon.rs with the original CLI/ICO encoders | MIT OR Apache-2.0 |
+| assets/icons/app/linux/exports/hicolor/512x512/apps/fr.node_os.cad.png | SolidCraft contributors | Generated from assets/icons/app/shared/source/app_icon.rs with the original CLI/ICO encoders | MIT OR Apache-2.0 |
+| assets/icons/app/linux/exports/hicolor/64x64/apps/fr.node_os.cad.png | SolidCraft contributors | Generated from assets/icons/app/shared/source/app_icon.rs with the original CLI/ICO encoders | MIT OR Apache-2.0 |
 | assets/icons/app/shared/source/app_icon.rs | NØDE OS | NØDE CAD mark drawn in code: the NØDE OS "Ø" (ring and coral bar) with the ring as a cube's hexagonal outline, on the NØDE night tile; brand artwork of NØDE OS | All rights reserved (NØDE OS brand) |
 | assets/icons/app/shared/source/windows_ico.rs | SolidCraft contributors | Original SolidCraft resource data or drawing code, collected without redesign | MIT OR Apache-2.0 |
 | assets/icons/app/windows/exports/solidcraft-executable.ico | SolidCraft contributors | Generated from assets/icons/app/shared/source/app_icon.rs with the original CLI/ICO encoders | MIT OR Apache-2.0 |
@@ -143,9 +143,9 @@ Editable drawing code, native projects and shipped exports are collected under `
 | assets/locales/zh.json | SolidCraft contributors | Original SolidCraft resource data or drawing code, collected without redesign | MIT OR Apache-2.0 |
 | assets/locales/zh-TW.json | SolidCraft contributors | Original Traditional Chinese (Taiwan) translation of SolidCraft's English catalog; no commercial CAD text used | MIT OR Apache-2.0 |
 | assets/materials/library.rs | SolidCraft contributors | Original SolidCraft resource data or drawing code, collected without redesign | MIT OR Apache-2.0 |
-| assets/platforms/linux/ai.storyteller.solidcraft.desktop | PhotoCraft / SolidCraft contributors | PhotoCraft packaging templates (https://github.com/storytold/photocraft), adapted for SolidCraft | Apache-2.0 |
-| assets/platforms/linux/ai.storyteller.solidcraft.metainfo.xml.in | PhotoCraft / SolidCraft contributors | PhotoCraft packaging templates (https://github.com/storytold/photocraft), adapted for SolidCraft | Apache-2.0 |
-| assets/platforms/linux/ai.storyteller.solidcraft.mime.xml | PhotoCraft / SolidCraft contributors | PhotoCraft packaging templates (https://github.com/storytold/photocraft), adapted for SolidCraft | Apache-2.0 |
+| assets/platforms/linux/fr.node_os.cad.desktop | PhotoCraft / SolidCraft contributors | PhotoCraft packaging templates (https://github.com/storytold/photocraft), adapted for SolidCraft | Apache-2.0 |
+| assets/platforms/linux/fr.node_os.cad.metainfo.xml.in | PhotoCraft / SolidCraft contributors | PhotoCraft packaging templates (https://github.com/storytold/photocraft), adapted for SolidCraft | Apache-2.0 |
+| assets/platforms/linux/fr.node_os.cad.mime.xml | PhotoCraft / SolidCraft contributors | PhotoCraft packaging templates (https://github.com/storytold/photocraft), adapted for SolidCraft | Apache-2.0 |
 | assets/platforms/macos/Info.plist.in | PhotoCraft / SolidCraft contributors | PhotoCraft packaging templates (https://github.com/storytold/photocraft), adapted for SolidCraft | Apache-2.0 |
 | assets/platforms/macos/README.txt | PhotoCraft / SolidCraft contributors | PhotoCraft packaging templates (https://github.com/storytold/photocraft), adapted for SolidCraft | Apache-2.0 |
 | assets/platforms/windows/solidcraft.en-us.wxl | PhotoCraft / SolidCraft contributors | PhotoCraft packaging templates (https://github.com/storytold/photocraft), adapted for SolidCraft | Apache-2.0 |

@@ -117,7 +117,7 @@ pub fn opens_design(extensions: &[&str]) -> bool {
 /// The file type a Save As dialog offers for `name`: (description, MIME type, extension).
 pub fn save_type(name: &str) -> (&'static str, &'static str, &'static str) {
     let json = std::path::Path::new(name).extension().is_some_and(|e| e.eq_ignore_ascii_case("json"));
-    if json { ("Plain JSON design", "application/json", ".json") } else { ("NØDE CAD design", "application/octet-stream", ".solidcraft") }
+    if json { ("Plain JSON design", "application/json", ".json") } else { ("NØDE CAD design", "application/octet-stream", ".nodecad") }
 }
 
 /// Is this a cancelled dialog (the browser's `AbortError`)? Not an error to show.
@@ -294,7 +294,7 @@ mod web {
         let options = Object::new();
         let _ = Reflect::set(&options, &"multiple".into(), &JsValue::FALSE);
         let extensions = Array::new();
-        for e in [".solidcraft", ".solvecraft", ".json", ".step", ".stp", ".3mf", ".stl", ".obj", ".glb", ".gltf"] {
+        for e in [".nodecad", ".solidcraft", ".solvecraft", ".json", ".step", ".stp", ".3mf", ".stl", ".obj", ".glb", ".gltf"] {
             extensions.push(&e.into());
         }
         let accept = Object::new();
@@ -615,6 +615,7 @@ mod tests {
     #[test]
     fn only_design_opens_use_the_disk_dialog() {
         assert!(opens_design(&[]));
+        assert!(opens_design(&["nodecad"]));
         assert!(opens_design(&["solidcraft"]));
         assert!(opens_design(&["solvecraft"]));
         assert!(!opens_design(&["step", "stp"]));
@@ -623,9 +624,9 @@ mod tests {
 
     #[test]
     fn the_save_dialog_offers_the_type_of_the_name() {
-        assert_eq!(save_type("Plate.solidcraft").2, ".solidcraft");
+        assert_eq!(save_type("Plate.nodecad").2, ".nodecad");
         assert_eq!(save_type("Plate.JSON").2, ".json");
-        assert_eq!(save_type("Plate").2, ".solidcraft");
+        assert_eq!(save_type("Plate").2, ".nodecad");
     }
 
     #[test]

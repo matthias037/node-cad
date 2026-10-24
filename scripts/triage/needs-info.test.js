@@ -52,6 +52,7 @@ test('missing: empty app reports are asked to paste the copied report', () => {
 
 test('missing: reproducible, long, app-filed and non-bug issues are left alone', () => {
   assert.deepEqual(info.missing('Loft fails', '## Reproduction\n1. sketch two circles\n2. loft them'), []);
+  assert.deepEqual(info.missing('Loft fails', 'see design.nodecad attached'), []);
   assert.deepEqual(info.missing('Loft fails', 'see design.solidcraft attached'), []);
   assert.deepEqual(info.missing('Loft fails', 'runs `solid.loft` and fails'), []);
   assert.deepEqual(info.missing('Loft fails', long), []);
@@ -59,7 +60,7 @@ test('missing: reproducible, long, app-filed and non-bug issues are left alone',
   assert.deepEqual(info.missing('Feature request: dark mode', 'please'), []);
   assert.deepEqual(info.missing('[FEAT] threads', 'please'), []);
   assert.deepEqual(info.missing('How do I draw a polygon?', ''), []);
-  assert.deepEqual(info.missing('Crash: SolidCraft 0.15.0 ended without a clean exit', ''), []);
+  assert.deepEqual(info.missing('Crash: NØDE CAD 0.15.0 ended without a clean exit', ''), []);
 });
 
 const opened = (title, body, login = 'reporter') => ({
@@ -73,7 +74,7 @@ test('an opened thin report is labelled and asked once', async () => {
   assert.deepEqual(find(calls, 'addLabels')[1].labels, ['needs-info']);
   const body = find(calls, 'comment')[1].body;
   assert.match(body, /Steps to reproduce/);
-  assert.match(body, /SolidCraft version/);
+  assert.match(body, /NØDE CAD version/);
   assert.match(body, /14 days/);
 });
 

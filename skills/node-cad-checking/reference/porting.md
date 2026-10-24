@@ -1,15 +1,15 @@
-# Porting a model into SolidCraft
+# Porting a model into NØDE CAD
 
 For a model that already exists as code (build123d, CadQuery, OpenSCAD) or as STEP. The port is
-done when the SolidCraft STEP export matches the source geometry for every parameter value you
+done when the NØDE CAD STEP export matches the source geometry for every parameter value you
 check: `compare_step.py` reports xor at most 1e-3 mm3. Volume, area and centre of mass alone are
 not enough: in one port, a hexagon left at dof 1 changed the volume by 2e-7 of the total and the
 centre of mass by 3e-4 mm, while xor showed 56 mm3 in 96 pieces along the outer walls.
 
-1. **Reference geometry in the design's frame.** The SolidCraft origin is chosen by trap 1 of SKILL.md, so it
+1. **Reference geometry in the design's frame.** The NØDE CAD origin is chosen by trap 1 of SKILL.md, so it
    often differs from the source. Translate the source model to the same frame and export it as
    STEP for each checked parameter value. Pick values that reach every branch of the layout logic.
-2. **Deliberate differences.** Logic that SolidCraft expressions cannot hold (conditionals,
+2. **Deliberate differences.** Logic that NØDE CAD expressions cannot hold (conditionals,
    search) gets a closed formula. Check the formula against the source over a wide range of
    values in plain Python first, list where it differs, and apply the formula to the reference
    too (patch the source function), so the comparison stays like for like. Tell the user each

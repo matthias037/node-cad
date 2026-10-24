@@ -2,13 +2,16 @@
 <!-- shared-mime-info definitions for types the system database may not have.
      Installed to /usr/share/mime/packages/ (update-mime-database runs on install). -->
 <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
-  <mime-type type="application/x-solidcraft">
-    <comment>SolidCraft design</comment>
-    <icon name="ai.storyteller.solidcraft"/>
+  <mime-type type="application/x-nodecad">
+    <comment>NØDE CAD design</comment>
+    <icon name="fr.node_os.cad"/>
     <sub-class-of type="application/json"/>
+    <glob pattern="*.nodecad"/>
+    <!-- Compatibility shim (docs/compatibility.md): designs saved with the earlier extensions
+         still open. -->
     <glob pattern="*.solidcraft"/>
-    <!-- Compatibility shim (docs/compatibility.md): designs saved before the rename. -->
     <glob pattern="*.solvecraft"/>
+    <alias type="application/x-solidcraft"/>
     <alias type="application/x-solvecraft"/>
   </mime-type>
 </mime-info>

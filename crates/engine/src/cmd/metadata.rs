@@ -17,7 +17,7 @@ pub static COMMANDS: &[CommandSpec] = &[
          author, organization, description and license, each its text or null (absent, or not text)",
     ),
     CommandSpec::new("document.metadata.set", "Change Design Properties", set).icon("settings").doc_only().params(
-        "key and value, or values: {key: value, …} (all or nothing, one undo step). SolidCraft's keys: project, part_number, \
+        "key and value, or values: {key: value, …} (all or nothing, one undo step). NØDE CAD's keys: project, part_number, \
          revision, author, organization, description, license (text; \"\" or null removes); another tool's data goes under its \
          reverse-DNS key such as com.example.tool (an object; null removes) → metadata, changed: [keys]",
     ),
@@ -167,7 +167,7 @@ mod tests {
     fn other_tools_keys_and_odd_values_survive_open_edit_and_save() {
         let dir = scratch("roundtrip");
         // A design another tool added metadata to by hand: a namespaced object with every kind of
-        // JSON value, a well-known key of the wrong type, a key a newer SolidCraft might read, and
+        // JSON value, a well-known key of the wrong type, a key a newer release might read, and
         // numbers no feature input could hold.
         let foreign = json!({
             "author": 42,

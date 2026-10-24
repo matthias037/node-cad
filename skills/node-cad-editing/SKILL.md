@@ -1,12 +1,12 @@
 ---
-name: solidcraft-editing
-description: Use when changing, fixing or extending an existing SolidCraft design through its MCP server - a .solidcraft file or the design open in the app. Typical requests: resize it, move a cut, change a hole or standoff, add a fillet or chamfer, make a fixed value parametric, or a feature shows an error after a change or after the app crashed.
+name: node-cad-editing
+description: Use when changing, fixing or extending an existing NØDE CAD design through its MCP server - a .nodecad file or the design open in the app. Typical requests: resize it, move a cut, change a hole or standoff, add a fillet or chamfer, make a fixed value parametric, or a feature shows an error after a change or after the app crashed.
 ---
 
-# SolidCraft editing
+# NØDE CAD editing
 
 ## Overview
-Edit an existing design through its parameters instead of rebuilding it. Every sketch dimension and feature input is already a parameter (`d1`, `d2`, ...), so most edits are a `parameters.change` each, sent together in one batch. Map the design with a few compact calls rather than walking the timeline one feature at a time. For command shapes and traps, use `reference.md` from the `solidcraft-modeling` skill.
+Edit an existing design through its parameters instead of rebuilding it. Every sketch dimension and feature input is already a parameter (`d1`, `d2`, ...), so most edits are a `parameters.change` each, sent together in one batch. Map the design with a few compact calls rather than walking the timeline one feature at a time. For command shapes and traps, use `reference.md` from the `node-cad-modeling` skill.
 
 ## Map the design (3-4 calls)
 1. **Open:** if the design is not open yet, run `open {path}`. When the server is bridged to the app and the current design is `dirty`, ask before opening anything.
@@ -59,7 +59,7 @@ Inspect one feature of each kind, not every copy.
   - Never retry the crashing command unchanged.
 
 ## Save
-`save {"path":"...-v2.solidcraft"}` writes a copy. `save {}` overwrites the opened file; do that only when the user asked for it.
+`save {"path":"...-v2.nodecad"}` writes a copy. `save {}` overwrites the opened file; do that only when the user asked for it.
 
 ## Red flags
 

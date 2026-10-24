@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=NØDE CAD
+GenericName=3D CAD
+Comment=Parametric 3D CAD: sketch, constrain, extrude, and change a parameter to rebuild
+Exec=node-cad %f
+TryExec=node-cad
+Icon=fr.node_os.cad
+Terminal=false
+StartupNotify=true
+StartupWMClass=fr.node_os.cad
+Categories=Graphics;3DGraphics;Engineering;
+Keywords=cad;3d;parametric;sketch;step;stl;modelling;modeling;
+MimeType=application/x-nodecad;application/x-solidcraft;model/step;model/iges;model/stl;model/3mf;

@@ -6,7 +6,7 @@ It (re)writes tests/oracle/<case>/expected.json with "source": "analytic".
 
 Folded sheet metal is built here from first principles as flat plates (prisms of thickness t)
 and bends (annular-sector prisms: inner radius R, outer R + t, angle theta), joined face to
-face.  The conventions that place them are SolidCraft's documented sheet-metal semantics
+face.  The conventions that place them are NODE CAD's documented sheet-metal semantics
 (crates/doc/src/sheet.rs module docs, docs/book/src/guide/sheet-metal.md):
 
   * Steel (mm) rule: t = 2.5, R = Thickness, K = 0.44, corner gap = Thickness.
@@ -203,7 +203,7 @@ def edge_flange_section(width_y, height, theta, rv, base_far=None):
     return [base, bend, panel], 2 * t, dict(setback=sb, leg=leg)
 
 
-# Cases SolidCraft fails today, with the issue that tracks each (cargo xtask oracle reports them
+# Cases NODE CAD fails today, with the issue that tracks each (cargo xtask oracle reports them
 # as known failures and fails once they pass, so the mark is removed with the fix).
 KNOWN_FAILURES = {"75-sm-bracket-holes": "#296"}
 
@@ -262,7 +262,7 @@ def c68():
          "flange y 0..2.5, z 5..20. Setback (R+t)tan45 = 5 (inside bend position, outer-face height datum: "
          "outer face of flange reaches z = 20); V = L*A_sec, A = 2 A_sec + L P_sec")
     return record(V, A, com, bb, m, faces=None,
-                  note="trim/setback and height datum are SolidCraft's documented edge-flange conventions (sheet.rs add_flanges)")
+                  note="trim/setback and height datum are NODE CAD's documented edge-flange conventions (sheet.rs add_flanges)")
 
 
 def c70():
@@ -272,7 +272,7 @@ def c70():
     m = ("as 68 with a 45 deg bend: setback (R+t)tan22.5 = %.6f, base y %.6f..60, bend annulus 2.5..5 over 45 deg about "
          "(y %.6f, z 5), flat leg 15 - setback = %.6f turned 45 deg; extrusion along x 100" % (info["setback"], info["setback"], info["setback"], info["leg"]))
     return record(V, A, com, bb, m, faces=None,
-                  note="SolidCraft convention: flange height (15) is measured along the flange's outer face from the virtual sharp at the original edge (y 0, z 0), so the outer top corner is at (y, z) = (-15 cos45, 15 sin45).")
+                  note="NODE CAD convention: flange height (15) is measured along the flange's outer face from the virtual sharp at the original edge (y 0, z 0), so the outer top corner is at (y, z) = (-15 cos45, 15 sin45).")
 
 
 def u_channel(rv, wx, wy, h):
@@ -316,7 +316,7 @@ def c72():
          "outer virtual sharp, setback R+t); wall x 37.5..40 z 5..27.5; bend R 2.5..5 about (42.5, 27.5) (sketch corner = inner "
          "virtual sharp, setback R); plate x 42.5..70 z 30..32.5")
     return record(V, A, com, bb, m, faces=None,
-                  note="SolidCraft convention: the sketch lines are the sheet face away from the material (material right of travel); thickness grows to the material side")
+                  note="NODE CAD convention: the sketch lines are the sheet face away from the material (material right of travel); thickness grows to the material side")
 
 
 def c73():
@@ -333,7 +333,7 @@ def c73():
          "about (y 2.51, z 20), folded toward +y (inside); hem leg 8 - (0.01 + 2.5) = 5.49: y 2.52..5.02, z 14.51..20; "
          "extrusion along x 100")
     return record(V, A, com, bb, m, faces=None,
-                  note="SolidCraft conventions: hem gap 0.01 mm (rule hem_gap), hem length measured to the outer face of the hem bend (top at z 22.51), hem folds over the flange's inner face.")
+                  note="NODE CAD conventions: hem gap 0.01 mm (rule hem_gap), hem length measured to the outer face of the hem bend (top at z 22.51), hem folds over the flange's inner face.")
 
 
 def c74():
@@ -391,7 +391,7 @@ def c75():
          "y 5..40; minus two d6 through holes at (25,20), (55,20) in the base. A = sum of prism areas - 2 x 4 joint "
          "areas (75t, 75t, 35t, 35t) + hole walls - hole discs")
     return record(V, A, com, bb, m, faces=None,
-                  note="SolidCraft convention: the second flange trims the base under the first bend, so bend 1 stops at x 75 while flange 1's panel runs to x 80 (open corner relief, no fill).")
+                  note="NODE CAD convention: the second flange trims the base under the first bend, so bend 1 stops at x 75 while flange 1's panel runs to x 80 (open corner relief, no fill).")
 
 
 def c69():
@@ -420,7 +420,7 @@ def c69():
          "(90, 50, 90, 50 long); four walls 2.5 thick, z 5..25, each running on past its bend by "
          "ext = (R+t) - (t + gap/sqrt2) = %.9f at both ends; open corners. A = sum of prisms - 2 x joints" % ext)
     return record(V, A, com, bb, m, faces=46,
-                  note="corner treatment is SolidCraft's convention (sheet.rs close_corners: panels extended until their inner corners are the rule gap = t apart; no corner fill, open corner relief below the walls)")
+                  note="corner treatment is NODE CAD's convention (sheet.rs close_corners: panels extended until their inner corners are the rule gap = t apart; no corner fill, open corner relief below the walls)")
 
 
 def c76():

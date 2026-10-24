@@ -2,8 +2,8 @@
 //! filling the disk (docs/crash-reports.md).
 //!
 //! - **Panics** are caught by a hook. One inside a command becomes a report with the design as
-//!   it was before the command and the command itself, so `solidcraft-cli run replay.json --in
-//!   design.solidcraft` reproduces it. Panics the third-party kernel raises (and
+//!   it was before the command and the command itself, so `node-cad-cli run replay.json --in
+//!   design.nodecad` reproduces it. Panics the third-party kernel raises (and
 //!   `solidcraft_kernel::guard` turns into errors) are reported the same way, marked recovered.
 //! - **Crashes no hook sees** (an abort, a stack overflow, a segfault, the process being killed)
 //!   are found at the next start: every running app keeps a small, locked command journal; a
@@ -25,7 +25,8 @@
 //!   the next start puts both into the unclean exit's report.
 //!
 //! Reports are folders `crashes/<time>-<signature>/` holding `report.json`, and when known
-//! `design.solidcraft`, `replay.json` and `minidump.dmp`. Nothing is ever sent anywhere.
+//! `design.nodecad` (`design.solidcraft` in reports of earlier releases), `replay.json` and
+//! `minidump.dmp`. Nothing is ever sent anywhere.
 
 use std::backtrace::Backtrace;
 use std::cell::{Cell, RefCell};
@@ -87,9 +88,13 @@ pub struct Summary {
     pub version: String,
     /// The report's folder.
     pub path: String,
-    /// `replay.json` and `design.solidcraft` are there: the crash can be replayed.
+    /// `replay.json` is there: the crash can be replayed (from `design.nodecad` when that is there too).
     pub replayable: bool,
 }
+
+/// The design a report holds, and its name in reports of earlier releases.
+const DESIGN_FILE: &str = "design.nodecad";
+const LEGACY_DESIGN_FILE: &str = "design.solidcraft";
 
 struct State {
     dir: PathBuf,
@@ -964,8 +969,8 @@ fn write_report(state: &State, kind: &str, p: Option<&Panic>, extra: Extra) -> O
         let mut notes = extra.notes;
         if let Some(d) = &extra.design {
             if d.len() <= MAX_DESIGN_BYTES {
-                if solidcraft_io::write_atomic(&folder.join("design.solidcraft"), d, false).is_ok() {
-                    files.insert("design".into(), json!("design.solidcraft"));
+                if solidcraft_io::write_atomic(&folder.join(DESIGN_FILE), d, false).is_ok() {
+                    files.insert("design".into(), json!(DESIGN_FILE));
                 }
             } else {
                 notes.push(format!("the design is larger than {} MB and was not copied", MAX_DESIGN_BYTES >> 20));
@@ -984,8 +989,8 @@ fn write_report(state: &State, kind: &str, p: Option<&Panic>, extra: Extra) -> O
             }
         }
         let reproduce = match (files.contains_key("replay"), files.contains_key("design")) {
-            (true, true) => Some(format!("solidcraft-cli crashes replay {id}")),
-            (true, false) => Some(format!("solidcraft-cli crashes replay {id}  (starts from a new design)")),
+            (true, true) => Some(format!("node-cad-cli crashes replay {id}")),
+            (true, false) => Some(format!("node-cad-cli crashes replay {id}  (starts from a new design)")),
             _ => None,
         };
         let environment = state.environment.lock().map(|e| e.clone()).unwrap_or_default();
@@ -1140,7 +1145,9 @@ pub fn read(dir: &Path, id: &str) -> std::result::Result<Value, String> {
     let folder = dir.join(id);
     let mut v = read_report_file(&folder.join("report.json")).ok_or_else(|| format!("no crash report `{id}`"))?;
     v["path"] = json!(folder.to_string_lossy());
-    for (k, f) in [("design_path", "design.solidcraft"), ("replay_path", "replay.json"), ("minidump_path", "minidump.dmp")] {
+    // Reports of earlier releases hold `design.solidcraft` (compatibility shim, docs/compatibility.md).
+    let files = [("design_path", LEGACY_DESIGN_FILE), ("design_path", DESIGN_FILE), ("replay_path", "replay.json"), ("minidump_path", "minidump.dmp")];
+    for (k, f) in files {
         if folder.join(f).is_file() {
             v[k] = json!(folder.join(f).to_string_lossy());
         }

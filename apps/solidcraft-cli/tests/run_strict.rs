@@ -40,7 +40,7 @@ impl Drop for Scratch {
 }
 
 fn cli() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_solidcraft-cli"))
+    Command::new(env!("CARGO_BIN_EXE_node-cad-cli"))
 }
 
 #[test]

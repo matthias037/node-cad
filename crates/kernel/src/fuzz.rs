@@ -1,4 +1,4 @@
-//! Robustness checks on random inputs (`solidcraft-cli fuzz`, docs/robustness.md): a small
+//! Robustness checks on random inputs (`node-cad-cli fuzz`, docs/robustness.md): a small
 //! seeded random generator, and the boolean volume identity on random pairs of primitives
 //! placed on a coarse grid, so coincident faces and tangencies come up often.
 

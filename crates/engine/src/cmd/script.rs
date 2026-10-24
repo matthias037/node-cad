@@ -1,5 +1,5 @@
 //! A design's history as a command script (#886): `timeline.export_script` writes the steps
-//! that rebuild the design (`solidcraft-cli eval` / `run` replay them), and `timeline.add`
+//! that rebuild the design (`node-cad-cli eval` / `run` replay them), and `timeline.add`
 //! appends one recorded feature, as the design file holds it, so every feature kind replays
 //! exactly: same ids, names, parameter names and stored edge and face names. Trimming the
 //! script after a step gives the design as it was at that step.
@@ -20,7 +20,7 @@ pub static COMMANDS: &[CommandSpec] = &[
          dimensions use); the feature goes at the marker → feature, name, error, warning",
     ),
     CommandSpec::new("timeline.export_script", "Export Command Script", export_script).icon("export").noundo().doc_only().params(
-        "path?: write the script to this file → script: {commands: [...]} that rebuilds the design (solidcraft-cli eval/run), \
+        "path?: write the script to this file → script: {commands: [...]} that rebuilds the design (node-cad-cli eval/run), \
          steps, omitted: what the script leaves out (appearances, folders, views, configurations); components and assemblies \
          are not supported yet",
     ),
@@ -102,7 +102,7 @@ fn export_script(s: &mut Session, p: &Value) -> Result<Value> {
             "design": s.doc.name,
             "format": solidcraft_doc::format::format_string(solidcraft_doc::format::FORMAT),
             "version": env!("CARGO_PKG_VERSION"),
-            "replay": "solidcraft-cli eval script.json (timeline.add steps need a build that reads this design format)",
+            "replay": "node-cad-cli eval script.json (timeline.add steps need a build that reads this design format)",
         },
         "commands": commands,
     });

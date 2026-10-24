@@ -22,7 +22,7 @@ fn mcp_connect_serves_before_the_app_runs_and_reaches_it_once_it_does() {
     let addr = format!("127.0.0.1:{port}");
     let control_dir = std::env::temp_dir().join(format!("solidcraft-mcp-connect-{}-{port}", std::process::id()));
     std::fs::create_dir_all(&control_dir).unwrap();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_solidcraft-cli"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_node-cad-cli"))
         .args(["mcp", "--connect", &addr, "--allow-any-path"])
         .env("SOLIDCRAFT_CONTROL_DIR", &control_dir)
         .env_remove("SOLIDCRAFT_CONTROL_TOKEN")
@@ -52,7 +52,7 @@ fn mcp_connect_serves_before_the_app_runs_and_reaches_it_once_it_does() {
     // A tool call says the app is not running and how to start it.
     let r = ask(3, "tools/call", measure.clone());
     assert_eq!(r["result"]["isError"], true, "{r}");
-    assert!(text(&r).contains("not running") && text(&r).contains(&format!("solidcraft --control {port}")), "{r}");
+    assert!(text(&r).contains("not running") && text(&r).contains(&format!("node-cad --control {port}")), "{r}");
 
     // The app starts: a token file for this launch, and its control port.
     let token = "0123456789abcdef".repeat(4);
@@ -83,7 +83,7 @@ fn mcp_connect_serves_before_the_app_runs_and_reaches_it_once_it_does() {
 #[test]
 fn mcp_connect_without_a_port_is_refused_at_start() {
     for addr in ["localhost", "127.0.0.1:0"] {
-        let output = Command::new(env!("CARGO_BIN_EXE_solidcraft-cli")).args(["mcp", "--connect", addr]).stdin(Stdio::null()).output().unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_node-cad-cli")).args(["mcp", "--connect", addr]).stdin(Stdio::null()).output().unwrap();
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(!output.status.success(), "{addr}: {stderr}");
         assert!(stderr.contains("HOST:PORT"), "{addr}: {stderr}");

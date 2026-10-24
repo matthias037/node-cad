@@ -1,4 +1,4 @@
-//! The format registry: one table describing every file format SolidCraft reads or writes,
+//! The format registry: one table describing every file format NØDE CAD reads or writes,
 //! with the options each one takes. The UI's pickers and panels, the hosts' file-dialog
 //! filters and the web `accept` list all derive from this table, so a new format (or a new
 //! option) is added in one place. The writers and readers themselves stay where they are
@@ -177,7 +177,7 @@ pub static FORMATS: &[FormatSpec] = &[
     FormatSpec {
         id: "design",
         label: "NØDE CAD design",
-        extensions: &[crate::DESIGN_EXT, crate::LEGACY_DESIGN_EXT, "json"],
+        extensions: &[crate::DESIGN_EXT, crate::LEGACY_DESIGN_EXTS[0], crate::LEGACY_DESIGN_EXTS[1], "json"],
         role: Role::Design,
         import: Some(ImportSpec { target: ImportTarget::Design, options: &[], native_only: false }),
         export: None,
@@ -442,6 +442,7 @@ mod tests {
 
     #[test]
     fn paths_resolve_to_the_canonical_rows() {
+        assert_eq!(for_path("a.NodeCad").map(|f| f.id), Some("design"));
         assert_eq!(for_path("a.SolidCraft").map(|f| f.id), Some("design"));
         assert_eq!(for_path("a.json").map(|f| f.id), Some("design"));
         assert_eq!(for_path("a.STEP").map(|f| f.id), Some("step"));
@@ -465,7 +466,7 @@ mod tests {
     fn import_filter_groups_hold_the_expected_extensions() {
         let native = import_filters(true);
         let find = |label: &str| native.iter().find(|(l, _)| *l == label).map(|(_, e)| e.clone()).unwrap_or_default();
-        assert_eq!(find("NØDE CAD design (container or JSON)"), vec![crate::DESIGN_EXT, crate::LEGACY_DESIGN_EXT, "json"]);
+        assert_eq!(find("NØDE CAD design (container or JSON)"), vec![crate::DESIGN_EXT, "solidcraft", "solvecraft", "json"]);
         assert_eq!(find("STEP"), vec!["step", "stp"]);
         assert_eq!(find("IGES"), vec!["igs", "iges"]);
         assert_eq!(find("FreeCAD and Rhino"), vec!["fcstd", "3dm"]);

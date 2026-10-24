@@ -1464,7 +1464,8 @@ mod tests {
         h.frames(3);
         h.settle();
         assert!(!h.app.home.open);
-        assert_eq!(h.app.session.path.as_deref(), h.dir.join("Copy.solidcraft").to_str());
+        // Save As proposes the current extension, whatever the source file had.
+        assert_eq!(h.app.session.path.as_deref(), h.dir.join("Copy.nodecad").to_str());
         assert_eq!(std::fs::read(source).unwrap(), bytes);
     }
 

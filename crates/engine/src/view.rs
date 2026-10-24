@@ -40,7 +40,7 @@ pub mod colors {
 }
 
 /// The colours a headless scene is drawn in. [`Palette::DEFAULT`] is [`colors`], the light
-/// theme's look, which `solidcraft-cli snapshot`, MCP screenshots and thumbnails keep; the app
+/// theme's look, which `node-cad-cli snapshot`, MCP screenshots and thumbnails keep; the app
 /// passes its theme's for `ui.render` and its CPU viewport, so they match the window. Only these
 /// defaults change: a body's appearance and a face's own look are the design's, drawn as they are.
 #[derive(Clone, Copy, Debug, PartialEq)]

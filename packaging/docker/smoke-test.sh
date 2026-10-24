@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Start the web app image and check that it serves the app the way browsers need it.
 #
-# Usage: packaging/docker/smoke-test.sh [IMAGE]     (default: solidcraft-web:test)
+# Usage: packaging/docker/smoke-test.sh [IMAGE]     (default: node-cad-web:test)
 #
 # Runs the container read-only (as compose.yaml does) and checks the page, the service worker
 # and the wasm: their status, types and caching (nginx.conf).
 set -euo pipefail
 
-IMAGE="${1:-solidcraft-web:test}"
-NAME="solidcraft-smoke-$$"
+IMAGE="${1:-node-cad-web:test}"
+NAME="node-cad-smoke-$$"
 docker run -d --rm --name "$NAME" --read-only --tmpfs /tmp --cap-drop ALL -p 127.0.0.1::8080 "$IMAGE" >/dev/null
 trap 'docker rm -f "$NAME" >/dev/null 2>&1 || true' EXIT
 PORT="$(docker port "$NAME" 8080/tcp | head -n1 | sed 's/.*://')"

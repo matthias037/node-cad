@@ -21,5 +21,5 @@
       12.37436867076458
     ]
   },
-  "note": "SolidCraft convention: flange height (15) is measured along the flange's outer face from the virtual sharp at the original edge (y 0, z 0), so the outer top corner is at (y, z) = (-15 cos45, 15 sin45)."
+  "note": "NODE CAD convention: flange height (15) is measured along the flange's outer face from the virtual sharp at the original edge (y 0, z 0), so the outer top corner is at (y, z) = (-15 cos45, 15 sin45)."
 }

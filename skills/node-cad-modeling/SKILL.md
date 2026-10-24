@@ -1,9 +1,9 @@
 ---
-name: solidcraft-modeling
-description: Use when building a new part, enclosure, bracket, plate, flange or any other 3D solid in SolidCraft through its MCP server (tools such as batch, execute, measure, screenshot), or when a SolidCraft session is using many tool calls or tokens.
+name: node-cad-modeling
+description: Use when building a new part, enclosure, bracket, plate, flange or any other 3D solid in NØDE CAD through its MCP server (tools such as batch, execute, measure, screenshot), or when a NØDE CAD session is using many tool calls or tokens.
 ---
 
-# SolidCraft modeling
+# NØDE CAD modeling
 
 ## Overview
 Work the part out as numbers first. Then build it in a few large `batch` calls, and check each stage with `measure` against values you computed yourself. A clean build takes 3-4 build batches, about 10-13 calls with the checks. Command shapes, plane axes, ids, reply sizes and known traps are in `reference.md` next to this file, so you do not need to explore the command catalog.
@@ -11,7 +11,7 @@ Work the part out as numbers first. Then build it in a few large `batch` calls, 
 ## Before the first call
 1. Read `reference.md`.
 2. Run `inspect_design {"measure":false,"sketches":false}`, even when you think the session is empty.
-   - The SolidCraft server's instructions end with `Backend: connected to the SolidCraft app` when it drives the user's open app, and with `Backend: headless` otherwise.
+   - The NØDE CAD server's instructions end with `Backend: connected to the NØDE CAD app` when it drives the user's open app, and with `Backend: headless` otherwise.
    - If the design has timeline features, ask before calling `new_design` or `open`, because both discard unsaved work. You can also build into the open design.
 3. Write a plan:
    - the parameters
@@ -57,7 +57,7 @@ Work the part out as numbers first. Then build it in a few large `batch` calls, 
   - When the server is bridged, `source` defaults to the whole app window and `view` also turns the user's camera, so pass `"source":"model"` and leave out `view` unless the user wants the camera moved.
 
 ## Finish
-`export {path}` writes `.step` for CAD, `.3mf`/`.stl` for printing, or `.urdf` (an assembly with joints, for robot simulators). `save {path}` writes `.solidcraft`.
+`export {path}` writes `.step` for CAD, `.3mf`/`.stl` for printing, or `.urdf` (an assembly with joints, for robot simulators). `save {path}` writes `.nodecad`.
 
 ## Red flags
 

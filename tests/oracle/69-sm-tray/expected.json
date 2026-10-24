@@ -22,5 +22,5 @@
     ]
   },
   "faces": 46,
-  "note": "corner treatment is SolidCraft's convention (sheet.rs close_corners: panels extended until their inner corners are the rule gap = t apart; no corner fill, open corner relief below the walls)"
+  "note": "corner treatment is NODE CAD's convention (sheet.rs close_corners: panels extended until their inner corners are the rule gap = t apart; no corner fill, open corner relief below the walls)"
 }

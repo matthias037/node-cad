@@ -21,5 +21,5 @@
       30.0
     ]
   },
-  "note": "SolidCraft convention: the second flange trims the base under the first bend, so bend 1 stops at x 75 while flange 1's panel runs to x 80 (open corner relief, no fill)."
+  "note": "NODE CAD convention: the second flange trims the base under the first bend, so bend 1 stops at x 75 while flange 1's panel runs to x 80 (open corner relief, no fill)."
 }

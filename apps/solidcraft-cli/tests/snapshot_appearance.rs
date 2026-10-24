@@ -80,7 +80,7 @@ impl Scratch {
 
     fn run(&self, script: &Path, out: &str, extra: &[&str]) -> Output {
         let (w, h) = (SIZE.0.to_string(), SIZE.1.to_string());
-        Command::new(env!("CARGO_BIN_EXE_solidcraft-cli"))
+        Command::new(env!("CARGO_BIN_EXE_node-cad-cli"))
             .arg("snapshot")
             .arg(script)
             .arg("--out")
@@ -213,7 +213,7 @@ fn a_body_tool_or_section_that_cannot_be_used_is_an_error_and_writes_nothing() {
 /// The usage text says what the options do.
 #[test]
 fn the_usage_names_the_body_tool_and_section_options() {
-    let output = Command::new(env!("CARGO_BIN_EXE_solidcraft-cli")).arg("snapshot").output().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_node-cad-cli")).arg("snapshot").output().unwrap();
     let stderr = String::from_utf8_lossy(&output.stderr);
     for word in ["--body", "--tool", "--section", "appearance.assign", "inspect.section", "see-through"] {
         assert!(stderr.contains(word), "usage lacks {word}: {stderr}");

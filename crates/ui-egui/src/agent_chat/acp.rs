@@ -44,10 +44,10 @@ pub fn initialize_params(version: &str) -> Value {
     })
 }
 
-/// The name the chat gives its MCP server (#2592): not `solidcraft`, the name docs/mcp.md suggests
+/// The name the chat gives its MCP server (#2592): not `node-cad`, the name docs/mcp.md suggests
 /// for a user's own setup, so an agent that merges its own MCP servers with the session's (Codex
 /// keeps its own entry on a clash) can't shadow the bridge with a headless session.
-pub const BRIDGE_NAME: &str = "solidcraft-app";
+pub const BRIDGE_NAME: &str = "node-cad-app";
 
 /// The MCP server the agent starts to reach the design: `solidcraft-cli mcp --connect` bridged to
 /// this app's control port. The server finds the port's token in the token file the app wrote
@@ -74,7 +74,7 @@ impl McpBridge {
 pub const SYSTEM_NOTE: &str = "Tu es l'assistant de NØDE CAD, le logiciel de CAO 3D paramétrique de NØDE, aux côtés de \
 personnes qui travaillent souvent en atelier : usinage, chaudronnerie, mécanique, bureau d'études. Réponds en français, sauf si \
 l'on t'écrit dans une autre langue. \
-La conception ouverte est accessible par le serveur MCP `solidcraft-app` : utilise ses outils (list_commands, batch, execute, \
+La conception ouverte est accessible par le serveur MCP `node-cad-app` : utilise ses outils (list_commands, batch, execute, \
 inspect_design, body_topology, measure, screenshot, set_parameter, undo) pour lire et modifier ce que la personne voit, et vérifie \
 avec measure ou inspect_design. Préfère un seul `batch` à plusieurs petits appels. `batch` et `execute` prennent des commandes du \
 moteur (parameters.change, sketch.create… : list_commands les donne), jamais les noms des outils MCP. Chaque élément des `items` \
@@ -501,16 +501,17 @@ mod tests {
         assert!(split_command("   ").is_empty());
     }
 
-    /// #2592: the bridge is not called `solidcraft`, the name a user's own MCP entry takes from
+    /// #2592: the bridge is not called `node-cad`, the name a user's own MCP entry takes from
     /// docs/mcp.md, and the note tells the agent the name it really has.
     #[test]
     fn the_bridge_has_a_name_of_its_own_and_the_note_uses_it() {
-        assert_ne!(BRIDGE_NAME, "solidcraft");
+        assert_ne!(BRIDGE_NAME, "node-cad");
         assert!(SYSTEM_NOTE.contains(&format!("serveur MCP `{BRIDGE_NAME}`")), "{SYSTEM_NOTE}");
-        assert!(!SYSTEM_NOTE.contains("serveur MCP `solidcraft`"));
-        // The panel still recognises the bridge's tools as SolidCraft's (agents name them after
-        // their server, e.g. `mcp__solidcraft-app__batch`).
-        assert!(BRIDGE_NAME.contains("solidcraft"));
+        assert!(!SYSTEM_NOTE.contains("serveur MCP `node-cad`") && !SYSTEM_NOTE.to_lowercase().contains("solidcraft"));
+        // The panel still recognises the bridge's tools as the app's own (agents name them after
+        // their server, e.g. `mcp__node-cad-app__batch`).
+        assert!(BRIDGE_NAME.contains("node-cad"));
+        assert!(super::super::solidcraft_tool(&format!("mcp__{BRIDGE_NAME}__batch")));
     }
 
     #[test]

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Build and package NØDE CAD for macOS:
 #
-#   $DIST/NODE-CAD-<version>-mac-<arch>.dmg           NØDE CAD.app (with solidcraft-cli inside) on a
+#   $DIST/NODE-CAD-<version>-mac-<arch>.dmg           NØDE CAD.app (with node-cad-cli inside) on a
 #                                                      drag-to-Applications DMG
-#   $DIST/node-cad-cli-<version>-mac-<arch>.zip       the headless CLI (and its solvecraft-cli
-#                                                      compatibility alias) with the licence files
+#   $DIST/node-cad-cli-<version>-mac-<arch>.zip       the headless CLI (and its solidcraft-cli and
+#                                                      solvecraft-cli compatibility aliases) with
+#                                                      the licence files
 #
 # Usage: packaging/macos/package.sh [--arch universal|aarch64|x86_64] [--skip-build]
 #
@@ -22,7 +23,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --arch) ARCH="$2"; shift 2 ;;
     --skip-build) SKIP_BUILD=1; shift ;;
-    -h | --help) sed -n '2,10p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,11p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -50,7 +51,7 @@ fi
 
 rm -rf "$WORK"
 mkdir -p "$WORK/bin"
-for bin in solidcraft solidcraft-cli solvecraft-cli; do
+for bin in node-cad node-cad-cli solidcraft-cli solvecraft-cli; do
   inputs=()
   for t in "${TARGETS[@]}"; do inputs+=("$CARGO_TARGET_DIR/$t/release/$bin"); done
   lipo -create -output "$WORK/bin/$bin" "${inputs[@]}"
@@ -60,16 +61,19 @@ done
 # ---- NØDE CAD.app ------------------------------------------------------------------------------
 echo "==> assembling $APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$WORK/bin/solidcraft" "$APP/Contents/MacOS/NODE-CAD"
-# solidcraft-cli next to the app, as every other package has it: the agent chat starts it as the
-# agent's MCP server (`solidcraft-cli mcp --connect`) and looks for it beside the running program.
+cp "$WORK/bin/node-cad" "$APP/Contents/MacOS/NODE-CAD"
+# node-cad-cli next to the app, as every other package has it: the agent chat starts it as the
+# agent's MCP server (`node-cad-cli mcp --connect`) and looks for it beside the running program.
+cp "$WORK/bin/node-cad-cli" "$APP/Contents/MacOS/node-cad-cli"
+# Compatibility shim (docs/compatibility.md): MCP client setups made with earlier releases start
+# Contents/MacOS/solidcraft-cli; the alias forwards to node-cad-cli beside it.
 cp "$WORK/bin/solidcraft-cli" "$APP/Contents/MacOS/solidcraft-cli"
 # The icon is drawn in code (assets/icons/app/shared/source/app_icon.rs); iconutil packs the sizes.
 ICONSET="$WORK/NODE-CAD.iconset"
 mkdir -p "$ICONSET"
 for s in 16 32 128 256 512; do
-  "$WORK/bin/solidcraft-cli" icon --size "$s" --out "$ICONSET/icon_${s}x${s}.png"
-  "$WORK/bin/solidcraft-cli" icon --size "$((s * 2))" --out "$ICONSET/icon_${s}x${s}@2x.png"
+  "$WORK/bin/node-cad-cli" icon --size "$s" --out "$ICONSET/icon_${s}x${s}.png"
+  "$WORK/bin/node-cad-cli" icon --size "$((s * 2))" --out "$ICONSET/icon_${s}x${s}@2x.png"
 done
 iconutil -c icns -o "$APP/Contents/Resources/NODE-CAD.icns" "$ICONSET"
 mkdir -p "$APP/Contents/Resources/Licenses"
@@ -79,10 +83,11 @@ plutil -lint "$APP/Contents/Info.plist"
 printf 'APPL????' >"$APP/Contents/PkgInfo"
 # Ad-hoc signature over the whole bundle (Apple silicon refuses unsigned code). Nested code is
 # signed first: the bundle signature refuses an unsigned helper in Contents/MacOS.
-codesign --force --sign - --timestamp=none --identifier "$MACOS_BUNDLE_ID-cli" "$APP/Contents/MacOS/solidcraft-cli"
+codesign --force --sign - --timestamp=none --identifier "$MACOS_BUNDLE_ID-cli" "$APP/Contents/MacOS/node-cad-cli"
+codesign --force --sign - --timestamp=none --identifier "$MACOS_BUNDLE_ID-cli-alias" "$APP/Contents/MacOS/solidcraft-cli"
 codesign --force --sign - --timestamp=none "$APP"
 codesign --verify --strict --deep --verbose=2 "$APP"
-test -x "$APP/Contents/MacOS/solidcraft-cli" || { echo "solidcraft-cli is missing from $APP" >&2; exit 1; }
+test -x "$APP/Contents/MacOS/node-cad-cli" || { echo "node-cad-cli is missing from $APP" >&2; exit 1; }
 
 # ---- DMG ---------------------------------------------------------------------------------------
 echo "==> building $DMG"
@@ -128,15 +133,17 @@ hdiutil detach "$MNT"
 echo "==> building $CLI_ZIP"
 CLI_DIR="$WORK/node-cad-cli-$VERSION-mac-$ARCH"
 mkdir -p "$CLI_DIR"
-cp "$WORK/bin/solidcraft-cli" "$CLI_DIR/"
-codesign --force --sign - --timestamp=none --identifier "$MACOS_BUNDLE_ID-cli" "$CLI_DIR/solidcraft-cli"
-# Compatibility shim (docs/compatibility.md): the old CLI name forwards to solidcraft-cli.
-cp "$WORK/bin/solvecraft-cli" "$CLI_DIR/"
-codesign --force --sign - --timestamp=none --identifier "$MACOS_BUNDLE_ID-cli-alias" "$CLI_DIR/solvecraft-cli"
+cp "$WORK/bin/node-cad-cli" "$CLI_DIR/"
+codesign --force --sign - --timestamp=none --identifier "$MACOS_BUNDLE_ID-cli" "$CLI_DIR/node-cad-cli"
+# Compatibility shim (docs/compatibility.md): the CLI's former names forward to node-cad-cli.
+for alias in solidcraft-cli solvecraft-cli; do
+  cp "$WORK/bin/$alias" "$CLI_DIR/"
+  codesign --force --sign - --timestamp=none --identifier "$MACOS_BUNDLE_ID-cli-alias" "$CLI_DIR/$alias"
+done
 copy_docs "$CLI_DIR"
 rm -f "$CLI_ZIP"
 ditto -c -k --keepParent "$CLI_DIR" "$CLI_ZIP"
 
-"$WORK/bin/solidcraft-cli" --version
+"$WORK/bin/node-cad-cli" --version
 echo "==> done"
 ls -lh "$DMG" "$CLI_ZIP"

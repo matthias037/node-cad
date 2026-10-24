@@ -1,5 +1,5 @@
 # Publishing a GitHub release (not a prerelease) promotes the snaps that release.yml uploaded to
-# the Snap Store's candidate channel to stable, so `sudo snap install solidcraft` gets it.
+# the Snap Store's candidate channel to stable, so `sudo snap install node-cad` gets it.
 # Skipped until the owner adds the SNAPCRAFT_STORE_CREDENTIALS secret; see docs/releasing.md.
 name: Snap Store
 
@@ -35,6 +35,6 @@ jobs:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         run: |
           sudo snap install snapcraft --classic
-          snapcraft status solidcraft
-          snapcraft promote solidcraft --from-channel=latest/candidate --to-channel=latest/stable --yes
-          snapcraft status solidcraft
+          snapcraft status node-cad
+          snapcraft promote node-cad --from-channel=latest/candidate --to-channel=latest/stable --yes
+          snapcraft status node-cad

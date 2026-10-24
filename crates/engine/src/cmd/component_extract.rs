@@ -555,8 +555,8 @@ pub(super) fn extract(s: &mut Session, p: &Value) -> Result<Value> {
     let sc = scope(s, comp, CMD)?;
     let given = str_(p, "path").filter(|x| !x.trim().is_empty() && x.len() < 4096).ok_or_else(|| bad(CMD, "`path` is required"))?;
     let file = absolute(Path::new(given));
-    if !file.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("solidcraft")) {
-        return Err(bad(CMD, "the new design must be a .solidcraft file"));
+    if !file.extension().and_then(|e| e.to_str()).is_some_and(|e| solidcraft_io::DESIGN_EXTS.iter().any(|x| e.eq_ignore_ascii_case(x))) {
+        return Err(bad(CMD, "the new design must be a .nodecad file"));
     }
     if s.path.as_deref().is_some_and(|own| absolute(Path::new(own)) == file) {
         return Err(bad(CMD, "choose another file than this design's own"));
@@ -852,7 +852,7 @@ mod tests {
         };
         refuse(&mut s, json!({"component": 0, "path": file}), "not the design");
         refuse(&mut s, json!({"component": "Plate"}), "`path` is required");
-        refuse(&mut s, json!({"component": "Plate", "path": dir.join("plate.step")}), ".solidcraft");
+        refuse(&mut s, json!({"component": "Plate", "path": dir.join("plate.step")}), ".nodecad");
 
         // A joint from Plate's subcomponent to the rest of the design
         let pin_occ = s.doc.occurrences.iter().find(|o| o.name.starts_with("Pin")).map(|o| o.id).unwrap();
@@ -929,13 +929,13 @@ mod tests {
         run(&mut s, "solid.extrude", json!({"distance": 3, "operation": "join"}));
         run(&mut s, "component.activate", json!({"component": 0}));
         let vol = volumes(&s);
-        let out = run(&mut s, "component.extract", json!({"component": "cylinder", "path": dir.join("cylinder.solidcraft")}));
+        let out = run(&mut s, "component.extract", json!({"component": "cylinder", "path": dir.join("cylinder.nodecad")}));
         assert_eq!(out["bodies"], json!(["Body2"]), "{out}");
         let linked = volumes(&s);
         assert_eq!(linked.keys().collect::<Vec<_>>(), ["Body1", "Body2", "Body2 (2)"]);
         assert!((linked["Body2"] + linked["Body2 (2)"] - vol["Body2"]).abs() < 100, "{linked:?} {vol:?}");
         let mut part = Session::default();
-        run(&mut part, "doc.open", json!({"path": dir.join("cylinder.solidcraft")}));
+        run(&mut part, "doc.open", json!({"path": dir.join("cylinder.nodecad")}));
         assert!(part.model.results.iter().all(|r| r.error.is_none()));
         assert_eq!(volumes(&part).get("Body2"), vol.get("Body2"));
         // A new body in the extracted design is numbered on from there

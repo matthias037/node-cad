@@ -207,7 +207,7 @@ jobs:
               case " $packages " in *" solidcraft-engine "*) ;; *) packages="$packages solidcraft-engine" ;; esac
             fi
           fi
-          # The reference tests replay recipes through solidcraft-cli: needed when it, or anything
+          # The reference tests replay recipes through node-cad-cli: needed when it, or anything
           # it depends on, is selected.
           oracle=$native
           if [ "$EVENT_NAME" = pull_request ] && [ "$full" != true ]; then
@@ -696,7 +696,7 @@ jobs:
       - name: Build the command line
         run: cargo build -p solidcraft-cli --profile ci --locked
       - name: Replay tests/oracle and compare with expected.json
-        run: cargo xtask oracle --cli "${CARGO_TARGET_DIR:-target}/ci/solidcraft-cli"
+        run: cargo xtask oracle --cli "${CARGO_TARGET_DIR:-target}/ci/node-cad-cli"
       - name: Upload the report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -731,7 +731,7 @@ jobs:
       # One test at a time: WARP's shader JIT crashes now and then (a null read in
       # d3d10warp.dll's JIT optimizer, about 1 run in 60) when several devices compile compute
       # pipelines at once, which the parallel tests do. Minidumps showed it in WARP itself, not
-      # in SolidCraft or FXC; serial runs never hit it.
+      # in the app or FXC; serial runs never hit it.
       - run: cargo test -p solidcraft-gpu --profile ci --locked -- --test-threads=1
 
   # The Windows app starts D3D12 first and only the backend it uses (a Vulkan driver crashed the
@@ -758,10 +758,10 @@ jobs:
         run: cargo build -p solidcraft --profile ci --locked
       - name: Start the app under different settings
         shell: pwsh
-        run: tools/windows-startup-smoke.ps1 -Exe target/ci/solidcraft.exe
+        run: tools/windows-startup-smoke.ps1 -Exe target/ci/node-cad.exe
       - name: Resize border from the first frame
         shell: pwsh
-        run: tools/windows-resize-smoke.ps1 -Exe target/ci/solidcraft.exe
+        run: tools/windows-resize-smoke.ps1 -Exe target/ci/node-cad.exe
 
   # Preserve the existing check name for branch protection, including docs-only PRs.
   ci:

@@ -87,7 +87,7 @@ pub fn map_on_threads<T: Sync, R: Send>(items: &[T], max_threads: usize, f: impl
             std::thread::scope(|scope| {
                 // A thread that cannot start leaves its share to the others.
                 let helpers: Vec<_> =
-                    (1..threads).filter_map(|_| std::thread::Builder::new().name("solidcraft-each".into()).spawn_scoped(scope, work).ok()).collect();
+                    (1..threads).filter_map(|_| std::thread::Builder::new().name("node-cad-each".into()).spawn_scoped(scope, work).ok()).collect();
                 let mut all = work();
                 for h in helpers {
                     // `work` never panics (every item runs under the guard).

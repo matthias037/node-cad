@@ -1,4 +1,4 @@
-"""SolidCraft builder: write command scripts whose sketches come out fully constrained.
+"""NØDE CAD builder: write command scripts whose sketches come out fully constrained.
 
 Each sketch helper makes one sketch and dimensions its geometry from the sketch origin. `at` is
 where the geometry starts: put it near the solved position, on the side of the origin it must
@@ -29,7 +29,7 @@ class Script:
 
     @staticmethod
     def _claim(name: str, taken: set[str], kind: str) -> None:
-        """SolidCraft resolves a sketch or feature name to its first match and renames a repeated
+        """NØDE CAD resolves a sketch or feature name to its first match and renames a repeated
         body name, so either repeat silently points at the wrong thing."""
         if name in taken:
             raise ValueError(f"{name}: {kind} already has this name")

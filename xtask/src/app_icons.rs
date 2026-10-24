@@ -13,7 +13,7 @@ pub fn run(root: &Path) -> Result<(), String> {
     for size in [16, 24, 32, 48, 64, 128, 256, 512] {
         let png = stage.join(format!("{size}.png"));
         draw(&png, size)?;
-        exports.push((png, format!("linux/exports/hicolor/{size}x{size}/apps/ai.storyteller.solidcraft.png")));
+        exports.push((png, format!("linux/exports/hicolor/{size}x{size}/apps/fr.node_os.cad.png")));
     }
     let installer = stage.join("solidcraft.ico");
     draw(&installer, 256)?;
@@ -36,5 +36,5 @@ pub fn run(root: &Path) -> Result<(), String> {
 fn draw(path: &Path, size: usize) -> Result<(), String> {
     let mut c = crate::cargo();
     c.args(["run", "-q", "--profile", "ci", "-p", "solidcraft-cli", "--", "icon", "--size", &size.to_string(), "--out"]).arg(path);
-    crate::run(c, "solidcraft-cli icon")
+    crate::run(c, "node-cad-cli icon")
 }

@@ -91,7 +91,7 @@ def test_save(tmp_path):
 
 
 def test_rejects_a_repeated_name():
-    # SolidCraft resolves a name to its first match, so a repeat silently points at the wrong feature
+    # NØDE CAD resolves a name to its first match, so a repeat silently points at the wrong feature
     script = scb.Script()
     script.circle("Hole sketch", diameter="5 mm", at=(10, 10), x="10 mm", y="10 mm")
     with pytest.raises(ValueError, match="Hole sketch"):
@@ -117,7 +117,7 @@ def test_place_rejects_a_dimension_that_starts_at_zero(at, x, y):
 
 
 def test_rejects_a_repeated_body_name():
-    # SolidCraft renames the second body silently, so targets would hit only the first
+    # NØDE CAD renames the second body silently, so targets would hit only the first
     script = scb.Script()
     script.cmd("solid.box", length=10, width=10, height=10, body_name="M")
     with pytest.raises(ValueError, match="M"):

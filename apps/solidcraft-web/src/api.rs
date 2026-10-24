@@ -73,7 +73,11 @@ impl Api {
             js_sys::Reflect::set(&object, &name.into(), &function)?;
         }
         let window = web_sys::window().ok_or_else(|| error("no window"))?;
-        js_sys::Reflect::set(&window, &"solidcraft".into(), &object)?;
+        // `window.nodecad`; `window.solidcraft` is the name earlier releases used (compatibility
+        // shim, docs/compatibility.md), so scripts written for them keep working.
+        for name in ["nodecad", "solidcraft"] {
+            js_sys::Reflect::set(&window, &name.into(), &object)?;
+        }
         Ok(api)
     }
 

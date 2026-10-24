@@ -6,7 +6,7 @@
 # What this can't check on a CI runner (one monitor at 100 %): moving the window between monitors
 # with different scales, and the resize border's width at other scales (unit tests cover the sizes).
 #
-# Usage: tools/windows-resize-smoke.ps1 -Exe target\ci\solidcraft.exe
+# Usage: tools/windows-resize-smoke.ps1 -Exe target\ci\node-cad.exe
 param([Parameter(Mandatory = $true)][string]$Exe)
 $ErrorActionPreference = 'Stop'
 
@@ -36,13 +36,13 @@ public static class Win {
     [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc f, IntPtr l);
     public static string Text(IntPtr h) { var s = new System.Text.StringBuilder(256); GetWindowTextW(h, s, 256); return s.ToString(); }
     public static string Class(IntPtr h) { var s = new System.Text.StringBuilder(256); GetClassNameW(h, s, 256); return s.ToString(); }
-    // The process's visible top-level window titled SolidCraft (the app's main window; the
+    // The process's visible top-level window titled with the app's name (its main window; the
     // process has other top-level windows, such as the IME's).
     public static IntPtr MainWindow(uint pid) {
         IntPtr found = IntPtr.Zero;
         EnumWindows((h, l) => {
             uint p; GetWindowThreadProcessId(h, out p);
-            if (p == pid && IsWindowVisible(h) && Text(h).StartsWith("SolidCraft")) { found = h; return false; }
+            if (p == pid && IsWindowVisible(h) && Text(h).StartsWith("N\u00d8DE CAD")) { found = h; return false; }
             return true;
         }, IntPtr.Zero);
         return found;
@@ -89,7 +89,7 @@ function CheckBorder($h, [string]$when) {
 $port = 47901
 $root = Join-Path $env:RUNNER_TEMP 'resize-smoke'
 Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
-$settings = Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'SolidCraft\data'
+$settings = Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'NODE CAD\data'
 Remove-Item -Recurse -Force $settings -ErrorAction SilentlyContinue
 $local = Join-Path $root 'local'
 $crashes = Join-Path $root 'crashes'

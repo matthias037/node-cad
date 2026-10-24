@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run a SolidCraft command script and print a short report: a failure, feature warnings,
+"""Run a NØDE CAD command script and print a short report: a failure, feature warnings,
 sketches that are not fully constrained, and body measurements. A document.inspect inside the
 script reports that state too, its lines prefixed with its step; the end state comes last."""
 
@@ -16,7 +16,7 @@ INSPECT = {"command": "document.inspect", "params": {"measure": True}}
 WARNING_LENGTH = 160
 
 
-class SolidCraftError(RuntimeError):
+class NodeCadError(RuntimeError):
     pass
 
 
@@ -25,14 +25,14 @@ def run_commands(commands: list, design: Path | None = None, save: Path | None =
     with tempfile.TemporaryDirectory() as tmp:
         script = Path(tmp) / "script.json"
         script.write_text(json.dumps({"commands": [*commands, INSPECT]}))
-        args = ["solidcraft-cli", "run", str(script), "--results"]
+        args = ["node-cad-cli", "run", str(script), "--results"]
         if design:
             args += ["--in", str(design)]
         if save:
             args += ["--save", str(save)]
         done = subprocess.run(args, capture_output=True, text=True)
     if done.returncode:
-        raise SolidCraftError(done.stderr.strip().removeprefix("error: "))
+        raise NodeCadError(done.stderr.strip().removeprefix("error: "))
     return json.loads(done.stdout)
 
 
@@ -88,7 +88,7 @@ def main() -> None:
     commands = json.loads(args.script.read_text())["commands"]
     try:
         results = run_commands(commands, args.design, args.save)
-    except SolidCraftError as error:
+    except NodeCadError as error:
         print(f"FAIL {error}")
         sys.exit(1)
     print("\n".join(script_report(commands, results)))

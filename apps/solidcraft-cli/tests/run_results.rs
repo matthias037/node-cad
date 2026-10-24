@@ -31,7 +31,7 @@ impl Drop for Scratch {
 }
 
 fn cli() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_solidcraft-cli"))
+    Command::new(env!("CARGO_BIN_EXE_node-cad-cli"))
 }
 
 fn json_output(output: Output) -> Value {
@@ -46,7 +46,7 @@ fn body_count(path: &Path) -> Value {
 #[test]
 fn cli_loads_both_design_encodings_by_contents() {
     let dir = Scratch::new();
-    for extension in ["solidcraft", "solvecraft", "json"] {
+    for extension in ["nodecad", "solidcraft", "solvecraft", "json"] {
         let saved = dir.0.join(format!("box.{extension}"));
         json_output(cli().arg("run").arg(dir.script()).arg("--save").arg(&saved).output().unwrap());
         let bytes = std::fs::read(&saved).unwrap();

@@ -26,14 +26,14 @@ fn hex(bytes: &[u8]) -> String {
 fn checksum_lists_are_read() {
     let h = "a".repeat(64);
     let sums = format!(
-        "{h}  solidcraft-linux-x86_64.AppImage\n{}  *solidcraft-windows-x64.msi\nnot a line\n{}  short.txt\n",
+        "{h}  node-cad-linux-x86_64.AppImage\n{}  *node-cad-windows-x64.msi\nnot a line\n{}  short.txt\n",
         "B".repeat(64),
         "c".repeat(10)
     );
-    assert_eq!(expected_sha256(&sums, "solidcraft-linux-x86_64.AppImage"), Some(h));
-    assert_eq!(expected_sha256(&sums, "solidcraft-windows-x64.msi"), Some("b".repeat(64)), "binary-mode marker and upper case");
+    assert_eq!(expected_sha256(&sums, "node-cad-linux-x86_64.AppImage"), Some(h));
+    assert_eq!(expected_sha256(&sums, "node-cad-windows-x64.msi"), Some("b".repeat(64)), "binary-mode marker and upper case");
     assert_eq!(expected_sha256(&sums, "short.txt"), None, "not a SHA-256");
-    assert_eq!(expected_sha256(&sums, "solidcraft-linux-x86_64"), None);
+    assert_eq!(expected_sha256(&sums, "node-cad-linux-x86_64"), None);
 }
 
 #[test]
@@ -48,7 +48,7 @@ fn signatures_must_match_the_key_the_list_and_the_release() {
 
 #[test]
 fn methods_per_installation() {
-    let exe = Path::new("/x/solidcraft.exe");
+    let exe = Path::new("/x/node-cad.exe");
     assert_eq!(method(&InstallKind::AppImage("/a/S.AppImage".into()), Some(exe)), Some(Method::AppImage("/a/S.AppImage".into())));
     assert_eq!(method(&InstallKind::WindowsMsi, Some(exe)), Some(Method::Msi));
     assert_eq!(method(&InstallKind::WindowsPortable, Some(exe)), Some(Method::PortableZip(exe.into())));
@@ -68,14 +68,14 @@ fn methods_per_installation() {
     }
 }
 
-const BASE: &str = "https://github.com/bherbruck/solidcraft/releases/download/v9.9.9/";
+const BASE: &str = "https://github.com/matthias037/node-cad/releases/download/v9.9.9/";
 
 fn release_with(assets: &[(&str, usize)]) -> Release {
     Release {
         tag: "v9.9.9".into(),
-        name: "SolidCraft v9.9.9".into(),
+        name: "NØDE CAD v9.9.9".into(),
         notes: String::new(),
-        page: "https://github.com/bherbruck/solidcraft/releases/tag/v9.9.9".into(),
+        page: "https://github.com/matthias037/node-cad/releases/tag/v9.9.9".into(),
         assets: assets.iter().map(|(n, size)| Asset { name: n.to_string(), url: format!("{BASE}{n}"), size: *size as u64 }).collect(),
     }
 }
@@ -105,10 +105,10 @@ fn net(files: Vec<(String, Vec<u8>)>) -> Net {
 #[test]
 fn an_appimage_is_replaced_only_when_it_verifies() {
     let dir = scratch("appimage");
-    let target = dir.join("SolidCraft.AppImage");
+    let target = dir.join("NODE-CAD.AppImage");
     std::fs::write(&target, b"old version").unwrap();
     let new = b"new version".to_vec();
-    let name = "solidcraft-linux-x86_64.AppImage";
+    let name = "node-cad-linux-x86_64.AppImage";
     let kind = InstallKind::AppImage(target.clone());
     let m = Method::AppImage(target.clone());
     let r = release_with(&[(name, new.len()), (SUMS, 100)]);
@@ -119,7 +119,7 @@ fn an_appimage_is_replaced_only_when_it_verifies() {
     let err = run(&r, &kind, &m, "x86_64", &n, &dir.join("staging"), &Progress::default()).unwrap_err();
     assert!(err.contains("doesn't match"), "{err}");
     assert_eq!(std::fs::read(&target).unwrap(), b"old version");
-    assert!(!dir.join("SolidCraft.AppImage.update").exists(), "the bad download is deleted");
+    assert!(!dir.join("NODE-CAD.AppImage.update").exists(), "the bad download is deleted");
 
     // Not listed at all.
     let n = net(vec![(name.into(), new.clone()), (SUMS.into(), b"".to_vec())]);
@@ -152,28 +152,28 @@ fn an_appimage_is_replaced_only_when_it_verifies() {
 #[test]
 fn the_portable_zip_swaps_both_executables() {
     let dir = scratch("portable");
-    let exe = dir.join("solidcraft.exe");
+    let exe = dir.join("node-cad.exe");
     std::fs::write(&exe, b"old app").unwrap();
-    std::fs::write(dir.join("solidcraft-cli.exe"), b"old cli").unwrap();
+    std::fs::write(dir.join("node-cad-cli.exe"), b"old cli").unwrap();
     let mut zip_bytes = Vec::new();
     {
         let mut z = zip::ZipWriter::new(std::io::Cursor::new(&mut zip_bytes));
         let o = zip::write::SimpleFileOptions::default();
-        z.add_directory("solidcraft-9.9.9-windows-x64-portable/", o).unwrap();
-        for (n, b) in [("solidcraft.exe", &b"new app"[..]), ("solidcraft-cli.exe", b"new cli"), ("README.md", b"readme")] {
-            z.start_file(format!("solidcraft-9.9.9-windows-x64-portable/{n}"), o).unwrap();
+        z.add_directory("node-cad-9.9.9-windows-x64-portable/", o).unwrap();
+        for (n, b) in [("node-cad.exe", &b"new app"[..]), ("node-cad-cli.exe", b"new cli"), ("README.md", b"readme")] {
+            z.start_file(format!("node-cad-9.9.9-windows-x64-portable/{n}"), o).unwrap();
             z.write_all(b).unwrap();
         }
         z.finish().unwrap();
     }
-    let name = "solidcraft-windows-x64-portable.zip";
+    let name = "node-cad-windows-x64-portable.zip";
     let r = release_with(&[(name, zip_bytes.len()), (SUMS, 100)]);
     let n = net(vec![(name.into(), zip_bytes.clone()), (SUMS.into(), format!("{}  {name}\n", hex(&zip_bytes)).into_bytes())]);
     let out =
         run(&r, &InstallKind::WindowsPortable, &Method::PortableZip(exe.clone()), "x86_64", &n, &dir.join("staging"), &Progress::default()).unwrap();
     assert_eq!(out, Outcome::Restart(exe.clone()));
     assert_eq!(std::fs::read(&exe).unwrap(), b"new app");
-    assert_eq!(std::fs::read(dir.join("solidcraft-cli.exe")).unwrap(), b"new cli");
+    assert_eq!(std::fs::read(dir.join("node-cad-cli.exe")).unwrap(), b"new cli");
     assert!(!dir.join("staging").join(name).exists(), "the zip is removed");
     // A zip without the app is refused and changes nothing.
     std::fs::write(dir.join("empty.zip"), {
@@ -185,16 +185,16 @@ fn the_portable_zip_swaps_both_executables() {
     assert!(apply(&Method::PortableZip(exe.clone()), &dir.join("empty.zip")).is_err());
     assert_eq!(std::fs::read(&exe).unwrap(), b"new app");
     // The moved-aside executable of an update goes at the next start.
-    std::fs::write(dir.join("solidcraft.exe.old"), b"x").unwrap();
+    std::fs::write(dir.join("node-cad.exe.old"), b"x").unwrap();
     clean_up_after_update(Some(&exe));
-    assert!(!dir.join("solidcraft.exe.old").exists());
+    assert!(!dir.join("node-cad.exe.old").exists());
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn installers_and_disk_images_are_handed_over() {
     let dir = scratch("msi");
-    let pkg = dir.join("solidcraft-windows-x64.msi");
+    let pkg = dir.join("node-cad-windows-x64.msi");
     std::fs::write(&pkg, b"msi").unwrap();
     assert_eq!(
         apply(&Method::Msi, &pkg).unwrap(),
@@ -206,14 +206,14 @@ fn installers_and_disk_images_are_handed_over() {
 
 #[test]
 fn windows_installer_is_followed_by_the_new_version() {
-    let args = vec!["/i".to_string(), r"C:\Users\a b\Temp\solidcraft-update\x.msi".to_string(), "/passive".to_string()];
-    let (program, out) = relaunch_after(Path::new("msiexec"), &args, Path::new(r"C:\Program Files\SolidCraft\it's.exe"));
+    let args = vec!["/i".to_string(), r"C:\Users\a b\Temp\node-cad-update\x.msi".to_string(), "/passive".to_string()];
+    let (program, out) = relaunch_after(Path::new("msiexec"), &args, Path::new(r"C:\Program Files\NODE CAD\it's.exe"));
     assert_eq!(program, PathBuf::from("powershell"));
     assert_eq!(
         out.last().unwrap(),
         &concat!(
-            r#"Start-Process -FilePath 'msiexec' -ArgumentList '/i','"C:\Users\a b\Temp\solidcraft-update\x.msi"','/passive' -Wait; "#,
-            r"Start-Process -FilePath 'C:\Program Files\SolidCraft\it''s.exe'"
+            r#"Start-Process -FilePath 'msiexec' -ArgumentList '/i','"C:\Users\a b\Temp\node-cad-update\x.msi"','/passive' -Wait; "#,
+            r"Start-Process -FilePath 'C:\Program Files\NODE CAD\it''s.exe'"
         )
     );
     assert!(out.iter().any(|a| a == "-Command"));

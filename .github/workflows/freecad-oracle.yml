@@ -1,6 +1,6 @@
 # Optional, run by hand: rebuild the reference cases whose expected values come from FreeCAD
 # (tools/freecad-oracle/) and show what changed. FreeCAD runs as a separate program on the runner;
-# it is not a dependency of SolidCraft. Nothing is committed: review the diff and the uploaded
+# it is not a dependency of NØDE CAD. Nothing is committed: review the diff and the uploaded
 # files, then commit them in a pull request if the change is intended.
 name: FreeCAD reference values
 

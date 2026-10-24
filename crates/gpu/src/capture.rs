@@ -1,6 +1,6 @@
 //! Pictures of a [`Scene`] drawn offscreen with the viewport's pipelines ([`crate::view`]): the
 //! same shading, edges, silhouettes, section cap and surface analysis the viewport shows, read
-//! back as RGBA. `solidcraft-cli snapshot`, MCP screenshots, `ui.render` and thumbnails draw
+//! back as RGBA. `node-cad-cli snapshot`, MCP screenshots, `ui.render` and thumbnails draw
 //! through it, on the application's device ([`Capturer::new`]) or on a headless one
 //! ([`Capturer::headless`], [`shared`]). Without a qualifying adapter, the `auto` policy falls
 //! to the last tier, the CPU rasterizer ([`headless_rgba`]), and says so: every picture names the

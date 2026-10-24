@@ -19,7 +19,7 @@ import tempfile
 import time
 import zlib
 
-APP_ID = "ai.storyteller.solidcraft"
+APP_ID = "fr.node_os.cad"
 MAX_PIXELS = 16_000_000
 MAX_PNG_BYTES = 70_000_000
 SANDBOX_PROBE = r'''
@@ -31,7 +31,7 @@ unset WGPU_BACKEND WGPU_BACKENDS
 # The control channel's token (docs/control-protocol.md), set here so this client knows it.
 SOLIDCRAFT_CONTROL_TOKEN=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
 export SOLIDCRAFT_CONTROL_TOKEN
-solidcraft --control 18837 >"$work/app.log" 2>&1 &
+node-cad --control 18837 >"$work/app.log" 2>&1 &
 app=$!
 cleanup() {
   kill "$app" 2>/dev/null || true
@@ -179,10 +179,11 @@ def frame_statistics(png):
 def probe(gl_saved_four=False):
     shell = SANDBOX_PROBE
     if gl_saved_four:
-        shell = shell.replace('solidcraft --control',
-                              'mkdir -p "$XDG_DATA_HOME/solidcraft"\n'
-                              'printf \'{"msaa":4}\' >"$XDG_DATA_HOME/solidcraft/graphics.json"\n'
-                              'export WGPU_BACKEND=gl\nsolidcraft --control')
+        # graphics.json sits in the settings folder (eframe's storage folder for "NODE CAD").
+        shell = shell.replace('node-cad --control',
+                              'mkdir -p "$XDG_DATA_HOME/nodecad"\n'
+                              'printf \'{"msaa":4}\' >"$XDG_DATA_HOME/nodecad/graphics.json"\n'
+                              'export WGPU_BACKEND=gl\nnode-cad --control')
     result = subprocess.run(["flatpak", "run", "--user", "--command=bash", APP_ID, "-c", shell],
                             text=True, capture_output=True, timeout=125)
     if result.returncode:
@@ -197,7 +198,7 @@ def probe(gl_saved_four=False):
     statistics = frame_statistics(base64.b64decode(lines[4], validate=True))
     if (capture["result"]["width"], capture["result"]["height"]) != (statistics["width"], statistics["height"]):
         raise ValueError("presented-frame dimensions disagree")
-    if gl_saved_four and "SolidCraft graphics: Gl, MSAA 1x (requested 4x)" not in result.stderr:
+    if gl_saved_four and "NØDE CAD graphics: Gl, MSAA 1x (requested 4x)" not in result.stderr:
         raise ValueError("forced GL did not apply the safe sample count")
     mode = "GL saved 4x" if gl_saved_four else "default backend"
     print(f"Flatpak desktop PASS: {mode}, renderer={renderer}, box=6000 mm³, frame={statistics}")

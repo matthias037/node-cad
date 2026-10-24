@@ -19,7 +19,7 @@ const MESH_TOL: f64 = 0.01;
 /// Relative tolerance on the principal second moments of the two triangulations.
 const INERTIA_REL: f64 = 2e-3;
 
-/// What SolidCraft built: totals over every body.
+/// What NØDE CAD built: totals over every body.
 struct Got {
     body_count: usize,
     volume: f64,

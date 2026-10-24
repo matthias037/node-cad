@@ -15,7 +15,7 @@ use solidcraft_mcp::{Headless, Server};
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
 /// Whether pictures can be drawn here; installs the renderer the CLI installs, so the MCP
-/// `screenshot` in this process draws as `solidcraft-cli mcp` does.
+/// `screenshot` in this process draws as `node-cad-cli mcp` does.
 fn gpu() -> bool {
     match solidcraft_gpu::capture::shared() {
         Ok(c) => {
@@ -89,7 +89,7 @@ impl Scratch {
 
     fn run(&self, script: &Path, out: &str, extra: &[&str]) -> Output {
         let (w, h) = (SIZE.0.to_string(), SIZE.1.to_string());
-        Command::new(env!("CARGO_BIN_EXE_solidcraft-cli"))
+        Command::new(env!("CARGO_BIN_EXE_node-cad-cli"))
             .arg("snapshot")
             .arg(script)
             .arg("--out")
@@ -308,7 +308,7 @@ fn a_snapshot_shows_the_part_where_the_camera_puts_it() {
 
 /// `snapshot` under a `SOLIDCRAFT_GPU` policy: its reply and stderr.
 fn snapshot_under(dir: &Scratch, script: &Path, out: &str, policy: &str) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_solidcraft-cli"))
+    Command::new(env!("CARGO_BIN_EXE_node-cad-cli"))
         .env("SOLIDCRAFT_GPU", policy)
         .arg("snapshot")
         .arg(script)
@@ -344,13 +344,13 @@ fn a_forced_cpu_snapshot_is_the_cpu_rasterizers_and_says_so() {
 
 /// `hardware` (and `software`) never fall to the CPU rasterizer: without such an adapter the
 /// snapshot fails, naming the policy, and writes nothing; with one it says it was drawn on the GPU.
-/// `auto` lands where `solidcraft-cli gpu` says it does.
+/// `auto` lands where `node-cad-cli gpu` says it does.
 #[test]
 fn a_strict_policy_never_falls_to_the_cpu() {
     let dir = Scratch::new();
     let script = dir.script("part.json", &[]);
     let survey = |policy: &str| {
-        let o = Command::new(env!("CARGO_BIN_EXE_solidcraft-cli")).args(["gpu", "--policy", policy]).output().unwrap();
+        let o = Command::new(env!("CARGO_BIN_EXE_node-cad-cli")).args(["gpu", "--policy", policy]).output().unwrap();
         (o.status.success(), serde_json::from_slice::<Value>(&o.stdout).unwrap_or(Value::Null))
     };
     for policy in ["hardware", "software"] {
@@ -365,7 +365,7 @@ fn a_strict_policy_never_falls_to_the_cpu() {
         } else {
             assert_eq!(report["lands_on"], Value::Null, "{policy}: {report}");
             assert_eq!(output.status.code(), Some(1), "{policy}: {stderr}");
-            assert!(stderr.contains(&format!("`{policy}` policy")) && stderr.contains("solidcraft-cli gpu"), "{policy}: {stderr}");
+            assert!(stderr.contains(&format!("`{policy}` policy")) && stderr.contains("node-cad-cli gpu"), "{policy}: {stderr}");
             assert!(!dir.0.join(format!("{policy}.png")).exists());
         }
     }
@@ -404,7 +404,7 @@ fn a_view_or_a_camera_that_cannot_be_used_is_an_error_and_writes_nothing() {
 /// The usage text says what the new options do.
 #[test]
 fn the_usage_names_the_camera_and_the_guides() {
-    let output = Command::new(env!("CARGO_BIN_EXE_solidcraft-cli")).arg("snapshot").output().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_node-cad-cli")).arg("snapshot").output().unwrap();
     let stderr = String::from_utf8_lossy(&output.stderr);
     for word in ["--camera", "--view", "view.save", "--no-grid", "--no-axes"] {
         assert!(stderr.contains(word), "usage lacks {word}: {stderr}");

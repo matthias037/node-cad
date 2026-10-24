@@ -131,7 +131,7 @@ fn read(root: &Path, locale: &str) -> Result<Map<String, Value>, String> {
 
 /// Command labels the English catalog cannot translate, mapped to the commands that use them.
 ///
-/// The registry is read through `solidcraft-cli commands` so the report comes from the real
+/// The registry is read through `node-cad-cli commands` so the report comes from the real
 /// command table, never from a copy of it.
 fn labels_needing_translation(known: &[&str]) -> BTreeMap<String, Vec<String>> {
     let mut out: BTreeMap<String, Vec<String>> = BTreeMap::new();
@@ -159,7 +159,7 @@ fn registry() -> Result<Vec<Value>, String> {
         .output()
         .map_err(|e| format!("solidcraft-cli: {e}"))?;
     if !out.status.success() {
-        return Err(format!("solidcraft-cli commands failed:\n{}", String::from_utf8_lossy(&out.stderr)));
+        return Err(format!("node-cad-cli commands failed:\n{}", String::from_utf8_lossy(&out.stderr)));
     }
     serde_json::from_slice(&out.stdout).map_err(|e| format!("commands JSON: {e}"))
 }

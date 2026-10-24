@@ -602,7 +602,7 @@ fn file_menu(app: &mut SolveApp, ctx: &egui::Context) {
                     close = true;
                 }
                 ui.separator();
-                // The browser can install SolidCraft as an app (`install`): only while it offers to.
+                // The browser can install NØDE CAD as an app (`install`): only while it offers to.
                 if let Some(offer) = crate::install::offered(app)
                     && crate::context_menu::button(ui, crate::i18n::tr("install.menu"), "new")
                         .on_hover_text(crate::i18n::tr("install.button_tip"))
@@ -667,7 +667,7 @@ fn save_as_with_extension(app: &mut SolveApp, extension: &str) {
     });
 }
 
-/// File > Download design (browser build): the open design as a `.solidcraft` file download.
+/// File > Download design (browser build): the open design as a `.nodecad` file download.
 fn download_design(app: &mut SolveApp) {
     let name = format!("{}.{}", app.session.doc.name, solidcraft_engine::io::DESIGN_EXT);
     let result = app
@@ -1992,7 +1992,7 @@ mod header_report_tests {
     }
 
     /// The browser build's File > Download design hands the open design to the host as a
-    /// `.solidcraft` container named after it; a host that saves real files shows no such item.
+    /// `.nodecad` container named after it; a host that saves real files shows no such item.
     #[test]
     fn file_menu_download_design_hands_the_container_to_the_host() {
         let mut h = crate::scenario::Harness::new();
@@ -2009,7 +2009,7 @@ mod header_report_tests {
         h.step(&json!({"widget":"Download design"})).unwrap();
         let got = got.borrow();
         assert_eq!(got.len(), 1);
-        assert_eq!(got[0].0, "Plate.solidcraft");
+        assert_eq!(got[0].0, "Plate.nodecad");
         assert!(solidcraft_engine::io::is_design_container(&got[0].1));
         assert!(h.app.session.path.is_none(), "a download is no save: the design keeps no file");
     }

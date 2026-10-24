@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Repackage a SolidCraft Linux tarball as a snap:
+# Repackage a NØDE CAD Linux tarball as a snap:
 #
-#   $DIST/solidcraft-<version>-linux-<arch>.snap
+#   $DIST/node-cad-<version>-linux-<arch>.snap
 #
 # Usage: packaging/linux/snap-pack.sh [--destructive-mode] [TARBALL]
 #
-# TARBALL defaults to $DIST/solidcraft-<version>-linux-<arch>.tar.gz from package.sh. The snap is
+# TARBALL defaults to $DIST/node-cad-<version>-linux-<arch>.tar.gz from package.sh. The snap is
 # built for the host architecture (x86_64 or aarch64), which must match the tarball's. Needs
 # snapcraft (`sudo snap install snapcraft --classic`) and, without --destructive-mode, LXD.
 # --destructive-mode builds on the host itself, which must be Ubuntu 24.04 (the core24 base),
 # as in CI. Install and smoke-test the result with:
-#   sudo snap install --dangerous dist/release/solidcraft-<version>-linux-<arch>.snap
+#   sudo snap install --dangerous dist/release/node-cad-<version>-linux-<arch>.snap
 #   python3 packaging/linux/snap-smoke.py
 # Manifest: packaging/linux/snap/snapcraft.yaml.
 set -euo pipefail
@@ -35,7 +35,7 @@ case "$ARCH" in
   aarch64 | arm64) ARCH=aarch64; SNAP_ARCH=arm64 ;;
   *) echo "unsupported architecture $ARCH" >&2; exit 2 ;;
 esac
-BASENAME="solidcraft-$VERSION-linux-$ARCH"
+BASENAME="node-cad-$VERSION-linux-$ARCH"
 TARBALL="${TARBALL:-$DIST/$BASENAME.tar.gz}"
 [ -f "$TARBALL" ] || { echo "error: $TARBALL not found (run packaging/linux/package.sh --formats tar first)" >&2; exit 1; }
 command -v snapcraft >/dev/null || { echo "error: snapcraft not found (sudo snap install snapcraft --classic)" >&2; exit 1; }
@@ -45,13 +45,13 @@ if ! printf '%s' "$VERSION" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9.+~-]{0,31}$'; the
   exit 1
 fi
 
-echo "==> SolidCraft $VERSION snap for $SNAP_ARCH from $(basename "$TARBALL")"
+echo "==> NODE CAD $VERSION snap for $SNAP_ARCH from $(basename "$TARBALL")"
 
 WORK="$CARGO_TARGET_DIR/snap-pack"
 rm -rf "$WORK"
 mkdir -p "$WORK/snap" "$WORK/stage"
 tar -xzf "$TARBALL" -C "$WORK/stage" --strip-components=1
-[ -x "$WORK/stage/bin/solidcraft" ] || { echo "error: $TARBALL has no bin/solidcraft" >&2; exit 1; }
+[ -x "$WORK/stage/bin/node-cad" ] || { echo "error: $TARBALL has no bin/node-cad" >&2; exit 1; }
 cp "$HERE/snap/snapcraft.yaml" "$WORK/snap/snapcraft.yaml"
 printf '%s\n' "$VERSION" >"$WORK/version.txt"
 

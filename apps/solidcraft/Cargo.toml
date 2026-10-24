@@ -1,15 +1,20 @@
 [package]
 name = "solidcraft"
-description = "SolidCraft desktop app"
+description = "NØDE CAD desktop app"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
-default-run = "solidcraft"
+default-run = "node-cad"
 
 # The workspace lints, except unsafe_code: denied, not forbidden, so that src/open_documents.rs
 # (macOS file-open events), src/native_crash.rs (Windows exception filter) and src/native_frame.rs
 # (Windows resize border) can allow it: none has a safe API. Keep the rest in sync with [workspace.lints].
+# The executable is `node-cad`; the package keeps its upstream name so `cargo -p solidcraft` works.
+[[bin]]
+name = "node-cad"
+path = "src/main.rs"
+
 [lints.rust]
 unsafe_code = "deny"
 

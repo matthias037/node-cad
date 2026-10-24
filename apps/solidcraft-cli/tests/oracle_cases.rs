@@ -26,7 +26,7 @@ fn oracle_suite() {
     let children: Vec<_> = (0..n)
         .map(|i| {
             let chunk: Vec<&String> = cases.iter().skip(i).step_by(n).collect();
-            Command::new(env!("CARGO_BIN_EXE_solidcraft-cli"))
+            Command::new(env!("CARGO_BIN_EXE_node-cad-cli"))
                 .current_dir(&root)
                 .arg("oracle")
                 .arg("--json")

@@ -111,7 +111,7 @@ fn load(path: &Path) -> Result<Session, String> {
     }
     let v: Value = serde_json::from_slice(&std::fs::read(path).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     let script = if path.file_name().is_some_and(|n| n == "recipe.json") {
-        let out = Command::new(env!("CARGO_BIN_EXE_solidcraft-cli")).arg("recipe").arg(path).output().map_err(|e| e.to_string())?;
+        let out = Command::new(env!("CARGO_BIN_EXE_node-cad-cli")).arg("recipe").arg(path).output().map_err(|e| e.to_string())?;
         if !out.status.success() {
             return Err(format!("recipe: {}", String::from_utf8_lossy(&out.stderr).trim()));
         }

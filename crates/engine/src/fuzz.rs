@@ -1,4 +1,4 @@
-//! Random modelling sessions for robustness testing (`solidcraft-cli fuzz`, docs/robustness.md).
+//! Random modelling sessions for robustness testing (`node-cad-cli fuzz`, docs/robustness.md).
 //!
 //! A seeded generator builds realistic feature sequences: a base (box, extruded sketch profile
 //! with an arc, revolved section), then joins and cuts of boxes, cylinders and spheres placed on
@@ -69,7 +69,7 @@ pub struct Run {
 }
 
 impl Run {
-    /// The commands as a script for `solidcraft-cli run`.
+    /// The commands as a script for `node-cad-cli run`.
     pub fn script(&self) -> Value {
         Value::Array(self.steps.iter().flat_map(|s| s.commands.iter().map(|(c, p)| json!({"command": c, "params": p}))).collect())
     }

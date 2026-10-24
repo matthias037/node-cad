@@ -259,7 +259,7 @@ mod tests {
             "while running `solid.fillet`",
             "\"radius\": 2",
             "solid.box",
-            "solidcraft-cli crashes replay 20261012-162341-bb60791ed6692f1d",
+            "node-cad-cli crashes replay 20261012-162341-bb60791ed6692f1d",
             "Renderer: test",
             "Recorded 2 time(s)",
         ] {

@@ -77,7 +77,7 @@ def test_execute_returns_the_final_inspection():
 
 
 def test_execute_raises_on_failure():
-    with pytest.raises(run.SolidCraftError, match="step 1"):
+    with pytest.raises(run.NodeCadError, match="step 1"):
         run.execute([{"command": "solid.box", "params": {"width": 10}}])
 
 

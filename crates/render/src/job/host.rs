@@ -354,7 +354,7 @@ impl CpuHost {
             let shared = Self::shared();
             let worker_shared = shared.clone();
             let worker = std::thread::Builder::new()
-                .name("solidcraft-render".into())
+                .name("node-cad-render".into())
                 .spawn(move || native_worker(worker_shared))
                 .map_err(|e| JobError::new(ErrorCode::HostUnavailable, format!("could not start CPU image worker: {e}")))?;
             Ok(Self(Arc::new(Owner { shared, kind: HostKind::NativeWorker, running: Mutex::new(None), _worker: Some(worker) })))

@@ -1,4 +1,4 @@
-# SolidCraft command reference for agents
+# NØDE CAD command reference for agents
 
 These are the shapes of the commands a part build needs, so an agent rarely has to call `list_commands`. The worked example at the end runs in CI (`skill_reference_example_builds_as_documented` in `crates/mcp/src/tests.rs`).
 

@@ -24,7 +24,7 @@
   <string>@SHORT_VERSION@</string>
   <key>CFBundleVersion</key>
   <string>@SHORT_VERSION@</string>
-  <key>SolidCraftVersion</key>
+  <key>NodeCadVersion</key>
   <string>@VERSION@</string>
   <key>CFBundleIconFile</key>
   <string>NODE-CAD</string>
@@ -42,13 +42,27 @@
     <dict>
       <key>CFBundleTypeName</key>
       <string>NØDE CAD design</string>
+      <key>LSItemContentTypes</key>
+      <array><string>fr.node-os.cad.design</string></array>
       <key>CFBundleTypeExtensions</key>
-      <!-- solvecraft: designs saved before the rename (compatibility shim, docs/compatibility.md). -->
-      <array><string>solidcraft</string><string>solvecraft</string></array>
+      <array><string>nodecad</string></array>
       <key>CFBundleTypeRole</key>
       <string>Editor</string>
       <key>LSHandlerRank</key>
       <string>Owner</string>
+    </dict>
+    <!-- Designs saved with the earlier extensions still open (compatibility shim, docs/compatibility.md). -->
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>NØDE CAD design (earlier extension)</string>
+      <key>LSItemContentTypes</key>
+      <array><string>fr.node-os.cad.legacy-design</string></array>
+      <key>CFBundleTypeExtensions</key>
+      <array><string>solidcraft</string><string>solvecraft</string></array>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+      <key>LSHandlerRank</key>
+      <string>Default</string>
     </dict>
     <dict>
       <key>CFBundleTypeName</key>
@@ -59,6 +73,38 @@
       <string>Viewer</string>
       <key>LSHandlerRank</key>
       <string>Alternate</string>
+    </dict>
+  </array>
+  <key>UTExportedTypeDeclarations</key>
+  <array>
+    <dict>
+      <key>UTTypeIdentifier</key>
+      <string>fr.node-os.cad.design</string>
+      <key>UTTypeDescription</key>
+      <string>NØDE CAD design</string>
+      <key>UTTypeConformsTo</key>
+      <array><string>public.data</string></array>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key>
+        <array><string>nodecad</string></array>
+      </dict>
+    </dict>
+  </array>
+  <key>UTImportedTypeDeclarations</key>
+  <array>
+    <dict>
+      <key>UTTypeIdentifier</key>
+      <string>fr.node-os.cad.legacy-design</string>
+      <key>UTTypeDescription</key>
+      <string>NØDE CAD design (earlier extension)</string>
+      <key>UTTypeConformsTo</key>
+      <array><string>public.data</string></array>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key>
+        <array><string>solidcraft</string><string>solvecraft</string></array>
+      </dict>
     </dict>
   </array>
 </dict>

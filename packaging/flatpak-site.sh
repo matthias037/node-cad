@@ -6,7 +6,7 @@ trap 'echo "flatpak-site.sh: line $LINENO: \"$BASH_COMMAND\" failed (exit $?)" >
 
 site="${1:?site directory required}"
 tag="${RELEASE_TAG:-}"
-app_id=ai.storyteller.solidcraft
+app_id=fr.node_os.cad
 # Compatibility shim (docs/compatibility.md): releases before 0.8 used this app id. Its refs stay
 # in the repository, marked end-of-life with a rebase to $app_id once a release under $app_id
 # has been imported. Until then (the latest release is still from before the rename), the
@@ -42,7 +42,7 @@ if curl --fail --silent --location --output /dev/null "$previous_url/summary"; t
   ostree --repo="$repo_dir" remote delete previous
 fi
 for arch in x86_64 aarch64; do
-  asset="solidcraft-$version-linux-$arch.flatpak"
+  asset="node-cad-$version-linux-$arch.flatpak"
   gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$asset" --dir "$bundles"
   (
     cd "$bundles"
@@ -87,25 +87,22 @@ for arch in x86_64 aarch64; do
   fi
   test "$(ostree --repo="$repo_dir" show --print-metadata-key=ostree.endoflife-rebase "$legacy_ref")" = "'app/$app_id/$arch/stable'"
 done
-flatpak build-update-repo --title="SolidCraft" --comment='Official SolidCraft releases' \
-  --description='Official Flatpak repository for SolidCraft' \
+flatpak build-update-repo --title="NODE CAD" --comment='Official NODE CAD releases' \
+  --description='Official Flatpak repository for NODE CAD' \
   --homepage="https://github.com/$GITHUB_REPOSITORY" --default-branch=stable "$repo_dir"
 test -s "$repo_dir/summary"
-cat >"$site/flatpak/solidcraft.flatpakrepo" <<META
+cat >"$site/flatpak/node-cad.flatpakrepo" <<META
 [Flatpak Repo]
-Title=SolidCraft
-Comment=Official SolidCraft releases
-Description=Official Flatpak repository for SolidCraft
+Title=NODE CAD
+Comment=Official NODE CAD releases
+Description=Official Flatpak repository for NODE CAD
 Url=$base_url/flatpak/repo/
 Homepage=https://github.com/$GITHUB_REPOSITORY
 META
 cat >"$site/flatpak/index.html" <<HTML
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SolidCraft Flatpak repository</title></head><body><main><h1>SolidCraft Flatpak repository</h1><p>Latest published release: <strong>$tag</strong></p><p><a href="solidcraft.flatpakrepo">Add the SolidCraft repository</a></p><p>Flathub provides the required Freedesktop runtime. Add both remotes to the same user installation:</p><pre>flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-flatpak remote-add --user --if-not-exists solidcraft $base_url/flatpak/solidcraft.flatpakrepo
-flatpak install --user solidcraft $published_id
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>N&Oslash;DE CAD Flatpak repository</title></head><body><main><h1>N&Oslash;DE CAD Flatpak repository</h1><p>Latest published release: <strong>$tag</strong></p><p><a href="node-cad.flatpakrepo">Add the N&Oslash;DE CAD repository</a></p><p>Flathub provides the required Freedesktop runtime. Add both remotes to the same user installation:</p><pre>flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak remote-add --user --if-not-exists node-cad $base_url/flatpak/node-cad.flatpakrepo
+flatpak install --user node-cad $published_id
 flatpak run $published_id</pre></main></body></html>
 HTML
-# Compatibility shim (docs/compatibility.md): links and instructions from before the rename point
-# at solvecraft.flatpakrepo. Existing remotes keep working either way: they store the repo URL.
-cp "$site/flatpak/solidcraft.flatpakrepo" "$site/flatpak/solvecraft.flatpakrepo"
 touch "$site/.nojekyll"

@@ -1,4 +1,4 @@
-//! `solidcraft-cli fuzz`: random modelling sessions and boolean checks (docs/robustness.md).
+//! `node-cad-cli fuzz`: random modelling sessions and boolean checks (docs/robustness.md).
 //!
 //! Each seed runs in its own process (`fuzz-one`) with a time limit, so a hang or a hard crash
 //! is recorded like any other failure.

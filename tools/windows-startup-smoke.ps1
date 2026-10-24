@@ -2,7 +2,7 @@
 # draws a frame and quits cleanly, with no crash report. The CI runner has no GPU: its D3D12 adapter
 # is WARP, so this exercises the backend order's fallback and the D3D12 path end to end.
 #
-# Usage: tools/windows-startup-smoke.ps1 -Exe target\ci\solidcraft.exe
+# Usage: tools/windows-startup-smoke.ps1 -Exe target\ci\node-cad.exe
 param([Parameter(Mandatory = $true)][string]$Exe)
 $ErrorActionPreference = 'Stop'
 
@@ -23,7 +23,7 @@ foreach ($case in $cases) {
     Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
     # eframe asks Windows for the roaming folder (not %APPDATA%), so the settings go in the
     # runner's real one, emptied for each case.
-    $settings = Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'SolidCraft\data'
+    $settings = Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'NODE CAD\data'
     Remove-Item -Recurse -Force $settings -ErrorAction SilentlyContinue
     $local = Join-Path $root 'local'
     $crashes = Join-Path $root 'crashes'

@@ -471,7 +471,7 @@ impl Harness {
                 v
             } else if let Some(f) = s.get("script").and_then(Value::as_str) {
                 // A command script (`{"commands": [{command, params}]}`, path from the repository
-                // root) run through the engine, as `solidcraft-cli run` does.
+                // root) run through the engine, as `node-cad-cli run` does.
                 let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(f);
                 let text = std::fs::read_to_string(&path).map_err(|e| format!("{f}: {e}"))?;
                 let v: Value = serde_json::from_str(&text).map_err(|e| format!("{f}: {e}"))?;

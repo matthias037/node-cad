@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Demo v2/v3: build an electronics enclosure in a running SolidCraft the way a person would,
+"""Demo v2/v3: build an electronics enclosure in a running NØDE CAD the way a person would,
 with the parametric steps sent over MCP.
 
 --story pi (default, the 0.8 README demo): a case for a Raspberry Pi 4, from a sketch dimensioned
@@ -12,8 +12,8 @@ model under the pointer.
 Rectangular Pattern dialog, then width and wall changed in the Parameters dialog.
 --story v2: four standoffs from one sketch, then the width changed over MCP.
 
-    solidcraft --control 7878 &
-    python3 examples/demo/enclosure_ui_mcp.py --port 7878 --cli solidcraft-cli [--story v2|v3]
+    node-cad --control 7878 &
+    python3 examples/demo/enclosure_ui_mcp.py --port 7878 --cli node-cad-cli [--story v2|v3]
 
 Modelling steps go through the app's UI over its control channel: the pointer glides to a
 toolbar button and clicks it (the real dialog opens), glides to the face or point it picks and
@@ -21,7 +21,7 @@ clicks, and values are typed into the dialog, as by hand. The port and boss sket
 directly to the enclosure's side face and inner floor, as in the original demo.
 The camera follows like a user's would (Look At on a new sketch, back out to a 3/4 view on
 Finish Sketch, a little orbit between features). The parameters and the dimensions that use them
-are MCP `execute` calls through `solidcraft-cli mcp --connect` (enclosure_mcp.py's client).
+are MCP `execute` calls through `node-cad-cli mcp --connect` (enclosure_mcp.py's client).
 
 --log writes one JSON line per caption and per pointer event, which record.sh turns into burnt-in
 captions and a drawn cursor (the app gets synthetic pointer events, so the screen's own pointer
@@ -723,7 +723,7 @@ def run_pi(d, release="0.8"):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--port", type=int, default=7878, help="the app's --control port")
-    ap.add_argument("--cli", default="solidcraft-cli", help="path to solidcraft-cli")
+    ap.add_argument("--cli", default="node-cad-cli", help="path to node-cad-cli")
     ap.add_argument("--log", help="write a JSON line per caption and pointer event")
     ap.add_argument("--story", choices=["v2", "v3", "pi", "pi-0.6"], default="pi", help="v2: standoffs from one sketch, width over MCP; v3: one standoff patterned, Parameters dialog; pi: the 0.8 README demo, a Raspberry Pi 4 case; pi-0.6: the 0.6 one")
     ap.add_argument("--until", type=int, default=10**6, help="stop before step N (trying the script out)")

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Build an electronics enclosure in a running SolidCraft over MCP, one command at a time.
+"""Build an electronics enclosure in a running NØDE CAD over MCP, one command at a time.
 
-    solidcraft --control 7878 &
+    node-cad --control 7878 &
     python3 examples/demo/enclosure_mcp.py --port 7878
 
-The script is a minimal MCP client: it starts `solidcraft-cli mcp --connect 127.0.0.1:PORT`
+The script is a minimal MCP client: it starts `node-cad-cli mcp --connect 127.0.0.1:PORT`
 (stdio, JSON-RPC 2.0, one message per line), initializes, then sends one `execute` tool call
 per step of enclosure_steps.json, waiting `pause` seconds after each so the timeline can be
 watched growing. Camera moves (fit, home view, the closing orbit) go over the app's control
@@ -25,7 +25,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 class Mcp:
-    """A stdio MCP client for `solidcraft-cli mcp`."""
+    """A stdio MCP client for `node-cad-cli mcp`."""
 
     def __init__(self, argv):
         self.p = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
@@ -72,9 +72,9 @@ def control_token(port):
     if os.environ.get("SOLIDCRAFT_CONTROL_DIR"):
         folder = Path(os.environ["SOLIDCRAFT_CONTROL_DIR"])
     elif sys.platform == "win32":
-        folder = Path(os.environ["LOCALAPPDATA"]) / "SolidCraft" / "control"
+        folder = Path(os.environ["LOCALAPPDATA"]) / "NODE CAD" / "control"
     elif sys.platform == "darwin":
-        folder = Path.home() / "Library/Application Support/SolidCraft/control"
+        folder = Path.home() / "Library/Application Support/NODE CAD/control"
     else:
         data = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local/share")
         folder = Path(data) / "solidcraft" / "control"
@@ -98,7 +98,7 @@ def control(port, method, params=None):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--port", type=int, default=7878, help="the app's --control port")
-    ap.add_argument("--cli", default="solidcraft-cli", help="path to solidcraft-cli")
+    ap.add_argument("--cli", default="node-cad-cli", help="path to node-cad-cli")
     ap.add_argument("--steps", default=os.path.join(HERE, "enclosure_steps.json"))
     ap.add_argument("--pause", type=float, default=2.5, help="seconds after each step (unless the step says)")
     ap.add_argument("--log", help="write a JSON line per step: {t, caption, command}")

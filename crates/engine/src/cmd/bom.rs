@@ -21,7 +21,7 @@ pub static COMMANDS: &[CommandSpec] = &[
     ),
     CommandSpec::new("component.metadata.set", "Change Part Properties", set).icon("settings").doc_only().params(
         "component: id or name (not the root: use document.metadata.set); part_number?, description?, revision?: text (empty or null \
-         removes); values?: {key: value} (SolidCraft's keys project, part_number, revision, author, organization, description, \
+         removes); values?: {key: value} (NØDE CAD's keys project, part_number, revision, author, organization, description, \
          license, or a reverse-DNS key holding an object); properties?: {name: text, …} (free properties; empty or null removes). \
          All or nothing, one undo step → component, metadata, properties, changed: [keys]",
     ),

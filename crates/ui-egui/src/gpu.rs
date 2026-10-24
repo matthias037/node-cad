@@ -1,6 +1,6 @@
 //! The GPU viewport in egui: the viewport's pipelines ([`solidcraft_gpu::view`]) drawn in an
 //! `egui_wgpu` paint callback. Everything that draws lives in the GPU crate, so headless pictures
-//! (`solidcraft-cli snapshot`, MCP screenshots, `ui.render`) use the same pipelines; this is the
+//! (`node-cad-cli snapshot`, MCP screenshots, `ui.render`) use the same pipelines; this is the
 //! glue that hands them egui's device and render pass.
 
 #[cfg(all(test, not(target_arch = "wasm32")))]

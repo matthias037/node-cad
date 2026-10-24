@@ -1,5 +1,5 @@
 //! SolidCraft's licence texts and the third-party licences, built into every program so a single
-//! downloaded executable carries them (Help ▸ About ▸ Licences, `solidcraft-cli licences`).
+//! downloaded executable carries them (Help ▸ About ▸ Licences, `node-cad-cli licences`).
 //! THIRD-PARTY-LICENSES.txt is written by `cargo xtask licences` and checked by `cargo xtask ci`.
 
 pub const LICENSE_MIT: &str = include_str!("../../../LICENSE-MIT");

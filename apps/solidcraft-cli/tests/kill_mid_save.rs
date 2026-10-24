@@ -12,7 +12,7 @@ fn round_of(path: &std::path::Path) -> Option<String> {
 
 #[test]
 fn killed_mid_save_the_old_file_survives() {
-    let exe = env!("CARGO_BIN_EXE_solidcraft-cli");
+    let exe = env!("CARGO_BIN_EXE_node-cad-cli");
     let dir = std::env::temp_dir().join(format!("solidcraft-kill-mid-save-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();

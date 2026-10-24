@@ -61,7 +61,7 @@ fn catalog_clicked_load_apply_export_and_ok_keep_one_design_undo_step() {
     assert_eq!(h.app.session.undo.len(), undo + 1);
     let revision = h.app.session.revision;
     h.step(&json!({"widget":"Export design library..."})).unwrap();
-    let exported = h.dir.join("my-library.solidcraft-library.json");
+    let exported = h.dir.join("my-library.nodecad-library.json");
     let catalog = Catalog::read(&exported.to_string_lossy()).unwrap();
     assert_eq!(catalog.entries.len(), 1);
     assert_eq!(catalog.entries[0].definition.name(), "Warm oak colour");

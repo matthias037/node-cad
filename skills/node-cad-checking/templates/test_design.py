@@ -1,6 +1,6 @@
-"""Regression test for a SolidCraft design. One session walks the parameters through the cases in
+"""Regression test for a NØDE CAD design. One session walks the parameters through the cases in
 order, as edits in the app do, and compares a body after each case with frozen values.
-Copy next to the design, then fill in DESIGN, BODY and CASES. Needs solidcraft-cli on PATH."""
+Copy next to the design, then fill in DESIGN, BODY and CASES. Needs node-cad-cli on PATH."""
 
 import json
 import subprocess
@@ -13,7 +13,7 @@ import pytest
 
 DESIGN = Path(__file__).parent / "design.json"
 BODY = "Body"
-# SolidCraft measures a tessellation, and its volume and area error depends on the shape. Measure it
+# NØDE CAD measures a tessellation, and its volume and area error depends on the shape. Measure it
 # for this design: run.py's BODY volume against the OCCT volume compare_step.py prints for the
 # design's own STEP export (compared with itself). Set REL to about 3 times that error.
 REL = 2e-4
@@ -52,7 +52,7 @@ def inspections() -> dict:
         script = Path(tmp) / "script.json"
         script.write_text(json.dumps({"commands": commands}))
         done = subprocess.run(
-            ["solidcraft-cli", "run", script, "--in", DESIGN, "--results"], capture_output=True, text=True
+            ["node-cad-cli", "run", script, "--in", DESIGN, "--results"], capture_output=True, text=True
         )
     assert done.returncode == 0, done.stderr
     results = json.loads(done.stdout)

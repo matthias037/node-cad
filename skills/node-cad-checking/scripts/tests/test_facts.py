@@ -1,5 +1,5 @@
-"""SolidCraft behaviour that SKILL.md states, and the facts behind the corrections in
-solidcraft-modeling. A failure here means the skill text is out of date."""
+"""NØDE CAD behaviour that SKILL.md states, and the facts behind the corrections in
+node-cad-modeling. A failure here means the skill text is out of date."""
 
 import json
 import subprocess
@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
-from run import SolidCraftError, execute, run_commands  # noqa: E402
+from run import NodeCadError, execute, run_commands  # noqa: E402
 
 
 def cmd(command: str, /, **params) -> dict:
@@ -60,7 +60,7 @@ def holes(count: str) -> list:
 # Traps
 
 def test_a_dimension_driven_to_zero_can_break_the_next_change():
-    with pytest.raises(SolidCraftError, match="would conflict"):
+    with pytest.raises(NodeCadError, match="would conflict"):
         execute([
             cmd("parameters.add", name="y", expression="5 mm"),
             cmd("sketch.create", plane="XY", name="Pin sketch"),
@@ -122,7 +122,7 @@ def centred_row(position: list) -> list:
 
 
 def test_a_position_measured_from_an_anchor_point_survives_reaching_zero():
-    with pytest.raises(SolidCraftError, match="would conflict"):
+    with pytest.raises(NodeCadError, match="would conflict"):
         execute(centred_row([
             cmd("sketch.dimension", entities=["origin", "c1.center"], type="horizontal", value="(n - 1) / 2 * 10 mm"),
         ]))
@@ -136,7 +136,7 @@ def test_a_position_measured_from_an_anchor_point_survives_reaching_zero():
 
 
 def test_pattern_counts_run_from_1_to_1000_and_a_range_rule_does_not_stop_0():
-    with pytest.raises(SolidCraftError, match="pattern count must be 1…1000"):
+    with pytest.raises(NodeCadError, match="pattern count must be 1…1000"):
         execute([
             *holes("2"),
             cmd("config.configure", params=["n"]),
@@ -210,7 +210,7 @@ def test_centre_of_mass_and_bounding_box_measure_within_5e_5_of_the_part_size():
 def test_expressions_have_no_conditionals_and_sign_of_zero_is_one():
     def evaluate(expression):
         done = subprocess.run(
-            ["solidcraft-cli", "exec", "expr.evaluate", json.dumps({"expression": expression, "kind": "unitless"})],
+            ["node-cad-cli", "exec", "expr.evaluate", json.dumps({"expression": expression, "kind": "unitless"})],
             capture_output=True, text=True,
         )
         return json.loads(done.stdout)
@@ -219,7 +219,7 @@ def test_expressions_have_no_conditionals_and_sign_of_zero_is_one():
     assert evaluate("sign(0)")["value"] == 1
     assert evaluate("sign(-3)")["value"] == -1
     assert evaluate("log(100)")["value"] == 2
-    with pytest.raises(SolidCraftError, match="got an angle"):
+    with pytest.raises(NodeCadError, match="got an angle"):
         execute([cmd("parameters.add", name="a", expression="atan(1)", unit="")])
 
 
@@ -229,7 +229,7 @@ def test_a_point_created_on_the_origin_snaps_to_it():
 
 def test_symmetric_rectangle_sides_conflict_and_corners_do_not():
     rectangle = [cmd("sketch.create", plane="XY"), cmd("sketch.rectangle.two_point", p0=[-10, 2], p1=[10, 8])]
-    with pytest.raises(SolidCraftError, match="conflicts"):
+    with pytest.raises(NodeCadError, match="conflicts"):
         execute([*rectangle, cmd("sketch.constraint.symmetry", a="l4", b="l2", line="y")])
     execute([*rectangle, cmd("sketch.constraint.symmetry", a="p1", b="p2", line="y")])
 
@@ -293,7 +293,7 @@ def test_a_later_join_fills_an_earlier_cut():
 def test_a_failed_feature_names_itself_and_saves_nothing(tmp_path):
     design = tmp_path / "design.json"
     run_commands(holes("2"), save=design)
-    with pytest.raises(SolidCraftError, match="Row: pattern count"):
+    with pytest.raises(NodeCadError, match="Row: pattern count"):
         run_commands([cmd("parameters.change", name="n", expression="0")], design=design, save=tmp_path / "out.json")
     assert not (tmp_path / "out.json").exists()
 
@@ -303,12 +303,12 @@ def test_a_command_script_works_as_a_design(tmp_path):
     script.write_text(json.dumps({"commands": BLOCK}))
     assert execute([], design=script)["bodies"][0]["volume_mm3"] == pytest.approx(40 * 40 * 12)
     shot = tmp_path / "shot.png"
-    subprocess.run(["solidcraft-cli", "snapshot", script, "--out", shot, "--width", "64", "--height", "64"],
+    subprocess.run(["node-cad-cli", "snapshot", script, "--out", shot, "--width", "64", "--height", "64"],
                    capture_output=True, check=True)
     assert shot.stat().st_size > 0
 
 
-# Corrections to solidcraft-modeling
+# Corrections to node-cad-modeling
 
 def slot_along_y(last: dict) -> list:
     return [
@@ -322,7 +322,7 @@ def slot_along_y(last: dict) -> list:
 
 
 def test_a_slot_along_y_takes_a_horizontal_dimension_on_its_second_arc():
-    with pytest.raises(SolidCraftError, match="over-constrain"):
+    with pytest.raises(NodeCadError, match="over-constrain"):
         execute(slot_along_y(cmd("sketch.dimension", entities=["origin", "a2.center"], type="vertical", value="33 mm")))
     assert sketch_dof(slot_along_y(
         cmd("sketch.dimension", entities=["origin", "a2.center"], type="horizontal", value="10 mm"))) == 0
@@ -338,7 +338,7 @@ FILLET_CENTROID = (10 - 3 * pi) / (12 - 3 * pi)  # distance of a fillet's cross-
 
 
 def test_an_open_rim_is_rounded_after_the_shell():
-    with pytest.raises(SolidCraftError, match="offset"):
+    with pytest.raises(NodeCadError, match="offset"):
         execute([*OPEN_BOX, RIM, SHELL])
     outer = (40 * 30 - (4 - pi) * 9) * 20
     cavity = (36 * 26 - (4 - pi) * 1) * 18

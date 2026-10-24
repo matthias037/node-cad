@@ -38,9 +38,8 @@ export DIST
 export SOLIDCRAFT_BUILD_DATE="${SOLIDCRAFT_BUILD_DATE:-${SOLVECRAFT_BUILD_DATE:-$(date -u +%Y-%m-%d)}}"
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/target}"
 # The reverse-DNS id: Flatpak app id, desktop, metainfo and MIME file names, icon name and the
-# window's Wayland app_id / X11 class. Releases before 0.8 used ai.storyteller.solvecraft; the
-# Flatpak repository rebases that id to this one (packaging/flatpak-site.sh, docs/compatibility.md).
-APP_ID=ai.storyteller.solidcraft
+# window's Wayland app_id / X11 class.
+APP_ID=fr.node_os.cad
 export APP_ID
 
 # Emit a GitHub Actions warning (plain stderr outside Actions).
@@ -49,7 +48,7 @@ warn() {
 }
 
 # Copy the licence, notice and readme files into a package directory. The programs also carry
-# them (Help > About > Licences, `solidcraft-cli licences`).
+# them (Help > About > Licences, `node-cad-cli licences`).
 copy_docs() {
   local dest="$1" f
   for f in README.md LICENSE-MIT LICENSE-APACHE NOTICE THIRD-PARTY-LICENSES.txt; do

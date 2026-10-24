@@ -8,10 +8,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").ok_or("missing OUT_DIR")?);
-    let copy = out.join("solidcraft.ico");
+    let copy = out.join("node-cad.ico");
     std::fs::copy(icon, &copy)?;
-    let rc = out.join("solidcraft.rc");
+    let rc = out.join("node-cad.rc");
     std::fs::write(&rc, format!("1 ICON \"{}\"\n", copy.display().to_string().replace('\\', "/")))?;
-    embed_resource::compile_for(&rc, ["solidcraft"], embed_resource::NONE).manifest_required()?;
+    embed_resource::compile_for(&rc, ["node-cad"], embed_resource::NONE).manifest_required()?;
     Ok(())
 }

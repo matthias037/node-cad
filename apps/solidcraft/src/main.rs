@@ -1,6 +1,6 @@
-//! SolidCraft desktop app.
+//! NØDE CAD desktop app.
 //!
-//! Usage: `solidcraft [--control <port>] [--sample] [--crash-log] [--safe-mode] [design.solidcraft | part.step]`
+//! Usage: `node-cad [--control <port>] [--sample] [--crash-log] [--safe-mode] [design.nodecad | part.step]`
 //!
 //! `--safe-mode` (or `SOLIDCRAFT_SAFE_MODE=1`) starts with default settings, no recovery offer and
 //! the software renderer; see `startup` and docs/book/src/guide/troubleshooting.md.
@@ -376,7 +376,7 @@ fn agent_http(r: &solidcraft_ui_egui::agent_chat::backend::HttpRequest) -> Resul
     Ok((status, body))
 }
 
-/// API keys in the system keychain (service "SolidCraft agent chat", one entry per agent).
+/// API keys in the system keychain (service "NODE CAD agent chat", one entry per agent).
 struct Keychain;
 
 impl Keychain {
@@ -569,7 +569,7 @@ fn main() -> eframe::Result {
             "--sample" => sample = true,
             "--safe-mode" => safe_mode = true,
             "--version" | "-V" => {
-                println!("solidcraft {}", env!("CARGO_PKG_VERSION"));
+                println!("node-cad {}", env!("CARGO_PKG_VERSION"));
                 return Ok(());
             }
             "--crash-log" => {
@@ -579,14 +579,14 @@ fn main() -> eframe::Result {
                         for r in solidcraft_engine::crash::list(&dir).iter().take(5) {
                             println!("  {}  {}  {}", r.id, r.kind, r.message);
                         }
-                        println!("more: solidcraft-cli crashes");
+                        println!("more: node-cad-cli crashes");
                     }
                     None => println!("no crash folder on this system"),
                 }
                 return Ok(());
             }
             "--help" | "-h" => {
-                println!("usage: solidcraft [--control PORT] [--sample] [--crash-log] [--safe-mode] [design.solidcraft | part.step]");
+                println!("usage: node-cad [--control PORT] [--sample] [--crash-log] [--safe-mode] [design.nodecad | part.step]");
                 return Ok(());
             }
             _ => files.push(a),

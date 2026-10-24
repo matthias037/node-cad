@@ -1,13 +1,13 @@
 //! What the engine logs (`log::info!`, `log::debug!`: why a body has no display plan, why a save
 //! left its model cache out), written to stderr. Off unless asked for, so the CLI's output and
-//! the scripts reading it stay as they are: `--debug` shows SolidCraft's own debug messages (and
+//! the scripts reading it stay as they are: `--debug` shows the app's own debug messages (and
 //! other crates' warnings, whose debug output is large), `RUST_LOG=error|warn|info|debug|trace`
 //! sets one level for every crate.
 
 use log::{LevelFilter, Log, Metadata, Record};
 
 struct Stderr {
-    /// The level for SolidCraft's crates.
+    /// The level for the app's own crates.
     ours: LevelFilter,
     /// The level for every other crate.
     others: LevelFilter,
@@ -15,7 +15,9 @@ struct Stderr {
 
 impl Log for Stderr {
     fn enabled(&self, m: &Metadata) -> bool {
-        m.level() <= if m.target().starts_with("solidcraft") { self.ours } else { self.others }
+        // The crates are `solidcraft_*`; the CLI binary itself is `node_cad_cli`.
+        let ours = ["solidcraft", "node_cad"].iter().any(|p| m.target().starts_with(p));
+        m.level() <= if ours { self.ours } else { self.others }
     }
 
     fn log(&self, r: &Record) {

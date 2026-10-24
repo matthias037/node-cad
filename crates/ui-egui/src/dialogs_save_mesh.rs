@@ -331,7 +331,7 @@ pub fn run(app: &mut SolveApp, k: &SaveMesh, inputs: &[SelInput]) -> Result<(), 
         p.save_mesh_slicer = k.slicer.clone();
     }
     if k.send {
-        let dir = std::env::temp_dir().join("solidcraft-slicer");
+        let dir = std::env::temp_dir().join("node-cad-slicer");
         std::fs::create_dir_all(&dir)
             .map_err(|e| crate::i18n::format("ui.save_mesh_temp_failed", &[("folder", &dir.display().to_string()), ("error", &e.to_string())]))?;
         let file: String = name.chars().map(|c| if c.is_alphanumeric() || "-_. ".contains(c) { c } else { '_' }).collect();
