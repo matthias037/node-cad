@@ -1194,6 +1194,16 @@ pub(super) fn radius_arg(p: &Value, cmd: &str) -> Result<f64> {
 /// design's parameters ("10 mm", "d_trou / 2") evaluated now. Agents write sizes as text and
 /// parameter names as often as numbers, and were refused for it with a message that did not say
 /// why.
+/// A slot's width: a number in mm or a length expression (`"oblong_largeur"`), positive.
+pub(super) fn slot_width(s: &Session, p: &Value, cmd: &str) -> Result<f64> {
+    let w = match p.get("width") {
+        Some(Value::Number(n)) => n.as_f64(),
+        Some(Value::String(e)) => Some(s.doc.eval(e, Kind::Length).map_err(|err| bad(cmd, format!("`width`: {err}")))?),
+        _ => None,
+    };
+    w.filter(|w| *w > 1e-9).ok_or_else(|| bad(cmd, "`width` must be positive (a number in mm or an expression)"))
+}
+
 fn circle_radius(s: &Session, p: &Value, cmd: &str) -> Result<f64> {
     let size = |key: &str| -> Result<Option<f64>> {
         match p.get(key) {
@@ -1230,7 +1240,23 @@ fn circle_center(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok((ids_of(sk, &[ci]), cons))
     })?;
-    Ok(result(out, info))
+    // A size given as an expression of parameters drives the circle from then on (a diameter or
+    // radius dimension), so a part family follows it: `diameter: "D"` grows with D.
+    let driven = ["diameter", "radius"].iter().find_map(|k| p.get(*k).and_then(Value::as_str).filter(|e| !plain_length(e)).map(|e| (*k, e.to_string())));
+    let curve = out.0.first().cloned();
+    let mut reply = result(out, info);
+    if let (Some((kind, e)), Some(curve)) = (driven, curve)
+        && s.execute("sketch.dimension", &json!({"entities": [curve], "type": kind, "value": e})).is_ok()
+    {
+        reply["driven_by"] = json!(e);
+    }
+    Ok(reply)
+}
+
+/// A length written as a bare number with or without its unit ("12", "12 mm"): nothing for a
+/// dimension to follow.
+fn plain_length(e: &str) -> bool {
+    e.trim().trim_end_matches(|c: char| c.is_ascii_alphabetic()).trim().parse::<f64>().is_ok()
 }
 
 fn circle_two(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1441,14 +1467,14 @@ pub(super) fn slot(s: &mut Session, p: &Value, cmd: &str, c0: Vec2, c1: Vec2, w:
 fn slot_c2c(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.slot.center_to_center";
     let (a, b) = (point_arg(s, p, "p0", cmd)?, point_arg(s, p, "p1", cmd)?);
-    let w = num(p, "width").filter(|w| *w > 1e-9).ok_or_else(|| bad(cmd, "`width` must be positive"))?;
+    let w = slot_width(s, p, cmd)?;
     slot(s, p, cmd, a, b, w)
 }
 
 fn slot_overall(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.slot.overall";
     let (a, b) = (point_arg(s, p, "p0", cmd)?, point_arg(s, p, "p1", cmd)?);
-    let w = num(p, "width").filter(|w| *w > 1e-9).ok_or_else(|| bad(cmd, "`width` must be positive"))?;
+    let w = slot_width(s, p, cmd)?;
     let d = (b - a).normalized().ok_or_else(|| bad(cmd, "the slot ends must differ"))?;
     if a.dist(b) <= w {
         return Err(bad(cmd, "the slot must be longer than it is wide"));

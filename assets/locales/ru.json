@@ -535,6 +535,7 @@
   "cmd.inspect_accessibility": "Анализ доступности",
   "cmd.inspect_center_of_mass": "Центр масс",
   "cmd.inspect_clearance": "Зазор",
+  "cmd.inspect_machining": "Обрабатываемость",
   "cmd.inspect_compare": "Сравнить тела",
   "cmd.inspect_continuity": "Анализ непрерывности",
   "cmd.inspect_curvature_comb": "Анализ кривизны (гребёнка)",

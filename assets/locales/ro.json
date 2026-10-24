@@ -535,6 +535,7 @@
   "cmd.inspect_accessibility": "Analiza accesibilității",
   "cmd.inspect_center_of_mass": "Centru de masă",
   "cmd.inspect_clearance": "Joc",
+  "cmd.inspect_machining": "Prelucrabilitate",
   "cmd.inspect_compare": "Compară corpurile",
   "cmd.inspect_continuity": "Analiza continuității",
   "cmd.inspect_curvature_comb": "Analiza pieptenelui de curbură",

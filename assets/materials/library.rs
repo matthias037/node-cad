@@ -2,7 +2,7 @@
 pub const DEFAULT_DENSITY: f64 = 1.29;
 
 /// Physical materials: name and density (g/cm³).
-pub const MATERIALS: [(&str, f64); 14] = [
+pub const MATERIALS: [(&str, f64); 18] = [
     ("Default", DEFAULT_DENSITY),
     ("Steel", 7.85),
     ("Stainless Steel", 8.0),
@@ -17,6 +17,11 @@ pub const MATERIALS: [(&str, f64); 14] = [
     ("Polycarbonate", 1.20),
     ("Oak", 0.75),
     ("Glass", 2.50),
+    // Shop materials: bearing bronze (CuSn8), acetal, PEEK and PTFE.
+    ("Bronze", 8.80),
+    ("POM", 1.41),
+    ("PEEK", 1.32),
+    ("PTFE", 2.20),
 ];
 
 /// How a physical material looks (sRGB); the default material has no colour of its own.
@@ -35,6 +40,10 @@ pub fn material_color(name: &str) -> Option<[u8; 3]> {
         "Polycarbonate" => [196, 216, 232],
         "Oak" => [190, 146, 92],
         "Glass" => [170, 208, 218],
+        "Bronze" => [176, 128, 72],
+        "POM" => [240, 238, 232],
+        "PEEK" => [214, 196, 160],
+        "PTFE" => [244, 244, 240],
         _ => return None,
     })
 }

@@ -536,6 +536,7 @@
   "cmd.inspect_accessibility": "Phân tích khả năng gia công tiếp cận",
   "cmd.inspect_center_of_mass": "Trọng tâm",
   "cmd.inspect_clearance": "Khoảng cách an toàn",
+  "cmd.inspect_machining": "Khả năng gia công",
   "cmd.inspect_compare": "So sánh các thân khối",
   "cmd.inspect_continuity": "Phân tích độ liên tục mặt",
   "cmd.inspect_curvature_comb": "Phân tích lược độ cong (Curvature Comb)",

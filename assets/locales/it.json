@@ -539,6 +539,7 @@
   "cmd.inspect_accessibility": "Analisi di accessibilità",
   "cmd.inspect_center_of_mass": "Centro di massa",
   "cmd.inspect_clearance": "Distanza libera",
+  "cmd.inspect_machining": "Lavorabilità",
   "cmd.inspect_compare": "Confronta corpi",
   "cmd.inspect_continuity": "Analisi di continuità",
   "cmd.inspect_curvature_comb": "Analisi del pettine di curvatura",

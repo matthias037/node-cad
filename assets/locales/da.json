@@ -536,6 +536,8 @@
   "cmd.inspect_accessibility": "Tilgængelighedsanalyse",
   "cmd.inspect_center_of_mass": "Massecentrum",
   "cmd.inspect_clearance": "Frigangskontrol",
+  "cmd.inspect_machining": "Bearbejdelighed",
+  "cmd.inspect_machining": "Bearbejdelighed",
   "cmd.inspect_compare": "Sammenlign emner",
   "cmd.inspect_continuity": "Kontinuitetsanalyse",
   "cmd.inspect_curvature_comb": "Krumningskamanalyse",

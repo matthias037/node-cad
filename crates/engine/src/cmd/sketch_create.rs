@@ -916,14 +916,14 @@ fn circle_three_tan(s: &mut Session, p: &Value) -> Result<Value> {
     tangent_circle(s, p, "sketch.circle.three_tangent", 3, None)
 }
 
-fn width(p: &Value, cmd: &str) -> Result<f64> {
-    num(p, "width").filter(|w| *w > 1e-9).ok_or_else(|| bad(cmd, "`width` must be positive"))
+fn width(s: &Session, p: &Value, cmd: &str) -> Result<f64> {
+    super::sketch::slot_width(s, p, cmd)
 }
 
 fn slot_center_point(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.slot.center_point";
     let (c, e) = (super::sketch::point_arg(s, p, "center", cmd)?, super::sketch::point_arg(s, p, "end", cmd)?);
-    let w = width(p, cmd)?;
+    let w = width(s, p, cmd)?;
     slot(s, p, cmd, c * 2.0 - e, e, w)
 }
 
@@ -966,7 +966,7 @@ fn arc_slot_three(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.slot.arc_three_point";
     let (a, t, b) =
         (super::sketch::point_arg(s, p, "start", cmd)?, super::sketch::point_arg(s, p, "through", cmd)?, super::sketch::point_arg(s, p, "end", cmd)?);
-    let w = width(p, cmd)?;
+    let w = width(s, p, cmd)?;
     let (o, r) = circumcircle(a, t, b).ok_or_else(|| bad(cmd, "the points are collinear"))?;
     let ang = |q: Vec2| (q - o).angle();
     let span = |from: f64, to: f64| (to - from).rem_euclid(std::f64::consts::TAU);
@@ -979,7 +979,7 @@ fn arc_slot_center(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.slot.arc_center";
     let (o, a, b) =
         (super::sketch::point_arg(s, p, "center", cmd)?, super::sketch::point_arg(s, p, "start", cmd)?, super::sketch::point_arg(s, p, "end", cmd)?);
-    let w = width(p, cmd)?;
+    let w = width(s, p, cmd)?;
     let r = o.dist(a);
     if r < 1e-9 || o.dist(b) < 1e-9 {
         return Err(bad(cmd, "the points must differ from the centre"));

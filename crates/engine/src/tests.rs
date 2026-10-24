@@ -4192,3 +4192,156 @@ fn a_primitive_refuses_a_parameter_it_does_not_read() {
     s.execute("solid.sphere", &json!({"radius": 5, "center": [0, 0, 300], "body_name": "Boule"})).unwrap();
     assert_eq!(s.model.state().bodies.len(), 2);
 }
+
+/// `inspect.machining`: a pocket's sharp internal corners along the tool, internal rounds
+/// smaller than the tool's radius, and holes deeper than a drill reaches; outside edges and
+/// ordinary holes are fine.
+#[test]
+fn machining_finds_what_an_end_mill_and_a_drill_cannot_make() {
+    let mut s = Session::default();
+    run(&mut s, "solid.box", json!({"length": 100, "width": 80, "height": 30, "body_name": "Bloc"}));
+    run(&mut s, "sketch.create", json!({"plane": "XY", "offset": 30}));
+    run(&mut s, "sketch.rectangle.two_point", json!({"p0": [20, 20], "p1": [80, 60]}));
+    run(&mut s, "sketch.finish", json!({}));
+    run(&mut s, "solid.extrude", json!({"distance": -10, "operation": "cut"}));
+    run(&mut s, "solid.hole", json!({"position": [90, 70, 30], "diameter": 10}));
+    let r = run(&mut s, "inspect.machining", json!({}));
+    let body = &r["bodies"][0];
+    assert_eq!(body["sharp_corners"].as_array().map(Vec::len), Some(4), "{r}");
+    assert_eq!(body["deep_holes"], json!([]), "{r}");
+    assert_eq!(body["small_radii"], json!([]), "{r}");
+    assert_eq!(r["ok"], false);
+    // Rounded to 3 mm, the corners pass a Ø6 end mill and not a Ø8 one.
+    run(&mut s, "solid.fillet", json!({"edges": [[20, 20, 25], [80, 20, 25], [80, 60, 25], [20, 60, 25]], "radius": 3}));
+    let r = run(&mut s, "inspect.machining", json!({"tool_diameter": 6}));
+    assert_eq!(r["ok"], true, "{r}");
+    let r = run(&mut s, "inspect.machining", json!({"tool_diameter": 8}));
+    assert_eq!(r["bodies"][0]["small_radii"].as_array().map(Vec::len), Some(4), "{r}");
+    // A Ø3 hole 30 deep: ten diameters is the default reach.
+    run(&mut s, "solid.hole", json!({"position": [10, 10, 30], "diameter": 2.5}));
+    let r = run(&mut s, "inspect.machining", json!({}));
+    let deep = r["bodies"][0]["deep_holes"].as_array().cloned().unwrap_or_default();
+    assert!(deep.len() == 1 && (deep[0]["diameter"].as_f64().unwrap() - 2.5).abs() < 1e-6, "{r}");
+    // Along X, the rounded upright corners are not along the tool; the floor's edges along X
+    // are (a tool from the side would leave its radius there; from above they come out sharp).
+    let r = run(&mut s, "inspect.machining", json!({"axis": "X", "tool_diameter": 6}));
+    let sharp = r["bodies"][0]["sharp_corners"].as_array().cloned().unwrap_or_default();
+    assert!(sharp.len() == 2 && sharp.iter().all(|c| (c["at"][2].as_f64().unwrap() - 20.0).abs() < 1e-6), "{r}");
+}
+
+/// A counterbore or countersink for a screw size takes its standard seat: ISO 4762 socket
+/// heads (Ø15 × 8.6 for M8) and ISO 10642 countersunk heads (Ø13.7 for M6); sizes given still win.
+#[test]
+fn a_counterbore_for_a_screw_size_takes_its_standard_seat() {
+    let mut s = Session::default();
+    run(&mut s, "solid.box", json!({"length": 60, "width": 40, "height": 15, "body_name": "Plate"}));
+    run(&mut s, "solid.hole", json!({"position": [15, 20, 15], "clearance": "M8", "type": "counterbore"}));
+    run(&mut s, "solid.hole", json!({"position": [45, 20, 15], "clearance": "M6", "type": "countersink"}));
+    let faces = run(&mut s, "model.faces", json!({"body": "Plate"}));
+    let radii: Vec<f64> = faces["faces"].as_array().unwrap().iter().filter_map(|f| f["cylinder"]["radius"].as_f64()).map(|r| (r * 2000.0).round() / 1000.0).collect();
+    assert!(radii.contains(&15.0) && radii.contains(&9.0) && radii.contains(&6.6), "{radii:?}");
+    // The counterbore's floor 8.6 mm down; the countersink's rim Ø13.7 on the face.
+    let v = run(&mut s, "inspect.measure", json!({}))["bodies"][0]["volume_mm3"].as_f64().unwrap_or(0.0);
+    let pi = std::f64::consts::PI;
+    let cb = pi * 7.5f64.powi(2) * 8.6 + pi * 4.5f64.powi(2) * (15.0 - 8.6);
+    let h = (13.7 - 6.6) / 2.0; // a 90° cone: as deep as it is wide on each side
+    let cs = pi * h / 3.0 * (6.85f64.powi(2) + 6.85 * 3.3 + 3.3f64.powi(2)) + pi * 3.3f64.powi(2) * (15.0 - h);
+    assert!((60.0 * 40.0 * 15.0 - cb - cs - v).abs() < 1.0, "{v}");
+    let e = s.execute("solid.hole", &json!({"position": [30, 10, 15], "diameter": 5, "type": "counterbore"})).unwrap_err().to_string();
+    assert!(e.contains("cb_diameter") && e.contains("clearance"), "{e}");
+}
+
+/// « Passe les trous en M8 » : a tapped hole's thread edited alone takes the new tap drill; a
+/// hole drilled to a size of its own keeps that size.
+#[test]
+fn editing_a_tapped_holes_thread_takes_its_tap_drill() {
+    let mut s = Session::default();
+    run(&mut s, "solid.box", json!({"length": 60, "width": 40, "height": 15, "body_name": "Plate"}));
+    run(&mut s, "solid.hole", json!({"position": [15, 20, 15], "thread": "M6", "depth": 12}));
+    run(&mut s, "timeline.edit", json!({"feature": "Hole1", "set": {"thread": "M8"}}));
+    let d = run(&mut s, "timeline.inspect", json!({"feature": "Hole1"}));
+    assert_eq!(d["definition"]["diameter"], "6.75 mm", "{d}");
+    assert_eq!(run(&mut s, "model.threads", json!({}))["threads"][0]["designation"], "M8");
+    run(&mut s, "solid.hole", json!({"position": [45, 20, 15], "diameter": 5.2, "thread": "M6", "depth": 12}));
+    let _ = s.execute("timeline.edit", &json!({"feature": "Hole2", "set": {"thread": "M8"}}));
+    let d = run(&mut s, "timeline.inspect", json!({"feature": "Hole2"}));
+    assert_eq!(d["definition"]["diameter"], "5.2", "{d}");
+}
+
+/// A slot's width, like its ends, may be a parameter: « oblong_largeur ».
+#[test]
+fn a_slot_takes_its_width_as_an_expression() {
+    let mut s = Session::default();
+    run(&mut s, "parameters.add", json!({"name": "oblong_largeur", "expression": "9 mm"}));
+    run(&mut s, "sketch.create", json!({"plane": "XY"}));
+    run(&mut s, "sketch.slot.center_to_center", json!({"p0": [0, 0], "p1": [20, 0], "width": "oblong_largeur"}));
+    run(&mut s, "sketch.slot.overall", json!({"p0": [0, 20], "p1": [29, 20], "width": "oblong_largeur"}));
+    run(&mut s, "sketch.finish", json!({}));
+    run(&mut s, "solid.extrude", json!({"distance": 2}));
+    let v = run(&mut s, "inspect.measure", json!({}))["total"]["volume_mm3"].as_f64().unwrap();
+    let slot = 20.0 * 9.0 + std::f64::consts::PI * 4.5f64.powi(2);
+    assert!((v - 2.0 * 2.0 * slot).abs() < 0.5, "{v}");
+    assert!(s.execute("sketch.slot.center_to_center", &json!({"p0": [0, 0], "p1": [20, 0], "width": "nope"})).is_err());
+}
+
+/// A circle sized by a parameter follows it: a flange of diameter D grows with D, also when a
+/// configuration row sets it; a plain size stays a plain size.
+#[test]
+fn a_circle_sized_by_a_parameter_follows_it() {
+    let mut s = Session::default();
+    run(&mut s, "parameters.add", json!({"name": "D", "expression": "100 mm"}));
+    run(&mut s, "sketch.create", json!({"plane": "XY"}));
+    let r = run(&mut s, "sketch.circle.center", json!({"center": [0, 0], "diameter": "D"}));
+    assert_eq!(r["driven_by"], "D", "{r}");
+    let r = run(&mut s, "sketch.circle.center", json!({"center": [0, 0], "diameter": "30 mm"}));
+    assert!(r.get("driven_by").is_none(), "{r}");
+    run(&mut s, "sketch.finish", json!({}));
+    run(&mut s, "solid.extrude", json!({"distance": 10, "body_name": "Bride"}));
+    let size = |s: &mut Session| run(s, "inspect.measure", json!({}))["bodies"][0]["bbox"]["max"][0].as_f64().unwrap();
+    assert!((size(&mut s) - 50.0).abs() < 1e-6);
+    run(&mut s, "parameters.change", json!({"name": "D", "expression": "150 mm"}));
+    assert!((size(&mut s) - 75.0).abs() < 1e-6, "{}", size(&mut s));
+}
+
+/// config.configure takes its parameter names as a list, or as one text with commas.
+#[test]
+fn configure_takes_names_with_commas() {
+    let mut s = Session::default();
+    run(&mut s, "parameters.add", json!({"name": "D", "expression": "100 mm"}));
+    run(&mut s, "parameters.add", json!({"name": "ep", "expression": "10 mm"}));
+    let t = run(&mut s, "config.configure", json!({"params": "D, ep"}));
+    assert_eq!(t["columns"], json!(["param:D", "param:ep"]), "{t}");
+    // A name written with its accents finds the parameter written without them.
+    run(&mut s, "parameters.add", json!({"name": "alesage", "expression": "30 mm"}));
+    let t = run(&mut s, "config.configure", json!({"params": ["alésage"]}));
+    assert_eq!(t["columns"], json!(["param:D", "param:ep", "param:alesage"]), "{t}");
+}
+
+/// Edge points for a fillet or chamfer may be written with parameters, as the part was.
+#[test]
+fn a_fillet_takes_edge_points_with_parameters() {
+    let mut s = Session::default();
+    run(&mut s, "parameters.add", json!({"name": "L", "expression": "80 mm"}));
+    run(&mut s, "parameters.add", json!({"name": "ep", "expression": "10 mm"}));
+    run(&mut s, "solid.box", json!({"length": "L", "width": 40, "height": "ep", "body_name": "B"}));
+    run(&mut s, "solid.fillet", json!({"edges": [["L", 0, "ep / 2"], [0, 0, "ep / 2"]], "radius": 3}));
+    run(&mut s, "solid.chamfer", json!({"edges": [["L / 2", 40, "ep"]], "distance": 1}));
+    assert!(s.execute("solid.fillet", &json!({"edges": [["nope", 0, 0]], "radius": 1})).is_err());
+}
+
+/// A measured face or edge may be given by its body and a point alone: the nearest one.
+#[test]
+fn measure_items_find_their_index_from_a_point() {
+    let mut s = Session::default();
+    run(&mut s, "solid.cylinder", json!({"diameter": 20, "height": 30, "body_name": "Pin"}));
+    let r = run(&mut s, "inspect.measure", json!({"items": [{"type": "face", "body": "Pin", "point": [10, 0, 15]}]}));
+    assert!((r["diameter"].as_f64().unwrap_or(0.0) - 20.0).abs() < 1e-6, "{r}");
+    let r = run(&mut s, "inspect.measure", json!({"items": [{"type": "edge", "body": "Pin", "point": [0, 10, 30]}]}));
+    assert!((r["diameter"].as_f64().unwrap_or(0.0) - 20.0).abs() < 1e-6, "{r}");
+    // Three or more: each measured alone.
+    let r = run(&mut s, "inspect.measure", json!({"items": [
+        {"type": "face", "body": "Pin", "point": [10, 0, 15]}, {"type": "edge", "body": "Pin", "point": [0, 10, 0]}, {"type": "face", "body": "Pin", "point": [0, 0, 30]}]}));
+    let each = r["each"].as_array().cloned().unwrap_or_default();
+    assert_eq!(each.len(), 3, "{r}");
+    assert!((each[1]["diameter"].as_f64().unwrap_or(0.0) - 20.0).abs() < 1e-6, "{r}");
+}

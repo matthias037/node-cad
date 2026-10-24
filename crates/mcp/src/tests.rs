@@ -518,6 +518,26 @@ fn a_batch_reports_split_bodies_free_parts_and_overlaps() {
     assert_eq!(bad["result"]["isError"], true, "{bad}");
 }
 
+/// Steps written with a tool's name or wrapped in `execute` run as their engine command, and a
+/// batch that builds again what is already there says so.
+#[test]
+fn a_batch_takes_tool_names_and_flags_a_rebuilt_part() {
+    let mut s = server();
+    let c = |cmd: &str, p: Value| json!({"command": cmd, "params": p});
+    let make = json!({"commands": [c("solid.box", json!({"length": 10, "width": 20, "height": 5, "body_name": "Plate"}))]});
+    let r = tool(&mut s, "batch", make.clone());
+    assert!(r.get("check").is_none(), "{r}");
+    let r = tool(&mut s, "batch", make);
+    assert_eq!(r["check"]["duplicates"][0]["same_as"], "Plate", "{r}");
+    let r = tool(
+        &mut s,
+        "batch",
+        json!({"commands": [c("undo", json!({})), c("execute", json!({"command": "inspect.measure", "params": {}})), c("measure", json!({}))]}),
+    );
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(r["results"][1]["body_count"], 1, "{r}");
+}
+
 /// Regression (#3242): a failed batch containing `file.new` reported `rolled_back: true` and
 /// kept the replacement design. The checkpoint survives the new document, so the design the
 /// batch started in — the 1 mm cube — is back when the batch fails.
@@ -1471,7 +1491,8 @@ fn batch_is_one_engine_batch_call() {
     let steps = json!([{"command": "a.one", "params": {"v": 1}}, {"command": "a.two"}]);
     let (b, body, is_error) = recorded_batch(Ok(reply.clone()), json!({"commands": steps}));
     assert_eq!(methods(&b), ["engine.batch", "engine.execute"]);
-    assert_eq!(b.calls[1].1, json!({"command": "inspect.measure", "params": {"bodies": ["B"]}}));
+    // It made a body: every body is measured once, for a twin and for pieces.
+    assert_eq!(b.calls[1].1, json!({"command": "inspect.measure", "params": {}}));
     assert_eq!(b.calls[0].1, json!({"commands": steps, "rollback": true}));
     assert!(!is_error);
     assert_eq!(body, json!({"ok": true, "completed": 2, "results": reply["results"]}));

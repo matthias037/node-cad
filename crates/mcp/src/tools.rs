@@ -574,6 +574,7 @@ fn batch(b: &mut dyn Backend, a: &Map<String, Value>) -> Value {
     let Some(steps) = a.get("commands").and_then(Value::as_array) else {
         return text_result(&json!("`commands` must be an array of {command, params}"), true);
     };
+    let steps = &steps.iter().take(MAX_BATCH + 1).map(plain_step).collect::<Vec<_>>();
     if steps.len() > MAX_BATCH {
         return text_result(&json!(format!("batch too long ({} steps, at most {MAX_BATCH})", steps.len())), true);
     }
@@ -641,6 +642,21 @@ fn batch(b: &mut dyn Backend, a: &Map<String, Value>) -> Value {
     text_result(&with_timings(reply, timed, rows, clock.ms()), false)
 }
 
+/// A step as agents write it, as the engine runs it: a tool's name for its command (`undo`,
+/// `redo`, `measure`), or an `execute` step wrapping the command it runs.
+fn plain_step(step: &Value) -> Value {
+    let command = step.get("command").or_else(|| step.get("id")).and_then(Value::as_str).unwrap_or("");
+    let params = step.get("params").cloned().filter(|p| !p.is_null()).unwrap_or_else(|| json!({}));
+    match command {
+        "execute" if params.get("command").is_some_and(Value::is_string) => {
+            json!({"command": params["command"], "params": params.get("params").cloned().filter(Value::is_object).unwrap_or_else(|| json!({}))})
+        }
+        "undo" | "redo" => json!({"command": format!("edit.{command}"), "params": {}}),
+        "measure" => json!({"command": "inspect.measure", "params": params}),
+        _ => step.clone(),
+    }
+}
+
 /// Commands that place, link or insert parts: after one, the design is checked as an assembly.
 fn places_parts(command: &str) -> bool {
     ["component.", "occurrence.", "joint."].iter().any(|p| command.starts_with(p)) || matches!(command, "parts.insert" | "parts.fastener")
@@ -679,20 +695,41 @@ fn design_check(b: &mut dyn Backend, assembly: bool, results: &[Value]) -> Optio
     }
     let mut check = Map::new();
     let mut faults: Vec<&str> = Vec::new();
-    if !touched.is_empty()
-        && let Ok(m) = exec(b, "inspect.measure", json!({ "bodies": touched }))
-    {
-        let split: Vec<Value> = m["bodies"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter(|x| x["kernel"]["shells"].as_u64().is_some_and(|n| n > 1))
-            .map(|x| json!({"body": x["name"], "solids": x["kernel"]["shells"]}))
-            .collect();
-        if !split.is_empty() {
-            check.insert("split_bodies".into(), Value::Array(split));
-            faults.push("split_bodies: a shape joined to these bodies does not touch them, so each is in separate solids (move it until it overlaps)");
-        }
+    // One measure: every body when the batch made some (a twin may be any of them), else the
+    // bodies it changed.
+    let created: Vec<&str> = results.iter().flat_map(|r| r["created_bodies"].as_array().into_iter().flatten()).filter_map(Value::as_str).collect();
+    let measured = match (created.is_empty(), touched.is_empty()) {
+        (false, _) => exec(b, "inspect.measure", json!({})).ok(),
+        (true, false) => exec(b, "inspect.measure", json!({ "bodies": touched })).ok(),
+        (true, true) => None,
+    };
+    let bodies = measured.as_ref().and_then(|m| m["bodies"].as_array().cloned()).unwrap_or_default();
+    // A body just made the same size and place as one there already: the batch sent again on
+    // top of itself (banc NØDE IA, 25/10/2026).
+    let same = |x: &Value, y: &Value| {
+        let (vx, vy) = (x["volume_mm3"].as_f64().unwrap_or(f64::NAN), y["volume_mm3"].as_f64().unwrap_or(f64::NAN));
+        let corners = |v: &Value| ["min", "max"].iter().flat_map(|k| v["bbox"][*k].as_array().cloned().unwrap_or_default()).filter_map(|c| c.as_f64()).collect::<Vec<_>>();
+        let (cx, cy) = (corners(x), corners(y));
+        (vx - vy).abs() <= 1e-6 * vx.abs().max(1.0) && cx.len() == 6 && cy.len() == 6 && cx.iter().zip(&cy).all(|(a, b)| (a - b).abs() < 1e-6 * (1.0 + a.abs()))
+    };
+    let twins: Vec<Value> = bodies
+        .iter()
+        .filter(|x| x["name"].as_str().is_some_and(|n| created.contains(&n)))
+        .filter_map(|x| bodies.iter().find(|y| y["name"] != x["name"] && same(x, y)).map(|y| json!({"body": x["name"], "same_as": y["name"]})))
+        .collect();
+    if !twins.is_empty() {
+        check.insert("duplicates".into(), Value::Array(twins));
+        faults.push("duplicates: these bodies were just made the same size and place as bodies already there (a batch sent again on top of itself?): undo it");
+    }
+    let split: Vec<Value> = bodies
+        .iter()
+        .filter(|x| x["name"].as_str().is_some_and(|n| touched.contains(&n)))
+        .filter(|x| x["kernel"]["shells"].as_u64().is_some_and(|n| n > 1))
+        .map(|x| json!({"body": x["name"], "solids": x["kernel"]["shells"]}))
+        .collect();
+    if !split.is_empty() {
+        check.insert("split_bodies".into(), Value::Array(split));
+        faults.push("split_bodies: a shape joined to these bodies does not touch them, so each is in separate solids (move it until it overlaps)");
     }
     if assembly {
         // Occurrence names by id, for the degrees of freedom `joint.list` gives by id.

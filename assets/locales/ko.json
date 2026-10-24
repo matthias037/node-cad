@@ -537,6 +537,7 @@
   "cmd.inspect_accessibility": "접근성 분석",
   "cmd.inspect_center_of_mass": "무게중심",
   "cmd.inspect_clearance": "여유 간격",
+  "cmd.inspect_machining": "가공성",
   "cmd.inspect_compare": "바디 비교",
   "cmd.inspect_continuity": "연속성 분석",
   "cmd.inspect_curvature_comb": "곡률빗 분석",

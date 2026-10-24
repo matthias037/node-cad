@@ -71,6 +71,32 @@ fn face_tris(m: &Mesh, f: usize) -> Vec<[Vec3; 3]> {
     m.triangles.iter().zip(&m.tri_face).filter(|(_, tf)| **tf as usize == f).filter_map(|(t, _)| m.tri(t)).collect()
 }
 
+/// A face or edge given by its body and a point alone, as agents write it: the index of the
+/// face or edge nearest the point (body_topology's indices), so it reads as a full selection.
+fn with_index(st: &solidcraft_doc::ModelState, v: &Value) -> Value {
+    let (Some(kind), Some(body), Some(point), None) = (v.get("type").and_then(Value::as_str), v.get("body").and_then(Value::as_str), v.get("point").and_then(crate::params::vec3), v.get("index")) else {
+        return v.clone();
+    };
+    let Some(b) = st.body(body) else { return v.clone() };
+    let m = b.mesh();
+    let index = match kind {
+        "edge" => edge_index(&m, usize::MAX, point),
+        "face" => m
+            .triangles
+            .iter()
+            .zip(&m.tri_face)
+            .filter_map(|(t, f)| m.tri(t).map(|[a, b, c]| (solidcraft_geom::compare::closest_on_triangle(point, a, b, c).dist(point), *f as usize)))
+            .min_by(|x, y| x.0.total_cmp(&y.0))
+            .map(|(_, f)| f),
+        _ => None,
+    };
+    let mut out = v.clone();
+    if let Some(i) = index {
+        out["index"] = json!(i);
+    }
+    out
+}
+
 /// A described item: its geometry, direction (planar face normal, straight edge direction),
 /// description and exact shape.
 struct Item {
@@ -417,9 +443,15 @@ pub(crate) fn measure_items(s: &Session, items: &Value) -> Result<Value> {
     if list.is_empty() || list.len() > 1000 {
         return Err(bad(cmd, "measure one or two items"));
     }
+    // More than two (an agent checking every size at once): each one alone, in order.
+    if list.len() > 2 {
+        let each: Vec<Value> = list.iter().map(|v| measure_items(s, &json!([v])).unwrap_or_else(|e| json!({"error": e.to_string()}))).collect();
+        return Ok(json!({ "each": each }));
+    }
     let st = s.world_state();
     let mut sels = Vec::new();
     for value in list {
+        let value = &with_index(&st, value);
         let mut sel = serde_json::from_value::<Sel>(value.clone()).map_err(|e| bad(cmd, e.to_string()))?;
         // Two kernel halves of one visible item are one measurement target.
         match &mut sel {

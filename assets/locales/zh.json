@@ -694,6 +694,7 @@
   "cmd.inspect_accessibility": "可达性分析",
   "cmd.inspect_center_of_mass": "质心",
   "cmd.inspect_clearance": "间隙",
+  "cmd.inspect_machining": "可加工性",
   "cmd.inspect_compare": "比较实体",
   "cmd.inspect_continuity": "连续性分析",
   "cmd.inspect_curvature_comb": "曲率梳分析",

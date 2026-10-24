@@ -694,6 +694,7 @@
   "cmd.inspect_accessibility": "アクセシビリティ解析",
   "cmd.inspect_center_of_mass": "重心",
   "cmd.inspect_clearance": "クリアランス",
+  "cmd.inspect_machining": "切削加工性",
   "cmd.inspect_compare": "ボディを比較",
   "cmd.inspect_continuity": "連続性解析",
   "cmd.inspect_curvature_comb": "曲率コーム解析",

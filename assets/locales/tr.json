@@ -535,6 +535,7 @@
   "cmd.inspect_accessibility": "Erişilebilirlik analizi",
   "cmd.inspect_center_of_mass": "Kütle merkezi",
   "cmd.inspect_clearance": "Açıklık",
+  "cmd.inspect_machining": "İşlenebilirlik",
   "cmd.inspect_compare": "Gövdeleri karşılaştır",
   "cmd.inspect_continuity": "Süreklilik kontrolü",
   "cmd.inspect_curvature_comb": "Eğrilik tarağı analizi",

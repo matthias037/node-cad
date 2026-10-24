@@ -55,6 +55,7 @@ mod measure_shape;
 mod mesh;
 mod metadata;
 pub(crate) mod motion;
+mod machining;
 mod parts;
 mod script;
 mod section;
@@ -281,6 +282,7 @@ pub fn command_specs() -> Vec<&'static CommandSpec> {
     v.extend(component_link::COMMANDS.iter());
     v.extend(joints::COMMANDS.iter());
     v.extend(clearance::COMMANDS.iter());
+    v.extend(machining::COMMANDS.iter());
     v.extend(motion::COMMANDS.iter());
     v.extend(config::COMMANDS.iter());
     v.extend(parts::COMMANDS.iter());

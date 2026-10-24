@@ -95,10 +95,28 @@ fn column_of(s: &Session, p: &Value, cmd: &str) -> Result<Column> {
         }
     }
     if let Some(n) = str_(p, "param") {
-        if !s.doc.all_param_exprs().iter().any(|(m, _, _)| m == n) {
-            return Err(bad(cmd, format!("no parameter `{n}`")));
+        let names: Vec<String> = s.doc.all_param_exprs().iter().map(|(m, _, _)| m.to_string()).collect();
+        if names.iter().any(|m| m == n) {
+            return Ok(Column::Param(n.to_string()));
         }
-        return Ok(Column::Param(n.to_string()));
+        // The same name written with or without its accents (« alésage », « alesage »).
+        let fold = |t: &str| -> String {
+            t.chars()
+                .map(|c| match c {
+                    'à' | 'â' | 'ä' => 'a',
+                    'é' | 'è' | 'ê' | 'ë' => 'e',
+                    'î' | 'ï' => 'i',
+                    'ô' | 'ö' => 'o',
+                    'ù' | 'û' | 'ü' => 'u',
+                    'ç' => 'c',
+                    c => c,
+                })
+                .collect()
+        };
+        return match names.iter().filter(|m| fold(m) == fold(n)).collect::<Vec<_>>().as_slice() {
+            [one] => Ok(Column::Param((*one).clone())),
+            _ => Err(bad(cmd, format!("no parameter `{n}`"))),
+        };
     }
     let f = str_(p, "feature").ok_or_else(|| bad(cmd, "give `param` or `feature`"))?;
     let id = s.doc.find_feature(f).map(|x| x.id).ok_or_else(|| bad(cmd, format!("no feature `{f}`")))?;
@@ -124,18 +142,24 @@ fn add_column(s: &mut Session, c: Column, cmd: &str) -> Result<()> {
     Ok(())
 }
 
+/// A list of names, also given as one text with commas (`"D, epaisseur"`, as agents write it):
+/// names never hold a comma.
+fn names(p: &Value, k: &str) -> Vec<String> {
+    string_list(p, k).iter().flat_map(|n| n.split(',')).map(str::trim).filter(|n| !n.is_empty()).map(str::to_string).collect()
+}
+
 fn configure(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "config.configure";
-    for n in string_list(p, "params") {
+    for n in names(p, "params") {
         let c = column_of(s, &json!({ "param": n }), cmd)?;
         add_column(s, c, cmd)?;
     }
-    for n in string_list(p, "features") {
+    for n in names(p, "features") {
         let c = column_of(s, &json!({ "feature": n }), cmd)?;
         add_column(s, c, cmd)?;
     }
     for key in ["materials", "appearances"] {
-        for n in string_list(p, key) {
+        for n in names(p, key) {
             let field = if key == "materials" { "material" } else { "appearance" };
             let c = column_of(s, &json!({ field: n }), cmd)?;
             add_column(s, c, cmd)?;

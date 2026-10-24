@@ -535,6 +535,7 @@
   "cmd.inspect_accessibility": "Analisis Aksesibilitas",
   "cmd.inspect_center_of_mass": "Pusat Massa",
   "cmd.inspect_clearance": "Kelonggaran",
+  "cmd.inspect_machining": "Kemampuan permesinan",
   "cmd.inspect_compare": "Bandingkan Bodi",
   "cmd.inspect_continuity": "Analisis Kontinuitas",
   "cmd.inspect_curvature_comb": "Analisis Sisir Kelengkungan",

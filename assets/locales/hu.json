@@ -535,6 +535,7 @@
   "cmd.inspect_accessibility": "Hozzáférhetőség-elemzés",
   "cmd.inspect_center_of_mass": "Tömegközéppont",
   "cmd.inspect_clearance": "Hézag",
+  "cmd.inspect_machining": "Megmunkálhatóság",
   "cmd.inspect_compare": "Testek összehasonlítása",
   "cmd.inspect_continuity": "Folytonosságelemzés",
   "cmd.inspect_curvature_comb": "Görbületi fésű elemzése",

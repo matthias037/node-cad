@@ -535,6 +535,7 @@
   "cmd.inspect_accessibility": "Toegankelijkheidsanalyse",
   "cmd.inspect_center_of_mass": "Zwaartepunt",
   "cmd.inspect_clearance": "Speling",
+  "cmd.inspect_machining": "Bewerkbaarheid",
   "cmd.inspect_compare": "Lichamen vergelijken",
   "cmd.inspect_continuity": "Continuïteitsanalyse",
   "cmd.inspect_curvature_comb": "Krommingskamanalyse",

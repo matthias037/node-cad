@@ -368,7 +368,19 @@ impl Worker {
                     // A call whose arguments do not parse is answered, never run with `{}`.
                     (format!("Not run: {e}"), true)
                 } else if !self.tool_names.iter().any(|n| n == &c.name) {
-                    (format!("unknown tool `{}`", c.name), true)
+                    // A model that calls an engine command, or a family of them, as a tool
+                    // (`inspect` with {command, params}, `inspect.machining`): run it through
+                    // `execute`, and say so, rather than fail a call whose meaning is plain.
+                    match as_execute(&self.tool_names, &c.name, &args) {
+                        Some((execute, a)) => match self.mcp_call("tools/call", json!({"name": execute, "arguments": a})) {
+                            Ok(r) => {
+                                let (text, failed) = tool_text(&r);
+                                (format!("{text}\n(`{}` is not a tool: this ran as execute {{command, params}}.)", c.name), failed)
+                            }
+                            Err(e) => (e, true),
+                        },
+                        None => (format!("unknown tool `{}`", c.name), true),
+                    }
                 } else {
                     match self.mcp_call("tools/call", json!({"name": c.name, "arguments": args})) {
                         Ok(r) => tool_text(&r),
@@ -832,6 +844,20 @@ pub fn test_anthropic_endpoint(http: &HttpFn, base_url: &str, key: Option<&str>,
 }
 
 /// A tool call's result as text for the model, and whether it failed.
+/// An unknown tool call that names an engine command: the `execute` tool and its arguments.
+/// `{command, params?}` under any name, or a dotted command id as the name with its parameters
+/// as the arguments. `None` when the server has no `execute` or the call names no command.
+fn as_execute(tools: &[String], name: &str, args: &Value) -> Option<(String, Value)> {
+    let execute = tools.iter().find(|n| n.rsplit("__").next() == Some("execute"))?.clone();
+    if let Some(command) = args.get("command").and_then(Value::as_str) {
+        let params = args.get("params").cloned().filter(Value::is_object).unwrap_or_else(|| json!({}));
+        return Some((execute, json!({"command": command, "params": params})));
+    }
+    let id = name.rsplit("__").next().unwrap_or(name);
+    let dotted = id.split('.').count() >= 2 && id.split('.').all(|w| !w.is_empty() && w.chars().all(|c| c.is_ascii_lowercase() || c == '_'));
+    dotted.then(|| (execute, json!({"command": id, "params": if args.is_object() { args.clone() } else { json!({}) }})))
+}
+
 fn tool_text(r: &Value) -> (String, bool) {
     let failed = r.get("isError").and_then(Value::as_bool).unwrap_or(false);
     let parts: Vec<String> = r
@@ -976,6 +1002,17 @@ pub fn test_endpoint(http: &HttpFn, base_url: &str, key: Option<&str>, model: &s
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_engine_command_called_as_a_tool_runs_through_execute() {
+        let tools = vec!["batch".to_string(), "node-cad-app__execute".to_string()];
+        let (name, args) = as_execute(&tools, "inspect", &json!({"command": "inspect.machining", "params": {"tool_diameter": 8}})).unwrap();
+        assert_eq!((name.as_str(), &args), ("node-cad-app__execute", &json!({"command": "inspect.machining", "params": {"tool_diameter": 8}})));
+        let (_, args) = as_execute(&tools, "inspect.machining", &json!({"axis": "Z"})).unwrap();
+        assert_eq!(args, json!({"command": "inspect.machining", "params": {"axis": "Z"}}));
+        assert!(as_execute(&tools, "joint", &json!({"type": "revolute"})).is_none());
+        assert!(as_execute(&["batch".to_string()], "inspect", &json!({"command": "x.y"})).is_none());
+    }
 
     #[test]
     fn tool_results_go_compact_and_past_ones_are_shortened() {

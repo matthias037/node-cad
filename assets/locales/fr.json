@@ -694,6 +694,7 @@
   "cmd.inspect_accessibility": "Analyse d'accessibilité",
   "cmd.inspect_center_of_mass": "Centre de gravité",
   "cmd.inspect_clearance": "Jeu",
+  "cmd.inspect_machining": "Usinabilité",
   "cmd.inspect_compare": "Comparer les corps",
   "cmd.inspect_continuity": "Analyse de continuité",
   "cmd.inspect_curvature_comb": "Analyse par peigne de courbure",

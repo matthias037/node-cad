@@ -68,7 +68,7 @@ pub static COMMANDS: &[CommandSpec] = &[
         .at("SOLID", "CREATE")
         .icon("hole")
         .key("H")
-        .params("position: [x,y,z] on a face (numbers, or length expressions the hole follows) | sketch + points: [sketch point ids] (one hole each, perpendicular to the sketch, into the material on whichever side of the sketch plane it is) | sketch alone (every sketch point: standalone points and circle centres); flip?: bool (sketch points: drill to the other side); single?: bool (with one sketch point: a Single hole that follows the point, drilled into the face there); direction?: [x,y,z] (default: into the face, against its outward normal; one that leaves the face is mirrored into it; ignored with sketch points unless single); diameter | thread (a tapped hole: the tap drill, major − pitch) | clearance: \"M6\" with fit?: close|normal|loose (ISO 273); depth? (default through all) | to?: [x,y,z] (To Object: drill to that face or point); type?: simple|drilled|counterbore|countersink; tip_angle?; cb_diameter?, cb_depth?; cs_diameter?, cs_angle?; thread?: \"M6\" (cosmetic); targets?: [body] (the bodies to drill; holes at the points of a sketch on a body's face default to that body, found along the holes' direction on it alone; explicit targets or participants override, [\"*\"] every body)"),
+        .params("position: [x,y,z] on a face (numbers, or length expressions the hole follows) | sketch + points: [sketch point ids] (one hole each, perpendicular to the sketch, into the material on whichever side of the sketch plane it is) | sketch alone (every sketch point: standalone points and circle centres); flip?: bool (sketch points: drill to the other side); single?: bool (with one sketch point: a Single hole that follows the point, drilled into the face there); direction?: [x,y,z] (default: into the face, against its outward normal; one that leaves the face is mirrored into it; ignored with sketch points unless single); diameter | thread (a tapped hole: the tap drill, major − pitch) | clearance: \"M6\" with fit?: close|normal|loose (ISO 273); depth? (default through all) | to?: [x,y,z] (To Object: drill to that face or point); type?: simple|drilled|counterbore|countersink; tip_angle?; cb_diameter?, cb_depth? (default with clearance: the seat of an ISO 4762 socket head); cs_diameter? (default with clearance: an ISO 10642 countersunk head), cs_angle?; thread?: \"M6\" (cosmetic); targets?: [body] (the bodies to drill; holes at the points of a sketch on a body's face default to that body, found along the holes' direction on it alone; explicit targets or participants override, [\"*\"] every body)"),
     CommandSpec::new("solid.pipe", "Pipe", pipe)
         .at("SOLID", "CREATE")
         .icon("pipe")
@@ -1129,6 +1129,23 @@ fn edge_points(s: &Session, p: &Value, cmd: &str) -> Result<Vec<Vec3>> {
     let mut candidates: Option<Vec<(f64, Vec<solidcraft_kernel::EdgeInfo>)>> = None;
     let mut out = Vec::new();
     for e in a {
+        // A point written with expressions of parameters (`["L / 2", 0, "ep"]`): where they are now.
+        let worked;
+        let e = match e.as_array().filter(|v| v.len() == 3 && v.iter().any(Value::is_string)) {
+            Some(v) => {
+                let mut xyz = [0.0; 3];
+                for (slot, c) in xyz.iter_mut().zip(v) {
+                    *slot = match c {
+                        Value::Number(n) => n.as_f64().unwrap_or(f64::NAN),
+                        Value::String(t) => s.doc.eval(t, Kind::Length).map_err(|err| bad(cmd, format!("edge point: {err}")))?,
+                        _ => f64::NAN,
+                    };
+                }
+                worked = json!(xyz);
+                &worked
+            }
+            None => e,
+        };
         let pt = match edge_ref_form(e).map_err(|why| bad(cmd, why))? {
             EdgeRefForm::Point(pt) => pt,
             EdgeRefForm::Index { body, index } => {
@@ -1850,6 +1867,42 @@ fn split_body(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// ISO 273 clearance hole diameters (close, normal, loose fit) for metric bolts.
+/// The nominal diameter of a metric screw size ("M8", "M8x1.25").
+fn screw_size(size: &str) -> Option<f64> {
+    size.trim().trim_start_matches(['M', 'm']).split(['x', 'X']).next()?.trim().parse().ok()
+}
+
+/// The counterbore (diameter, depth) seating a socket head cap screw (ISO 4762) of this size,
+/// as machine shops cut it (DIN 974-1): the head below the face.
+fn counterbore_for(size: &str) -> Option<(f64, f64)> {
+    const TABLE: [(f64, f64, f64); 13] = [
+        (2.0, 4.4, 2.3),
+        (2.5, 5.5, 2.8),
+        (3.0, 6.5, 3.3),
+        (4.0, 8.0, 4.4),
+        (5.0, 10.0, 5.4),
+        (6.0, 11.0, 6.4),
+        (8.0, 15.0, 8.6),
+        (10.0, 18.0, 10.6),
+        (12.0, 20.0, 12.6),
+        (14.0, 24.0, 14.6),
+        (16.0, 26.0, 16.6),
+        (20.0, 33.0, 20.6),
+        (24.0, 40.0, 24.8),
+    ];
+    let d = screw_size(size)?;
+    TABLE.iter().find(|r| (r.0 - d).abs() < 1e-9).map(|r| (r.1, r.2))
+}
+
+/// The 90° countersink diameter seating a countersunk socket screw (ISO 10642) of this size:
+/// its head's theoretical diameter and a little more, so the head sits flush.
+fn countersink_for(size: &str) -> Option<f64> {
+    const TABLE: [(f64, f64); 9] =
+        [(3.0, 7.0), (4.0, 9.3), (5.0, 11.5), (6.0, 13.7), (8.0, 18.2), (10.0, 22.7), (12.0, 27.2), (16.0, 33.9), (20.0, 40.6)];
+    let d = screw_size(size)?;
+    TABLE.iter().find(|r| (r.0 - d).abs() < 1e-9).map(|r| r.1)
+}
+
 fn clearance_diameter(size: &str, fit: &str) -> Option<f64> {
     const TABLE: [(f64, f64, f64, f64); 21] = [
         (1.6, 1.7, 1.8, 2.0),
@@ -1874,8 +1927,7 @@ fn clearance_diameter(size: &str, fit: &str) -> Option<f64> {
         (60.0, 62.0, 66.0, 70.0),
         (64.0, 66.0, 70.0, 74.0),
     ];
-    let t = size.trim().trim_start_matches(['M', 'm']);
-    let d: f64 = t.split(['x', 'X']).next()?.trim().parse().ok()?;
+    let d = screw_size(size)?;
     let row = TABLE.iter().find(|r| (r.0 - d).abs() < 1e-9)?;
     match fit {
         "close" | "fine" => Some(row.1),
@@ -1987,19 +2039,35 @@ fn hole(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(d) = &depth {
         check_expr(s, d, Kind::Length, cmd, "depth")?;
     }
-    let get = |k: &str| -> Result<Expr> {
-        let e = req_expr(cmd, p, k)?;
-        Ok(e)
-    };
     let kind = match str_(p, "type").unwrap_or("simple") {
         "simple" => match expr(p, "tip_angle") {
             Some(t) if depth.is_some() => solidcraft_doc::HoleKind::Drilled { tip_angle: t },
             _ => solidcraft_doc::HoleKind::Simple,
         },
         "drilled" => solidcraft_doc::HoleKind::Drilled { tip_angle: expr(p, "tip_angle").unwrap_or_else(|| "118 deg".into()) },
-        "counterbore" => solidcraft_doc::HoleKind::Counterbore { cb_diameter: get("cb_diameter")?, cb_depth: get("cb_depth")? },
+        // With `clearance` a screw size, the seat its standard head needs where no size is given.
+        "counterbore" => {
+            let seat = str_(p, "clearance").and_then(counterbore_for);
+            let or_seat = |k: &str, v: Option<f64>| -> Result<Expr> {
+                match (expr(p, k), v) {
+                    (Some(e), _) => Ok(e),
+                    (None, Some(v)) => Ok(Expr::new(format!("{v} mm"))),
+                    (None, None) => Err(bad(cmd, format!("a counterbore needs `{k}`, or `clearance: \"M6\"` (the seat of an ISO 4762 socket head, M2 to M24)"))),
+                }
+            };
+            solidcraft_doc::HoleKind::Counterbore {
+                cb_diameter: or_seat("cb_diameter", seat.map(|s| s.0))?,
+                cb_depth: or_seat("cb_depth", seat.map(|s| s.1))?,
+            }
+        }
         "countersink" => solidcraft_doc::HoleKind::Countersink {
-            cs_diameter: get("cs_diameter")?,
+            cs_diameter: match (expr(p, "cs_diameter"), str_(p, "clearance").and_then(countersink_for)) {
+                (Some(e), _) => e,
+                (None, Some(v)) => Expr::new(format!("{v} mm")),
+                (None, None) => {
+                    return Err(bad(cmd, "a countersink needs `cs_diameter`, or `clearance: \"M6\"` (the seat of an ISO 10642 countersunk head, M3 to M20)"));
+                }
+            },
             cs_angle: expr(p, "cs_angle").unwrap_or_else(|| "90 deg".into()),
         },
         other => return Err(bad(cmd, format!("unknown hole type `{other}`"))),

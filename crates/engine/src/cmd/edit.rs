@@ -939,6 +939,20 @@ fn edit_feature(s: &mut Session, p: &Value) -> Result<Value> {
     merge(&mut v, set, 0);
     let mut nf: Feature = serde_json::from_value(v.clone()).map_err(|e| bad(cmd, format!("invalid feature: {e}")))?;
     nf.id = f.id;
+    // A tapped hole given another thread and no diameter takes that thread's tap drill, when it
+    // had its old one (a hole drilled to a size of its own keeps it): « passe les trous en M8 ».
+    if let (FeatureKind::Hole { diameter: was, thread: Some(old), .. }, FeatureKind::Hole { diameter: now, thread: Some(new), .. }) = (&f.kind, &mut nf.kind)
+        && set.get("diameter").is_none()
+        && old != new
+    {
+        let tap = |t: &str| solidcraft_doc::parse_metric_thread(t).map(|(major, pitch)| ((major - pitch) * 1000.0).round() / 1000.0);
+        let mm = was.trim().trim_end_matches("mm").trim().parse::<f64>().ok();
+        if let (Some(a), Some(b), Some(d)) = (tap(old), tap(new), mm)
+            && (d - a).abs() < 1e-6
+        {
+            *now = solidcraft_doc::Expr::new(format!("{b} mm"));
+        }
+    }
     if let (FeatureKind::Extrude { extent: old, .. }, FeatureKind::Extrude { extent: new, .. }) = (&f.kind, &mut nf.kind)
         && old.direction != solidcraft_doc::Direction::Symmetric
         && new.direction == solidcraft_doc::Direction::Symmetric

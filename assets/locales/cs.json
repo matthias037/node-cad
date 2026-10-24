@@ -536,6 +536,8 @@
   "cmd.inspect_accessibility": "Analýza přístupnosti",
   "cmd.inspect_center_of_mass": "Těžiště",
   "cmd.inspect_clearance": "Vůle",
+  "cmd.inspect_machining": "Obrobitelnost",
+  "cmd.inspect_machining": "Obrobitelnost",
   "cmd.inspect_compare": "Porovnat tělesa",
   "cmd.inspect_continuity": "Analýza spojitosti",
   "cmd.inspect_curvature_comb": "Analýza hřebenu křivosti",
