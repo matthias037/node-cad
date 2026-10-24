@@ -554,6 +554,7 @@ pub fn dialog(app: &mut SolveApp, ctx: &egui::Context) {
             };
             let key = Some(s.key.trim().to_string()).filter(|k| !k.is_empty());
             let result = match url {
+                Ok(_) if key.as_deref().is_some_and(|k| !agents::plausible_key(k)) => Test::Done(Err(tr("ui.ai_key_not_a_key").to_string())),
                 Ok(_) => start_test(app, &e, key),
                 Err(err) => Test::Done(Err(err)),
             };
@@ -604,6 +605,9 @@ fn add_agent(app: &mut SolveApp) -> Result<(), String> {
                 return Err(tr("ui.ai_need_model").to_string());
             }
             key = Some(s.key.trim().to_string()).filter(|k| !k.is_empty());
+            if key.as_deref().is_some_and(|k| !agents::plausible_key(k)) {
+                return Err(tr("ui.ai_key_not_a_key").to_string());
+            }
             if key.is_some() && !agents::key_safe_for(&c.base_url) {
                 return Err(tr("ui.ai_key_needs_https").to_string());
             }

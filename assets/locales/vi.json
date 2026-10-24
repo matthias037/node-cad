@@ -1285,6 +1285,7 @@
   "ui.ai_key": "Khóa API",
   "ui.ai_key_hint": "tùy chọn; lưu trữ bảo mật trong chuỗi khóa hệ thống",
   "ui.ai_key_needs_https": "Khóa chỉ được gửi qua HTTPS, hoặc trực tiếp trên máy tính này.",
+  "ui.ai_key_not_a_key": "This looks like a file path or a command, not an API key: the clipboard probably held something else. Copy the key again from the provider's console (for Mistral: console.mistral.ai, API Keys) and paste it again.",
   "ui.ai_key_note": "Được lưu an toàn trong Keychain hệ thống, không lưu trong cài đặt của NØDE CAD. Để trống nếu dùng máy chủ cục bộ.",
   "ui.ai_keychain_error": "Chuỗi khóa hệ thống từ chối: {error}",
   "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",

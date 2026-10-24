@@ -1284,6 +1284,7 @@
   "ui.ai_key": "API-sleutel",
   "ui.ai_key_hint": "optioneel; bewaard in de sleutelhanger van het systeem",
   "ui.ai_key_needs_https": "Een sleutel wordt alleen via HTTPS of naar deze computer verzonden.",
+  "ui.ai_key_not_a_key": "This looks like a file path or a command, not an API key: the clipboard probably held something else. Copy the key again from the provider's console (for Mistral: console.mistral.ai, API Keys) and paste it again.",
   "ui.ai_key_note": "Bewaard in de sleutelhanger van het systeem, nooit in de instellingen van NØDE CAD. Laat leeg voor een lokale server.",
   "ui.ai_keychain_error": "De sleutelhanger van het systeem weigerde: {error}",
   "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",

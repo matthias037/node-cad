@@ -199,8 +199,10 @@ fn menu_commands(
     out
 }
 
-/// Room for the version between Report a bug and the caption buttons.
-const RIGHT_GROUP: f32 = 60.0;
+/// Room for the version (`v0.21.0-rc.2`) between Report a bug and the caption buttons.
+const RIGHT_GROUP: f32 = 84.0;
+/// The narrowest bar that shows the version; a narrower one gives its room to the tabs.
+const VERSION_SHOWN: f32 = 960.0;
 const CLUSTER_BUTTONS: f32 = 108.0;
 
 /// The centre of Help, between Settings and Report a bug.
@@ -211,7 +213,7 @@ fn help_x(report: Rect) -> f32 {
 /// The Report a bug button: labelled when there is room for its text (`label_width`, measured in
 /// the current language), otherwise just the icon.
 fn report_rect(bar: Rect, captions: f32, tabs_start: f32, label_width: f32) -> (Rect, bool) {
-    let right = bar.right() - captions - if bar.width() < 640.0 { 8.0 } else { RIGHT_GROUP };
+    let right = bar.right() - captions - if bar.width() < VERSION_SHOWN { 8.0 } else { RIGHT_GROUP };
     // Icon, text and a margin that mirrors the icon side.
     let full = REPORT_TEXT_X + label_width + 11.0;
     let labeled = right - CLUSTER_BUTTONS - tabs_start >= 216.0 + full;
@@ -291,21 +293,21 @@ pub fn app_bar(app: &mut SolveApp, ui: &mut egui::Ui) {
         // Keep the current header controls and product name when merging the new mark.
         let compact_actions = r.right() - left < 640.0;
         // Brand mark: the NØDE CAD mark, drawn in code with the app icon's geometry
-        // (`glyphs::brand_mark`). Same 20 px height and centre as the old block.
+        // (`glyphs::brand_mark`), 26 px tall in the 34 px bar.
         {
-            let c = pos2(left + 20.0, r.center().y);
+            let c = pos2(left + 22.0, r.center().y);
             crate::icons::glyphs::brand_mark(ui.painter(), c);
         }
         if !compact_actions {
             ui.painter().text(
-                pos2(left + 36.0, r.center().y),
+                pos2(left + 42.0, r.center().y),
                 Align2::LEFT_CENTER,
                 "NØDE CAD",
                 crate::fonts::semibold(t.font_heading),
                 t.app_bar_text,
             );
         }
-        let mut x = left + if compact_actions { 56.0 } else { 128.0 };
+        let mut x = left + if compact_actions { 56.0 } else { 134.0 };
         let home = Rect::from_center_size(pos2(x - 4.0, r.center().y), vec2(32.0, 32.0));
         let idle = !app.file_load.busy();
         let home_response = ui.interact(home, ui.id().with("appbar_home"), if idle { Sense::click() } else { Sense::hover() });
@@ -460,7 +462,7 @@ pub fn app_bar(app: &mut SolveApp, ui: &mut egui::Ui) {
         if gresp.on_hover_text(prefs_tip).clicked() {
             crate::prefs::open_at(app, 0);
         }
-        if r.width() >= 640.0 {
+        if r.width() >= VERSION_SHOWN {
             ui.painter().text(
                 pos2(r.right() - 12.0 - captions, r.center().y),
                 Align2::RIGHT_CENTER,
@@ -2180,7 +2182,7 @@ mod header_report_tests {
                         let full = REPORT_TEXT_X + label_width + 11.0;
                         assert_eq!(
                             labeled,
-                            width - captions - if width < 640.0 { 8.0 } else { RIGHT_GROUP } - CLUSTER_BUTTONS - 354.0 >= 216.0 + full
+                            width - captions - if width < VERSION_SHOWN { 8.0 } else { RIGHT_GROUP } - CLUSTER_BUTTONS - 354.0 >= 216.0 + full
                         );
                         if labeled {
                             assert!(REPORT_TEXT_X + label_width < report.width(), "{label_width}: the text overruns its button");

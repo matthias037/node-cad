@@ -236,6 +236,14 @@ pub fn presets(protocol: Protocol) -> &'static [ApiPreset] {
     }
 }
 
+/// Whether `key` can be an API key: not a file path or a command line, which a paste from a
+/// stale clipboard puts in the (masked) key field without anyone seeing it.
+pub fn plausible_key(key: &str) -> bool {
+    let k = key.trim();
+    let path = k.starts_with('~') || (k.starts_with('/') && k[1..].contains('/'));
+    !path && !k.chars().any(char::is_whitespace)
+}
+
 /// Whether a key may be sent to `url`: only over HTTPS, or to this computer.
 pub fn key_safe_for(url: &str) -> bool {
     let u = url.trim().to_ascii_lowercase();
@@ -277,6 +285,16 @@ mod tests {
         assert!(!key_safe_for("http://localhost.evil.example/v1"));
         assert!(!key_safe_for("http://user@evil.example/v1"));
         assert!(!key_safe_for("ftp://x"));
+    }
+
+    #[test]
+    fn a_pasted_path_or_command_is_not_a_key() {
+        assert!(plausible_key("aB3dE5gH7jK9mN1pQ3sT5vW7yZ9bC1dE"));
+        assert!(plausible_key("sk-proj-Ab_12-xyz"));
+        assert!(plausible_key("  aB3dE5gH7jK9mN1p \n"));
+        assert!(!plausible_key("~/.cargo-target/solidcraft/release/solidcraft"));
+        assert!(!plausible_key("/Applications/NØDE CAD.app/Contents/MacOS/solidcraft"));
+        assert!(!plausible_key("open -a 'NØDE CAD'"));
     }
 
     #[test]

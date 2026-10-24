@@ -1291,6 +1291,7 @@
   "ui.ai_key": "Clé d'API",
   "ui.ai_key_hint": "facultative ; conservée dans le trousseau de clés du système",
   "ui.ai_key_needs_https": "Une clé n'est envoyée qu'en HTTPS, ou vers cet ordinateur.",
+  "ui.ai_key_not_a_key": "Ceci ressemble à un chemin de fichier ou à une commande, pas à une clé d'API : le presse-papiers contenait sans doute autre chose. Recopiez la clé depuis la console du fournisseur (pour Mistral : console.mistral.ai, rubrique API Keys) puis collez-la de nouveau.",
   "ui.ai_key_note": "Stockée dans le trousseau de clés du système, jamais dans les réglages de NØDE CAD. Laisser vide pour un serveur local.",
   "ui.ai_keychain_error": "Le trousseau de clés du système a refusé : {error}",
   "ui.ai_mistral_key_hint": "Mistral refuse cette clé. Vérifiez que c'est une clé d'API créée sur console.mistral.ai (une clé Codestral ne fonctionne que sur codestral.mistral.ai), qu'un forfait est activé sur l'espace de travail (le forfait gratuit « Experiment » suffit), et attendez quelques minutes après sa création.",

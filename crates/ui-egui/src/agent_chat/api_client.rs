@@ -71,6 +71,10 @@ impl ApiBackend {
         if cfg.key.is_some() && !super::agents::key_safe_for(&cfg.base_url) {
             return Err(crate::i18n::tr("ui.ai_key_needs_https").to_string());
         }
+        // A key saved before the dialog checked it may be a pasted path: say so, not "HTTP 401".
+        if cfg.key.as_deref().is_some_and(|k| !super::agents::plausible_key(k)) {
+            return Err(crate::i18n::tr("ui.ai_key_not_a_key").to_string());
+        }
         // The same MCP server an ACP agent would get.
         let mcp = match &ctx.bridge {
             Some(b) => {
@@ -875,6 +879,9 @@ pub fn test_endpoint(http: &HttpFn, base_url: &str, key: Option<&str>, model: &s
     if let Some(k) = key {
         if !super::agents::key_safe_for(base_url) {
             return Err(crate::i18n::tr("ui.ai_key_needs_https").to_string());
+        }
+        if !super::agents::plausible_key(k) {
+            return Err(crate::i18n::tr("ui.ai_key_not_a_key").to_string());
         }
         headers.push(("Authorization".to_string(), format!("Bearer {k}")));
     }

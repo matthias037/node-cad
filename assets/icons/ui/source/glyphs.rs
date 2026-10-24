@@ -99,10 +99,10 @@ pub(crate) fn breadcrumb(p: &egui::Painter, c: egui::Pos2, col: Color32) {
 }
 
 /// The NØDE CAD mark in the application bar: the geometry of the app icon
-/// (`assets/icons/app/shared/source/app_icon.rs`) without its tile, 20 px tall.
+/// (`assets/icons/app/shared/source/app_icon.rs`) without its tile, 26 px tall.
 pub(crate) fn brand_mark(p: &egui::Painter, c: Pos2) {
     let t = crate::theme::Tokens::get();
-    brand_mark_styled(p, c, 20.0, t.app_bar_text, t.logo[0], Some(t.app_bar));
+    brand_mark_styled(p, c, 26.0, t.app_bar_text, t.logo[0], Some(t.app_bar));
 }
 
 /// The same mark as a single quiet silhouette.

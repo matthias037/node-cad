@@ -1589,6 +1589,7 @@
   "ui.ai_key": "API 密钥",
   "ui.ai_key_hint": "可选；保存在系统钥匙串中",
   "ui.ai_key_needs_https": "密钥只会通过 HTTPS 发送，或发送到本机。",
+  "ui.ai_key_not_a_key": "This looks like a file path or a command, not an API key: the clipboard probably held something else. Copy the key again from the provider's console (for Mistral: console.mistral.ai, API Keys) and paste it again.",
   "ui.ai_key_note": "保存在系统钥匙串中，绝不保存在 NØDE CAD 的设置里。本地服务器可留空。",
   "ui.ai_keychain_error": "系统钥匙串拒绝：{error}",
   "ui.ai_kind": "类型",

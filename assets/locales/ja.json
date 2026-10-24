@@ -1589,6 +1589,7 @@
   "ui.ai_key": "API キー",
   "ui.ai_key_hint": "任意。システムのキーチェーンに保存",
   "ui.ai_key_needs_https": "キーは HTTPS 経由、またはこのコンピューター宛てにのみ送信されます。",
+  "ui.ai_key_not_a_key": "This looks like a file path or a command, not an API key: the clipboard probably held something else. Copy the key again from the provider's console (for Mistral: console.mistral.ai, API Keys) and paste it again.",
   "ui.ai_key_note": "システムのキーチェーンに保存され、NØDE CAD の設定には保存されません。ローカルサーバーの場合は空欄のままにします。",
   "ui.ai_keychain_error": "システムのキーチェーンが拒否しました: {error}",
   "ui.ai_kind": "種類",

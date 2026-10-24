@@ -1589,6 +1589,7 @@
   "ui.ai_key": "API key",
   "ui.ai_key_hint": "optional; kept in the system keychain",
   "ui.ai_key_needs_https": "A key is only sent over HTTPS, or to this computer.",
+  "ui.ai_key_not_a_key": "This looks like a file path or a command, not an API key: the clipboard probably held something else. Copy the key again from the provider's console (for Mistral: console.mistral.ai, API Keys) and paste it again.",
   "ui.ai_key_note": "Stored in the system keychain, never in NØDE CAD's settings. Leave it empty for a local server.",
   "ui.ai_keychain_error": "The system keychain refused: {error}",
   "ui.ai_kind": "Kind",

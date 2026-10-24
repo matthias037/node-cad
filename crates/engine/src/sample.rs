@@ -37,8 +37,8 @@ pub fn script() -> Value {
 /// The ring is cut in two by the gap around the bar, hence its two bodies.
 pub fn logo() -> Value {
     // Three-quarter front view: face on enough to read the Ø, turned enough to show the
-    // relief of the bar.
-    let camera = json!({"target": [0, 0, 46], "yaw": -0.38, "pitch": 0.24, "distance": 200});
+    // relief of the bar, close enough for the mark to fill most of the view.
+    let camera = json!({"target": [0, 0, 50], "yaw": -0.38, "pitch": 0.24, "distance": 160});
     json!({"commands": [
         {"command": "parameters.change", "params": {"name": "epaisseur", "expression": "8 mm", "comment": "épaisseur de l'anneau"}},
         {"command": "parameters.change", "params": {"name": "relief", "expression": "12 mm", "comment": "épaisseur de la barre, en relief des deux côtés"}},
