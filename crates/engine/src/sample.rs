@@ -32,6 +32,36 @@ pub fn script() -> Value {
     ]})
 }
 
+/// The NØDE logo as a part: the ring cut by the coral bar, standing on the front plane so the
+/// opening view reads it face on. NØDE CAD opens on it (desktop without a file, and the web app).
+/// The ring is cut in two by the gap around the bar, hence its two bodies.
+pub fn logo() -> Value {
+    // Three-quarter front view: face on enough to read the Ø, turned enough to show the
+    // relief of the bar.
+    let camera = json!({"target": [0, 0, 46], "yaw": -0.38, "pitch": 0.24, "distance": 200});
+    json!({"commands": [
+        {"command": "parameters.change", "params": {"name": "epaisseur", "expression": "8 mm", "comment": "épaisseur de l'anneau"}},
+        {"command": "parameters.change", "params": {"name": "relief", "expression": "12 mm", "comment": "épaisseur de la barre, en relief des deux côtés"}},
+        {"command": "sketch.create", "params": {"plane": "XZ", "name": "Anneau"}},
+        {"command": "sketch.circle.center", "params": {"center": [0, -46], "diameter": 87}},
+        {"command": "sketch.circle.center", "params": {"center": [0, -46], "diameter": 61}},
+        {"command": "sketch.finish", "params": {}},
+        {"command": "solid.extrude", "params": {"distance": "epaisseur", "direction": "symmetric", "body_name": "Anneau", "name": "Anneau"}},
+        {"command": "sketch.create", "params": {"plane": "XZ", "name": "Coupe"}},
+        {"command": "sketch.slot.center_to_center", "params": {"p0": [-39, -7], "p1": [39, -85], "width": 21}},
+        {"command": "sketch.finish", "params": {}},
+        {"command": "solid.extrude", "params": {"distance": "epaisseur", "direction": "symmetric", "operation": "cut", "targets": ["Anneau"], "name": "Coupe"}},
+        {"command": "sketch.create", "params": {"plane": "XZ", "name": "Barre"}},
+        {"command": "sketch.slot.center_to_center", "params": {"p0": [-39, -7], "p1": [39, -85], "width": 13}},
+        {"command": "sketch.finish", "params": {}},
+        {"command": "solid.extrude", "params": {"distance": "relief", "direction": "symmetric", "operation": "new", "body_name": "Barre", "name": "Barre"}},
+        {"command": "appearance.assign", "params": {"bodies": ["Anneau", "Anneau (1)"], "color": "#d9dde4"}},
+        {"command": "appearance.assign", "params": {"bodies": ["Barre"], "color": "#e56e6e"}},
+        {"command": "view.save", "params": {"name": "NØDE", "camera": camera.clone()}},
+        {"command": "view.apply", "params": {"camera": camera}},
+    ]})
+}
+
 /// A built-in sample design: its name, a line about what it shows, and the script that builds it.
 pub struct Sample {
     pub name: &'static str,
@@ -42,6 +72,7 @@ pub struct Sample {
 /// The built-in samples (the start page lists them), each built through commands.
 pub fn samples() -> Vec<Sample> {
     vec![
+        Sample { name: "NØDE Logo", about: "The NØDE ring and bar as a part: ring thickness and bar relief are parameters", script: logo },
         Sample { name: "Sample Plate", about: "Parametric plate with fillets, holes and a bored boss", script },
         Sample { name: "Sheet Metal Bracket", about: "Base flange with edge flanges and a hem on a 2 mm rule", script: bracket },
         Sample { name: "Hinge Assembly", about: "Two components and a revolute joint, driven to 60°", script: hinge },

@@ -643,14 +643,17 @@ mod web {
                             // eframe's web painter has no stencil buffer.
                             app.set_wgpu(rs, DEPTH_BITS, 0, 1);
                         }
-                        if query().contains("sample") {
-                            if let Err(e) = app.session.run_script(&solidcraft_engine::sample::script()) {
-                                app.set_status(format!("sample: {e}"), true);
+                        // NØDE CAD opens on the NØDE logo, built as a part; `?vide` gives the
+                        // empty design and the start page instead.
+                        let empty = query().contains("vide");
+                        if !empty {
+                            if let Err(e) = app.session.run_script(&solidcraft_engine::sample::logo()) {
+                                app.set_status(format!("logo: {e}"), true);
                             }
-                            app.session.doc_mut().name = "Sample Plate".into();
+                            app.session.doc_mut().name = "Logo NØDE".into();
                             app.session.mark_saved();
                         }
-                        if !query().contains("sample") {
+                        if empty {
                             // The empty design takes Units of new designs (#1205). The sample
                             // part is built in millimetres and is left that way.
                             solidcraft_ui_egui::prefs::apply_new_design(&mut app);

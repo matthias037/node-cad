@@ -12,6 +12,8 @@ pub const COMMIT: &str = env!("SOLIDCRAFT_COMMIT");
 pub const BUILD_DATE: &str = env!("SOLIDCRAFT_BUILD_DATE");
 /// The user and developer guide (docs/book, published by .github/workflows/pages.yml).
 pub const DOCS_URL: &str = "https://node-os.fr/cad";
+/// NØDE OS, from the same publisher: managing the workshop the parts are drawn for.
+pub const NODE_OS_URL: &str = "https://node-os.fr/?utm_source=node-cad&utm_medium=app";
 const ATTRIBUTION: &str = include_str!("../../../ATTRIBUTION.md");
 use solidcraft_engine::licences::{LICENSE_APACHE, LICENSE_MIT, NOTICE, THIRD_PARTY};
 
@@ -43,6 +45,7 @@ pub fn run(app: &mut SolveApp, ctx: &egui::Context, item: &str) {
     app.help.menu = false;
     match item {
         "docs" => ctx.open_url(egui::OpenUrl::new_tab(DOCS_URL)),
+        "nodeos" => ctx.open_url(egui::OpenUrl::new_tab(NODE_OS_URL)),
         "about" => app.help.about = true,
         "shortcuts" => {
             app.keymap.open = true;
@@ -72,6 +75,7 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context, anchor: egui::Pos2) {
                 crate::context_menu::menu_frame(ui, |ui| {
                     for (id, label, icon) in [
                         ("docs", "Documentation", "library"),
+                        ("nodeos", "Discover NØDE OS", "library"),
                         ("about", "About NØDE CAD", "help"),
                         ("shortcuts", "Keyboard Shortcuts", "list"),
                         ("messages", "Messages…", "list"),
@@ -114,7 +118,7 @@ fn about(app: &mut SolveApp, ctx: &egui::Context) {
             );
             ui_kit::text(
                 ui,
-                crate::i18n::tr_label("Open-source parametric 3D CAD in Rust. Licensed MIT OR Apache-2.0."),
+                crate::i18n::tr_label("The free, open-source parametric 3D CAD of NØDE, written in Rust by the publisher of NØDE OS. Licensed Apache-2.0."),
                 ui_kit::Text::Note("description"),
             );
             let copy = ui_kit::button(ui, crate::i18n::tr_label("Copy diagnostic information"), ui_kit::Button::Normal);

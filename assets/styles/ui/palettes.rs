@@ -1,4 +1,6 @@
-//! Original light and dark palette values. Compiled by the UI theme boundary.
+//! Light and dark palette values, in the NØDE colours: the night family (`#0a0e18` and its
+//! panels) for the chrome, the NØDE carmine for accents. Viewport selection stays blue: it is
+//! a working colour, not a brand one. Compiled by the UI theme boundary.
 use crate::theme::{AnalysisColors, IconColors, Tokens};
 use egui::Color32;
 
@@ -18,12 +20,12 @@ impl Tokens {
             file_surface: Color32::WHITE,
             file_border: Color32::from_rgb(224, 229, 236),
             file_image_tint: Color32::WHITE,
-            file_rail: Color32::from_rgb(35, 110, 173),
+            file_rail: Color32::from_rgb(190, 18, 60),
             file_rail_ink: Color32::WHITE,
-            file_rail_hover: Color32::from_rgb(43, 118, 180),
-            file_primary: Color32::from_rgb(227, 240, 251),
-            file_primary_ink: Color32::from_rgb(26, 80, 127),
-            file_primary_border: Color32::from_rgb(50, 139, 211),
+            file_rail_hover: Color32::from_rgb(159, 18, 57),
+            file_primary: Color32::from_rgb(255, 241, 243),
+            file_primary_ink: Color32::from_rgb(190, 18, 60),
+            file_primary_border: Color32::from_rgb(225, 29, 72),
             file_recovery: Color32::from_rgb(255, 246, 229),
             file_recovery_ink: Color32::from_rgb(122, 74, 5),
             file_recovery_border: Color32::from_rgb(240, 210, 154),
@@ -70,7 +72,7 @@ impl Tokens {
             control_height: 28.0,
             form_ink: Color32::from_rgb(27, 36, 48),
             form_dim: Color32::from_rgb(74, 88, 104),
-            form_primary: Color32::from_rgb(35, 110, 173),
+            form_primary: Color32::from_rgb(190, 18, 60),
             form_error: Color32::from_rgb(161, 52, 44),
             form_error_fill: Color32::from_rgb(252, 239, 237),
             form_success: Color32::from_rgb(39, 107, 44),
@@ -96,7 +98,7 @@ impl Tokens {
             sketch_mode_tint: 0.12,
             sketch_footer_icon_size: 15.0,
             font_section_tracking: 0.04,
-            app_bar: Color32::from_rgb(52, 56, 64),
+            app_bar: Color32::from_rgb(10, 14, 24),
             app_bar_separator: Color32::from_rgb(136, 145, 160),
             toolbar: Color32::from_rgb(246, 247, 249),
             panel: Color32::from_rgb(250, 251, 252),
@@ -104,8 +106,8 @@ impl Tokens {
             border: Color32::from_rgb(208, 212, 220),
             text: Color32::from_rgb(38, 42, 50),
             text_dim: Color32::from_rgb(110, 116, 128),
-            accent: Color32::from_rgb(38, 120, 218),
-            accent_soft: Color32::from_rgb(214, 230, 250),
+            accent: Color32::from_rgb(225, 29, 72),
+            accent_soft: Color32::from_rgb(255, 241, 243),
             sketch_accent: icon_primary(crate::icon_svg::SKETCH_PRIMARY[0]),
             // Icon palette active-3 ramps; these accents have no compiled constants yet.
             surface_accent: Color32::from_rgb(164, 80, 0),
@@ -137,7 +139,7 @@ impl Tokens {
             warning: Color32::from_rgb(222, 150, 30),
             icon: Color32::from_rgb(70, 78, 92),
             timeline: Color32::from_rgb(232, 235, 240),
-            hover: Color32::from_rgb(226, 234, 246),
+            hover: Color32::from_rgb(242, 244, 247),
             sel_face: Color32::from_rgb(76, 127, 203),
             sel_edge: Color32::from_rgb(0, 127, 255),
             sel_edge_rim: Color32::from_rgb(127, 191, 255),
@@ -203,8 +205,8 @@ impl Tokens {
             control_fill: Color32::from_rgb(255, 255, 255),
             control_border: Color32::from_rgb(195, 203, 214),
             dialog_label: Color32::from_rgb(58, 70, 86),
-            selected_ink: Color32::from_rgb(26, 80, 127),
-            selected_bg: Color32::from_rgb(232, 241, 250),
+            selected_ink: Color32::from_rgb(190, 18, 60),
+            selected_bg: Color32::from_rgb(255, 236, 240),
             timeline_item: Color32::WHITE,
             timeline_item_error: Color32::from_rgb(250, 220, 220),
             timeline_marker: Color32::from_rgb(70, 76, 88),
@@ -267,26 +269,26 @@ impl Tokens {
         t.font_section_tracking = 0.04;
         t.file_dim = Color32::from_rgb(180, 187, 200);
         t.file_recovery_well = Color32::from_rgb(92, 68, 32);
-        t.file_background = Color32::from_rgb(31, 35, 43);
-        t.file_surface = Color32::from_rgb(39, 43, 52);
-        t.file_border = Color32::from_rgb(63, 69, 82);
-        t.file_rail = Color32::from_rgb(30, 80, 128);
-        t.file_rail_hover = Color32::from_rgb(46, 99, 149);
-        t.file_primary = Color32::from_rgb(27, 48, 72);
-        t.file_primary_ink = Color32::from_rgb(156, 199, 245);
-        t.file_primary_border = Color32::from_rgb(58, 136, 238);
+        t.file_background = Color32::from_rgb(14, 19, 31);
+        t.file_surface = Color32::from_rgb(19, 26, 41);
+        t.file_border = Color32::from_rgb(36, 48, 74);
+        t.file_rail = Color32::from_rgb(120, 22, 48);
+        t.file_rail_hover = Color32::from_rgb(150, 30, 60);
+        t.file_primary = Color32::from_rgb(58, 20, 32);
+        t.file_primary_ink = Color32::from_rgb(253, 164, 180);
+        t.file_primary_border = Color32::from_rgb(239, 74, 104);
         t.file_recovery = Color32::from_rgb(67, 51, 28);
         t.file_recovery_ink = Color32::from_rgb(245, 204, 137);
         t.file_recovery_border = Color32::from_rgb(115, 88, 43);
-        t.app_bar = Color32::from_rgb(28, 31, 38);
-        t.toolbar = Color32::from_rgb(39, 43, 52);
-        t.panel = Color32::from_rgb(39, 43, 52);
-        t.panel_header = Color32::from_rgb(47, 52, 62);
-        t.border = Color32::from_rgb(63, 69, 82);
+        t.app_bar = Color32::from_rgb(10, 14, 24);
+        t.toolbar = Color32::from_rgb(19, 26, 41);
+        t.panel = Color32::from_rgb(19, 26, 41);
+        t.panel_header = Color32::from_rgb(27, 36, 56);
+        t.border = Color32::from_rgb(36, 48, 74);
         t.text = Color32::from_rgb(222, 226, 232);
-        t.text_dim = Color32::from_rgb(148, 155, 168);
-        t.accent = Color32::from_rgb(58, 136, 238);
-        t.accent_soft = Color32::from_rgb(42, 70, 110);
+        t.text_dim = Color32::from_rgb(167, 176, 196);
+        t.accent = Color32::from_rgb(239, 74, 104);
+        t.accent_soft = Color32::from_rgb(74, 28, 42);
         t.sketch_accent = icon_primary(crate::icon_svg::SKETCH_PRIMARY[1]);
         t.surface_accent = Color32::from_rgb(149, 104, 45);
         t.mesh_accent = Color32::from_rgb(133, 113, 0);
@@ -313,21 +315,21 @@ impl Tokens {
         t.dialog_body = Color32::from_rgb(39, 43, 52);
         t.dialog_footer = Color32::from_rgb(47, 52, 62);
         t.dialog_rule = Color32::from_rgb(53, 59, 71);
-        t.control_fill = Color32::from_rgb(28, 31, 38);
-        t.control_border = Color32::from_rgb(74, 82, 98);
+        t.control_fill = Color32::from_rgb(10, 14, 24);
+        t.control_border = Color32::from_rgb(52, 66, 96);
         t.dialog_label = t.text;
-        t.selected_ink = Color32::from_rgb(156, 199, 245);
-        t.selected_bg = Color32::from_rgb(42, 70, 110);
+        t.selected_ink = Color32::from_rgb(253, 164, 180);
+        t.selected_bg = Color32::from_rgb(74, 28, 42);
         t.construction_geom = icon_primary(crate::icon_svg::CONSTRUCTION_PRIMARY[1]);
         t.error = Color32::from_rgb(240, 100, 96);
         t.warning = Color32::from_rgb(236, 170, 70);
         t.icon = Color32::from_rgb(208, 214, 226);
-        t.timeline = Color32::from_rgb(33, 37, 45);
+        t.timeline = Color32::from_rgb(14, 19, 31);
         t.hover = Color32::from_rgb(54, 61, 74);
         t.hover_edge_halo = Color32::from_rgb(203, 203, 203);
         t.origin_point = Color32::from_rgb(214, 215, 218);
-        t.viewport_top = Color32::from_rgb(46, 52, 64);
-        t.viewport_bottom = Color32::from_rgb(46, 52, 64);
+        t.viewport_top = Color32::from_rgb(27, 35, 52);
+        t.viewport_bottom = Color32::from_rgb(20, 27, 42);
         t.grid = Color32::from_rgb(59, 65, 76);
         t.grid_major = Color32::from_rgb(73, 79, 90);
         t.body = Color32::from_rgb(152, 156, 162);

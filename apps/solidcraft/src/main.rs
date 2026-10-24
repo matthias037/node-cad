@@ -735,31 +735,34 @@ fn main() -> eframe::Result {
             // on a free port the first time the chat connects (docs/agent-chat.md).
             let ctx = cc.egui_ctx.clone();
             app.agent_chat.control_starter = Some(Box::new(move |tx| control_server::listen_agent(tx, ctx.clone())));
-            if sample {
-                if let Err(e) = app.session.run_script(&solidcraft_engine::sample::script()) {
-                    app.set_status(format!("sample: {e}"), true);
-                }
-                app.session.doc_mut().name = "Sample Plate".into();
-                app.session.mark_saved();
-                app.session.undo.clear();
-            }
             // A launch from Finder: its files arrived before the window.
             #[cfg(target_os = "macos")]
             let files = {
                 open_documents::set_ui(&cc.egui_ctx);
                 [files, open_documents::take()].concat()
             };
+            // NØDE CAD opens on the NØDE logo, built as a part, when no design is given (and
+            // with `--sample`); the start page stays one click away (Home).
+            let logo = sample || (files.is_empty() && control_port.is_none());
+            if logo {
+                if let Err(e) = app.session.run_script(&solidcraft_engine::sample::logo()) {
+                    app.set_status(format!("logo: {e}"), true);
+                }
+                app.session.doc_mut().name = "Logo NØDE".into();
+                app.session.mark_saved();
+                app.session.undo.clear();
+            }
             for f in &files {
                 app.open_path_async(f);
             }
             // No file and no sample: the empty design takes Units of new designs (#1205).
             // An opened file and the sample part keep the units they were saved or built with.
-            if files.is_empty() && !sample {
+            if files.is_empty() && !logo {
                 solidcraft_ui_egui::prefs::apply_new_design(&mut app);
             }
             // No design given: the start page (not when driven over the control channel, whose
             // clients expect the design view; `ui.home` shows it there).
-            if files.is_empty() && !sample && control_port.is_none() {
+            if files.is_empty() && !logo && control_port.is_none() {
                 let rev = app.session.revision;
                 app.home.show(rev);
             }
