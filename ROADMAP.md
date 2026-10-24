@@ -1,6 +1,6 @@
-# SolidCraft roadmap
+# NØDE CAD roadmap
 
-Status as of **2026-10-14**. SolidCraft supports parametric modelling (sketch →
+Status as of **2026-10-14**. NØDE CAD supports parametric modelling (sketch →
 features → parametric timeline) as an open, pure-Rust, agent-drivable application.
 
 ## At a glance
@@ -82,7 +82,7 @@ hierarchies are shared; bounded desktop preparation and occlusion use up to eigh
 Curves are approximated; drawing sheets,
 annotations and exact projected curves remain deferred. See [view DXF](docs/view-dxf.md).
 
-Drawing foundations: [RFC #860](https://github.com/tangency-labs/solidcraft/issues/860)
+Drawing foundations: RFC upstream #860
 and the [foundation ledger](docs/drawing-foundations.md) track the bounded implementation
 packages. The first geometry increment defines validated section records in a plane-local
 frame; the ledger separates that contract from section producers and the Drawing workspace.
@@ -190,7 +190,7 @@ completed drawings publish atomically. The browser still exports synchronously.
   command. It describes the current CPU raster snapshot path without evaluating the model.
   The legacy Design snapshot route remains unchanged. Later slices above provide the
   workspace/jobs and opaque PBR; HDRI and optional engines remain future work. See [the contract](docs/render-backends.md)
-  and [the phased proposal (#620)](https://github.com/bherbruck/solidcraft/issues/620).
+  and the phased proposal (upstream #620).
 
 ## Dimensioning and error reporting
 
@@ -256,20 +256,20 @@ completed drawings publish atomically. The browser still exports synchronously.
 - Crash reports: every panic (in a command, in the kernel, anywhere else) and every unclean
   exit (abort, stack overflow, kill: found at the next start through a locked per-run command
   journal) leaves a local report with the backtrace, version and commit, the command and the
-  design that reproduce it (`solidcraft-cli crashes replay <id>`). Repeats are counted, not
+  design that reproduce it (`node-cad-cli crashes replay <id>`). Repeats are counted, not
   rewritten; at most 20 reports, 50 MB and 90 days. The app shows them after a crash (Help >
   Crash Reports…) with a reviewed issue draft; agents read them through
   `diagnostics.crash_reports`, the MCP `crash_reports` tool or the CLI. Nothing is sent
   anywhere. See [crash reports](docs/crash-reports.md).
 - Agent chat (off by default, desktop): a side panel that drives a coding agent the user
   already has (Claude Code through its ACP adapter, Codex, Gemini CLI, OpenCode, Grok Build, …) over the
-  Agent Client Protocol, under the user's own login; SolidCraft stores no keys. The agent works
-  through SolidCraft's MCP tools on a gated endpoint of its own: file actions wait for Allow or
+  Agent Client Protocol, under the user's own login; NØDE CAD stores no keys. The agent works
+  through NØDE CAD's MCP tools on a gated endpoint of its own: file actions wait for Allow or
   Deny, crash reports are off limits, 24 changes per message, one undo step per message, and
   the agent's whole process group ends with the panel or the app. Docks left or right,
   minimises to a strip. Grok Build discovery includes `~/.grok/bin` and reuses the user's
   Grok login. See [agent chat](docs/agent-chat.md).
-- Command scripts from designs (#886): `timeline.export_script` (CLI `solidcraft-cli script`)
+- Command scripts from designs (#886): `timeline.export_script` (CLI `node-cad-cli script`)
   writes a design's history as a script that `eval` and `run` replay into the same design —
   user parameters, units, sheet metal and plastic rules and materials as their own commands,
   then each feature through `timeline.add` with its ids, names and dimension parameters kept,
@@ -618,7 +618,7 @@ and reference-object placement remain separate work, as do loft rails and center
   format. Generated-mesh storage measurements reduce serialization and decoding work;
   a seekable reader defers original blobs until after provisional display.
   See [container format](docs/design-container.md) and [performance measurements](docs/perf.md).
-- Warm saves with explicit `cache: true` can include a versioned native B-rep cache through SolidCraft-owned topology
+- Warm saves with explicit `cache: true` can include a versioned native B-rep cache through NØDE CAD-owned topology
   and geometry records, with a separate truck adapter and bounded binary reader. Exact
   face-source certificates and operation history survive codec round trips. A provisional
   picture can be generated before original blobs are read; editing and measurement wait

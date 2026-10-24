@@ -1,15 +1,16 @@
 # Browser command API
 
-After the browser app starts, `window.solidcraft` controls the design open in that tab.
+After the browser app starts, `window.nodecad` controls the design open in that tab (`window.solidcraft`,
+the name earlier releases used, is the same object; see [compatibility](compatibility.md)).
 Calls use the same command ids, parameters, control handlers and undo history as the desktop
 control channel. No separate engine or server is started.
 
 | Call | Result |
 |---|---|
-| `solidcraft.request(method, params?)` | Any [control method](control-protocol.md), such as `ui.inspect`, `document.inspect` or `engine.batch` |
-| `solidcraft.execute(command, params?)` | Run an engine command without opening its interactive dialog |
-| `solidcraft.commands()` | Discover commands, their parameters and current enablement |
-| `solidcraft.inspect(params?)` | Inspect the active document, optionally with `{measure: true}` |
+| `nodecad.request(method, params?)` | Any [control method](control-protocol.md), such as `ui.inspect`, `document.inspect` or `engine.batch` |
+| `nodecad.execute(command, params?)` | Run an engine command without opening its interactive dialog |
+| `nodecad.commands()` | Discover commands, their parameters and current enablement |
+| `nodecad.inspect(params?)` | Inspect the active document, optionally with `{measure: true}` |
 
 Every call returns a promise. It resolves to the control reply's `result`, or rejects with an
 `Error`. Omitted or `null` parameters become `{}`. Parameters must be JSON serializable and
@@ -20,15 +21,15 @@ completion; keep it active while driving the app. A reload ends the session and 
 In the browser's developer console, on an empty design:
 
 ```js
-await solidcraft.commands();
-await solidcraft.request("ui.home", {open: false});
-await solidcraft.execute("solid.box", {
+await nodecad.commands();
+await nodecad.request("ui.home", {open: false});
+await nodecad.execute("solid.box", {
   length: 30, width: 20, height: 10, body_name: "Browser API box"
 });
-await solidcraft.inspect({measure: true});
-await solidcraft.execute("edit.undo");
-await solidcraft.execute("edit.redo");
-await solidcraft.request("ui.inspect");
+await nodecad.inspect({measure: true});
+await nodecad.execute("edit.undo");
+await nodecad.execute("edit.redo");
+await nodecad.request("ui.inspect");
 ```
 
 An agent with JavaScript evaluation access to this tab can make the same calls. The API does

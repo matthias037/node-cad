@@ -1,8 +1,10 @@
 # Drawing foundations: first geometry slice
 
-This is the W00 bootstrap ledger for the [published Drawing plan][plan] in
-[#860][rfc]. The first implementation is W01a, [#2053][w01-issue] /
-[PR #2085][w01-pr], owned by `0xlillith`: neutral section-geometry records,
+Issue and PR numbers on this page refer to the upstream project's tracker.
+
+This is the W00 bootstrap ledger for the published Drawing plan in
+#860. The first implementation is W01a, #2053 /
+PR #2085, owned by `0xlillith`: neutral section-geometry records,
 structural validation and conversion to existing planar types. Its concrete API
 and limitations are in [the geometry contract](drawing-geometry.md).
 
@@ -10,7 +12,7 @@ W01a is part of W01, not completion of W00, the full W01 contract, Stage A, or t
 Drawing workspace. It does not extract a body section, calculate visibility,
 register `inspect.section_curves` or `drawing.view`, export a drawing, or save a
 Drawing document. The independent formatter slice W09a is tracked in
-[#2054][w09-issue] / [PR #2086][w09-pr]; it is not a module supplied by W01a.
+#2054 / PR #2086; it is not a module supplied by W01a.
 
 ## Scope, sources and status
 
@@ -20,9 +22,9 @@ Recheck the implementation revision, current claims, [AGENTS](../AGENTS.md) and
 documents were unavailable when this work began; this file does not reconstruct
 them or replace project instructions.
 
-The published plan reconciles the [original RFC][rfc],
-[SychPL's investigation][visibility], [NOWN-DEV's two-stage proposal][fabrication]
-and CamWight's [study and questionnaire][study-comment]. The [attachment][study]
+The published plan reconciles the original RFC,
+SychPL's investigation, NOWN-DEV's two-stage proposal
+and CamWight's study and questionnaire. The [attachment][study]
 retains the detailed requirements, alternatives and sources. Product research is
 requirements evidence; its descriptions and proposed standards rules are not
 implementation code, independently verified conformance or permission to copy
@@ -70,21 +72,21 @@ who have already agreed to an assignment.
 | Package | Depends on | Ownership / scope here | Review and next handoff |
 | --- | --- | --- | --- |
 | W00 | RFC and project rules | Bootstrap in W01a; full ledger/decision ownership remains open | Integration review: preserve sources, unresolved decisions and child-issue boundaries |
-| W01 | W00 immediate scope | `0xlillith`, [#2053][w01-issue]/[#2085][w01-pr], W01a only | Geometry/kernel and engine review: validate representation limits; finish source/provenance/outcome contracts before producer handoff |
-| W02 | Reviewed W01 producer contract and backend placement | Review overlap with NOWN-DEV's [#2068][section-pr] before another claim | Kernel/solidcore review: guarded live-body adapter, supported surfaces, complete source identity and no cache-byte authority |
-| W03 | W02 | Review/reuse producer proposal [#2068][section-pr]; exact supported subset remains to be agreed | Geometry/document review: analytic cuts, classified outcomes, winding/nesting/material checks and error evidence |
-| W04 | W03 and W10 geometry-only subset | NOWN-DEV's [#2068][section-pr] proposes Stage A command/output; not merged at the recorded review | Engine/IO review: explicit selection, request limits, no mutation, physical SVG/DXF, DTO adaptation and complete-or-error output |
-| W05 | Reviewed W01; W02 where extraction is needed | Coordinate with [SychPL's offer][visibility]; this is not an assignment | Geometry/kernel review: bounded HLR investigation and findings in the RFC before a substantial backend proposal |
+| W01 | W00 immediate scope | `0xlillith`, #2053/#2085, W01a only | Geometry/kernel and engine review: validate representation limits; finish source/provenance/outcome contracts before producer handoff |
+| W02 | Reviewed W01 producer contract and backend placement | Review overlap with NOWN-DEV's #2068 before another claim | Kernel/solidcore review: guarded live-body adapter, supported surfaces, complete source identity and no cache-byte authority |
+| W03 | W02 | Review/reuse producer proposal #2068; exact supported subset remains to be agreed | Geometry/document review: analytic cuts, classified outcomes, winding/nesting/material checks and error evidence |
+| W04 | W03 and W10 geometry-only subset | NOWN-DEV's #2068 proposes Stage A command/output; not merged at the recorded review | Engine/IO review: explicit selection, request limits, no mutation, physical SVG/DXF, DTO adaptation and complete-or-error output |
+| W05 | Reviewed W01; W02 where extraction is needed | Coordinate with SychPL's offer; this is not an assignment | Geometry/kernel review: bounded HLR investigation and findings in the RFC before a substantial backend proposal |
 | W06 | Reviewed W05 findings and W02 | Future projection/visibility slice | Geometry/document review: supported scene-wide visibility, split intervals, provenance and cache keys |
 | W07 | W01, W09; W03 for cuts; an agreed preview adapter or W06 | Future transient `drawing.view` | Engine/presentation review: meaningful measurements, snapshot status and explicit approximation |
 | W08 | W07 and W10 text/dimension subset; W04 adapters as reused | Future preview and SVG/DXF/PNG slice | UI/IO review: shared navigation/layout, output scale and UI/CLI/MCP parity |
 
 Stage A does not depend on persistent Drawing storage, PDF, fonts, a drafting
 profile or the W09 formatter. W10's geometry-only primitives are a separate
-increment from its text/dimension layout. W09a's [independent PR][w09-pr] can advance
+increment from its text/dimension layout. W09a's independent PR can advance
 in parallel without introducing a dependency into W01a.
 
-NOWN-DEV's [PR #2068][section-pr] is an overlapping Stage A producer/export
+NOWN-DEV's PR #2068 is an overlapping Stage A producer/export
 proposal to review before further W02-W04 claims. It was open and ready, not
 merged, when inspected at head `4e945d8af594b8cc252cc4e5ffede3684b7bf3bd` on
 2026-10-17. It proposes `doc/project_section.rs` and the
@@ -106,9 +108,9 @@ affected contract revision and dependent child issues.
 | D01: representation placement | W01a uses existing `geom::Plane`, `Seg2`, `Loop2` and `Region2`; neutral section records live at L0 | W01a geometry review. This does not decide the section/HLR algorithm's kernel placement |
 | D02: identity/status scope | W01a has only indices within one value and per-curve accuracy metadata; no persistent source names, provenance or freshness record | W01 follow-up with kernel/document/engine reviewers before W02-W04 depend on source contracts |
 | D03: validity claim | W01a validates structure and preserves supplied orientation. It does not certify winding, nesting, self-intersections or a material section | W03 owns producer/geometric validity evidence; callers must not promote structure checks into manufacturing certification |
-| D04: shared producer/backend | One reusable section provider is the plan; guarded extraction and substantial HLR placement must be coordinated with [solidcore][solidcore] | Kernel/solidcore and integration review before W02/W05 expand into a substantial backend |
+| D04: shared producer/backend | One reusable section provider is the plan; guarded extraction and substantial HLR placement must be coordinated with solidcore | Kernel/solidcore and integration review before W02/W05 expand into a substantial backend |
 | D05: supported geometry/accuracy | Representation support is documented; producer surface/curve coverage and defensible approximation bounds remain future | W02-W03 publish per-case capabilities and F05-F08 results; W05 does the same for visibility |
-| D06: public commands | [#2068][section-pr] proposes `inspect.section_curves`; transient `drawing.view` remains future. W01a registers neither | Review #2068's distinct output schema before W04 integration; live registry/claim check in W04/W07; preserve existing viewport commands |
+| D06: public commands | #2068 proposes `inspect.section_curves`; transient `drawing.view` remains future. W01a registers neither | Review #2068's distinct output schema before W04 integration; live registry/claim check in W04/W07; preserve existing viewport commands |
 | D07: later Drawing choices | Storage/undo, PDF/fonts, standards/profile semantics and release rules remain in the RFC decision register | Their relevant later packages decide them; none blocks this representation slice or standalone section work |
 
 ## Completion and handoff
@@ -124,15 +126,4 @@ need real app evidence when their effect can be shown. Keep generated reference
 documentation, assets and native-format changes outside this slice. Root project
 instructions govern any later change to those areas.
 
-[rfc]: https://github.com/tangency-labs/solidcraft/issues/860
-[plan]: https://github.com/tangency-labs/solidcraft/issues/860#issuecomment-6234779815
-[visibility]: https://github.com/tangency-labs/solidcraft/issues/860#issuecomment-6167030912
-[fabrication]: https://github.com/tangency-labs/solidcraft/issues/860#issuecomment-6231770565
-[study-comment]: https://github.com/tangency-labs/solidcraft/issues/860#issuecomment-6216908058
 [study]: https://github.com/user-attachments/files/33548772/inventor-drawings-research.md
-[w01-issue]: https://github.com/tangency-labs/solidcraft/issues/2053
-[w01-pr]: https://github.com/tangency-labs/solidcraft/pull/2085
-[w09-issue]: https://github.com/tangency-labs/solidcraft/issues/2054
-[w09-pr]: https://github.com/tangency-labs/solidcraft/pull/2086
-[section-pr]: https://github.com/tangency-labs/solidcraft/pull/2068
-[solidcore]: https://github.com/tangency-labs/solidcraft/issues/1597

@@ -1,6 +1,6 @@
 # Native B-rep, schema 3
 
-This is SolidCraft's geometry data model in `solidcraft_geom::brep`. It has no
+This is NØDE CAD's geometry data model in `solidcraft_geom::brep`. It has no
 modelling-backend dependency. It is the body encoding of a design's model cache
 ([the container format](design-container.md#model-cache)); it is not a STEP
 replacement for external interchange. The container reader, binary codec and
@@ -13,7 +13,7 @@ Coordinates are IEEE-754 binary64, in millimetres, right-handed Z-up. Angles are
 radians. Integer references are unsigned 32-bit shell-local indices, never kernel
 addresses or runtime IDs. The schema version is an explicit unsigned 32-bit field.
 A body contains ordered shells; a shell contains ordered vertices, edges and faces.
-Order is retained for SolidCraft's face provenance and naming. Closed and open
+Order is retained for NØDE CAD's face provenance and naming. Closed and open
 shells are representable; material containment is not inferred from shell order.
 
 An edge references its start/end vertices in its curve's forward direction. Each
@@ -90,7 +90,7 @@ second backend still requires an implemented and tested adapter before claiming
 cross-kernel interoperability.
 
 Face-source certificates, operation history, appearances and persistent document
-identities belong to a versioned SolidCraft body/state envelope around this geometry.
+identities belong to a versioned NØDE CAD body/state envelope around this geometry.
 They must be preserved by the cache codec, not reconstructed from face counts or
 floating-point comparisons. A decoded cache remains provisional until authoritative
 re-evaluation finishes. The document and original blobs remain sufficient to reopen

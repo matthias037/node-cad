@@ -2,7 +2,7 @@
 
 | Format | Read | Write |
 |---|---|---|
-| `.solidcraft` (versioned container or JSON design) | yes | yes |
+| `.nodecad` (versioned container or JSON design) | yes | yes |
 | `.json` (self-contained plain JSON design) | yes | yes |
 | STEP (AP203, AP214, AP242) | solids, assemblies, units, names, colours | AP242 with names, colours and the component tree |
 | IGES 5.3 | manifold solids, or trimmed surfaces sewn into solids | manifold solids with names and colours |
@@ -55,12 +55,12 @@ Closed mechanical meshes with a constant cross-section can be rebuilt as solids 
 ordinary 3MF in which every triangle also names the B-rep face it lies on and every coordinate
 is the tessellation's own double-precision value. Meshing and analysis tools can use the tags to
 keep a model's faces (for loads, boundary conditions or feature edges); other 3MF readers ignore
-them. The format is specified in [`docs/formats/3mf-face-tags.md`](https://github.com/bherbruck/solidcraft/blob/main/docs/formats/3mf-face-tags.md).
+them. The format is specified in [`docs/formats/3mf-face-tags.md`](https://github.com/matthias037/node-cad/blob/main/docs/formats/3mf-face-tags.md).
 
 **File → Export URDF…** (`file.export` with a `.urdf` path) writes the assembly for robot
 simulators and ROS: a link per component placement with its mesh, mass and inertia, and the
-assembly's joints, so the parts move in the simulator as they do in SolidCraft. The meshes are
-written as STL files next to the `.urdf`. See [`docs/urdf.md`](https://github.com/bherbruck/solidcraft/blob/main/docs/urdf.md).
+assembly's joints, so the parts move in the simulator as they do in NØDE CAD. The meshes are
+written as STL files next to the `.urdf`. See [`docs/urdf.md`](https://github.com/matthias037/node-cad/blob/main/docs/urdf.md).
 
 Saves are atomic: a crash at any moment leaves either the old file or the new one, and the
 replaced version is kept as `<file>.bak`. A save keeps the file's permissions, and a design
@@ -75,7 +75,7 @@ from a newer version are refused with a message.
 desktop; **Save As JSON** is also available in the File menu on desktop and web. Choose
 the `.json` extension for plain JSON. **Export Design as JSON** writes an independent,
 self-contained copy without changing the current file. Scripts can explicitly pass
-`"format": "json"` to `file.save` or `file.save_as` even with a `.solidcraft` name.
+`"format": "json"` to `file.save` or `file.save_as` even with a `.nodecad` name.
 Opening detects the format from the contents, so existing JSON designs keep working.
 Containers favor fast reading and saving by default. Scripts can request
 `"compression": "compact"` when file size matters more than CPU time.
@@ -95,7 +95,7 @@ is available. Missing or incompatible pictures use the usual thumbnail generatio
 The default `cache: false` omits the portable thumbnail too.
 The repository's `docs/design-container.md` describes limits and encoding details.
 
-Designs are saved in the newest format this version of SolidCraft knows (`"format": "solidcraft/N"`
+Designs are saved in the newest format this version of NØDE CAD knows (`"format": "solidcraft/N"`
 in the file). It opens designs of every older format and upgrades them as they open; a design
 from a newer version asks you to update instead of being guessed at. Development (nightly) builds
 save a format number no release reads yet.
@@ -149,12 +149,12 @@ none, and is saved exactly as before:
 }
 ```
 
-- **SolidCraft's keys are unprefixed** and hold text. Every other unprefixed key is reserved for
-  later SolidCraft versions.
+- **NØDE CAD's keys are unprefixed** and hold text. Every other unprefixed key is reserved for
+  later NØDE CAD versions.
 - **Other tools keep their data under one reverse-DNS key** of their own (`com.example.tool`:
   two or more dot-separated labels of letters, digits, `-` and `_`), holding an object. A tool
   writes only under its own key and leaves the others alone.
-- **SolidCraft keeps every key as it is** through open, edit and save, in both the container
+- **NØDE CAD keeps every key as it is** through open, edit and save, in both the container
   and plain JSON, and never checks what another tool wrote: a well-known key holding something
   other than text (`"author": 42`) is kept, reads as absent, and never stops the design from
   opening. Typing over it in Design Properties replaces it.
@@ -170,7 +170,7 @@ copy its properties; Save As keeps them. A command script of the design
 ## Saving in the web app
 
 In Chrome, Edge and Opera, **Save As** opens your browser's save dialog and writes the
-`.solidcraft` file to the folder you choose, and **Open** opens the browser's open dialog.
+`.nodecad` file to the folder you choose, and **Open** opens the browser's open dialog.
 **Save** then writes back to that same file. The browser remembers the file, so after you
 reload the page the first **Save** asks once for permission to write to it, and carries on.
 A design you open from your computer saves back to the file you opened.

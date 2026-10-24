@@ -191,7 +191,7 @@ Scripts use the same command, with a midpoint reference in the `points` array:
 
 `mode` can be `horizontal` or `vertical`; omitting it chooses from the current positions.
 
-The solver is SolidCraft's own (damped Gauss–Newton with degree-of-freedom analysis). Constraints:
+The solver is NØDE CAD's own (damped Gauss–Newton with degree-of-freedom analysis). Constraints:
 coincident, horizontal/vertical, parallel, perpendicular, tangent, equal, concentric, collinear,
 midpoint, symmetry, fix, curvature (G2) and polygon. **Sketch Dimension** (D) adds linear,
 aligned, horizontal, vertical, point-to-line, line-to-circle, radius, diameter and angle

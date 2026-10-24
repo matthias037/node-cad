@@ -5,9 +5,9 @@ The full feature summary, moved out of the README. The commands by area are in [
 **Status: early but usable for simple parts.** 75 of 76 public reference parts
 match their analytic or FreeCAD-computed volume, area, centre of mass and bounding box
 ([oracle.md](oracle.md)); the other is a tracked bug.
-These checks do not establish complete geometric or workflow equivalence. The commands SolidCraft has
+These checks do not establish complete geometric or workflow equivalence. The commands NØDE CAD has
 are listed by area in [features.md](features.md); status and plans are in [ROADMAP.md](../ROADMAP.md).
-Open work and known bugs are in [GitHub issues](https://github.com/tangency-labs/solidcraft/issues),
+Open work and known bugs are in [GitHub issues](https://github.com/matthias037/node-cad/issues),
 and help is welcome: see [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 
@@ -54,7 +54,7 @@ and help is welcome: see [CONTRIBUTING.md](../CONTRIBUTING.md).
   retained shallow prismatic pockets, exact line/arc/circle DXF outlines and bend tables;
   plastic enclosure features and rules. Pocket depth and side survive unfold/refold and appear
   separately from through-hole outlines in the flat preview and DXF.
-- **Files**: design containers (`.solidcraft`) with lossless binary mesh payloads;
+- **Files**: design containers (`.nodecad`) with lossless binary mesh payloads;
   plain JSON remains supported for opening, Save As and export. Desktop Open can show a saved
   provisional picture from warm geometry caches while rebuilding before editing; caches never
   replace the parametric design. Export to STEP (AP242 with body names, colours and
@@ -90,10 +90,10 @@ and help is welcome: see [CONTRIBUTING.md](../CONTRIBUTING.md).
   control channel so agents and tests can drive it.
   Feature errors and Help can open an editable **Create Issue** draft with relevant context
   and an optional reviewed screenshot; opening GitHub does not submit the report.
-- **Headless CLI** `solidcraft-cli`: run command scripts, measure (volume, area, centre of mass,
+- **Headless CLI** `node-cad-cli`: run command scripts, measure (volume, area, centre of mass,
   face/edge/vertex counts), export, render PNG snapshots and replay reference recipes.
   A snapshot can draw a body see-through and another solid in a colour of its own, and cut
   the model at a plane, so a picture shows the body a cut would remove inside the material
   it meets.
-- **MCP server** `solidcraft-cli mcp`: AI agents model, measure and look at parts headless or
+- **MCP server** `node-cad-cli mcp`: AI agents model, measure and look at parts headless or
   in the running app (see below).

@@ -8,7 +8,7 @@ faded.
 
 A component is placed by its **occurrences**. Paste creates another instance of the same
 component, and **Paste New** creates an independent copy. Move an occurrence with the move
-triad, then **Capture Position** to keep it or **Revert** to put it back. SolidCraft asks before
+triad, then **Capture Position** to keep it or **Revert** to put it back. NØDE CAD asks before
 the next command if a move wasn't captured. **Ground** fixes an occurrence in place.
 
 Paste New copies nested component definitions, sketches, feature histories and generated
@@ -16,11 +16,11 @@ dimension parameters. Repeated child instances remain shared within the new copy
 appearances and wholly internal joints/motion records receive copied references. Design-wide
 user parameters remain shared; retained external links and omitted cross-boundary motion
 records are reported. Unsupported destructive links refuse the entire copy. See
-[individual-instance and copy details](https://github.com/bherbruck/solidcraft/blob/main/docs/occurrence-workflows.md).
+[individual-instance and copy details](https://github.com/matthias037/node-cad/blob/main/docs/occurrence-workflows.md).
 
 **Extract to File** (`component.extract`, in a component's right-click menu) moves a component
 into a design of its own: its sketches, features, bodies, subcomponents and the joints among them
-go to the new `.solidcraft` file at its origin, with the parameters they use, and the component
+go to the new `.nodecad` file at its origin, with the parameters they use, and the component
 becomes linked to that file, as **Insert Design** makes it. Its placements and the joints to the
 rest of the assembly stay. Components whose own history builds the same bodies are offered to
 become placements of the new link too (`component.copies`, `component.replace_with_link`).
@@ -244,7 +244,7 @@ association is detached. Changes and their generated curves undo and redo togeth
 A trace takes 2 to 500
 samples: 100 by default for a joint, one per step for a study.
 
-The [Chebyshev linkage demo](https://github.com/tangency-labs/solidcraft/blob/main/docs/chebyshev-motion-trace.md)
+The [Chebyshev linkage demo](https://github.com/matthias037/node-cad/blob/main/docs/chebyshev-motion-trace.md)
 builds a complete four-joint mechanism, plays a saved study and demonstrates the
 same retained trajectory updating after a link-length or driving-range edit.
 
@@ -260,7 +260,7 @@ their size in pixels (800 × 500 by default, at most 4096 a side), and `fps` the
 by default); `grid: false` and `axes: false` leave out the ground grid and the origin's axes.
 `camera` takes the reply of the control channel's `ui.camera` (or any of its fields;
 the rest come from the view `view.apply` chose, or the home view framing the model). The frames
-are drawn by the same renderer as `solidcraft-cli snapshot`, on a copy of the design, which is not
+are drawn by the same renderer as `node-cad-cli snapshot`, on a copy of the design, which is not
 changed. A GIF keeps one palette for all its frames, so colours don't flicker, and stores only
 what changed from one frame to the next. Frames are capped: at most 1000, and a GIF holds at most
 2^26 pixels of frames (about 160 frames of 800 × 500).
@@ -324,7 +324,7 @@ the part's bodies only: its timeline, parameters and sheet-metal data (flat patt
 table) stay in the part's own design.
 
 If a source file moves or is renamed, right-click its linked component or occurrence in the
-Browser and choose **Relink Source (All Instances)…**. Choose the saved `.solidcraft` design
+Browser and choose **Relink Source (All Instances)…**. Choose the saved `.nodecad` design
 to use. Relinking updates that component's stored path and solid bodies for **all its
 instances**, keeping their identities and placements. Cancelling or choosing a missing,
 invalid, empty or self-referencing design leaves the assembly unchanged. The operation is
@@ -348,7 +348,7 @@ uses its first placement; `occurrence.properties` selects a specific instance. R
 measures the complete assembly. Volumes are summed, including overlapping bodies, rather than
 measuring their union. The same workflow is available through `component.properties` and
 `occurrence.properties`; see
-[placement and measurement details](https://github.com/bherbruck/solidcraft/blob/main/docs/assembly-properties.md).
+[placement and measurement details](https://github.com/matthias037/node-cad/blob/main/docs/assembly-properties.md).
 
 ## Part properties and the bill of materials
 

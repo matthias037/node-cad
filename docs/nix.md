@@ -1,4 +1,4 @@
-# SolidCraft with Nix
+# NØDE CAD with Nix
 
 The flake supports `x86_64-linux`, `aarch64-linux` and `aarch64-darwin`. Enable Nix's `nix-command`
 and `flakes` experimental features. The committed `flake.lock` pins nixpkgs and
@@ -10,51 +10,49 @@ floor in `Cargo.toml`.
 Run the current app without installing it:
 
 ```sh
-nix run github:bherbruck/solidcraft#solidcraft -- --sample
+nix run github:matthias037/node-cad -- --sample
 ```
 
-Inside a checkout, `nix run .` and `nix run .#solidcraft` launch the desktop app.
-`nix run .#cli -- --version` launches the CLI. The legacy `.#solidcraft` app name
-also works. These commands use the flake's exact wrapped binary, rather than an
+Inside a checkout, `nix run .` launches the desktop app and `nix run .#cli -- --version`
+launches the CLI. These commands use the flake's exact wrapped binary, rather than an
 older executable already on your shell's `PATH`.
 
 Build without installing:
 
 ```sh
-nix build github:bherbruck/solidcraft#solidcraft
-./result/bin/solidcraft --version
-./result/bin/solidcraft --sample
+nix build github:matthias037/node-cad
+./result/bin/node-cad --version
+./result/bin/node-cad --sample
 ```
 
-The result contains `solidcraft`, `solidcraft-cli` and the deprecated old-name CLI alias
+The result contains `node-cad`, `node-cad-cli` and the deprecated old-name CLI aliases
 (see [compatibility.md](compatibility.md)). **Building does not install a desktop-menu entry.** For a user
 profile installation, run:
 
 ```sh
-nix profile install github:bherbruck/solidcraft#solidcraft
-solidcraft --sample
+nix profile install github:matthias037/node-cad
+node-cad --sample
 ```
 
-On Linux, this installs the SolidCraft desktop entry, MIME definition and generated icon
+On Linux, this installs the NØDE CAD desktop entry, MIME definition and generated icon
 sizes alongside the commands. On macOS the package contains the binaries only; for a bundled
-`SolidCraft.app`, use the release `.dmg`. NixOS/Home Manager can instead put the flake's
-`packages.${system}.solidcraft` in `environment.systemPackages`/`home.packages`.
+`NØDE CAD.app`, use the release `.dmg`. NixOS/Home Manager can instead put the flake's
+`packages.${system}.default` in `environment.systemPackages`/`home.packages`.
 If a non-NixOS desktop does not discover profile-installed launchers, ensure that
 its session includes `~/.nix-profile/share` in `XDG_DATA_DIRS`, then log out and
-back in. The desktop/application ID is unchanged (see
-[compatibility.md](compatibility.md#package-ids)).
+back in. The desktop/application ID is `fr.node_os.cad`.
 
 Check which executable a plain terminal command would run:
 
 ```sh
-type -a solidcraft
-readlink -f "$(command -v solidcraft)"
-solidcraft --version
-nix run github:bherbruck/solidcraft#solidcraft -- --version
+type -a node-cad
+readlink -f "$(command -v node-cad)"
+node-cad --version
+nix run github:matthias037/node-cad -- --version
 ```
 
 An unrelated old executable on `PATH` is not updated by `nix build`.
-Use the flake app or `./result/bin/solidcraft` to verify the package you just built.
+Use the flake app or `./result/bin/node-cad` to verify the package you just built.
 
 ## Graphics and file dialogs
 
@@ -75,7 +73,7 @@ GPU-specific instructions; a wrapper for a different driver is not a substitute.
 For Intel/Mesa, after building:
 
 ```sh
-nix run github:nix-community/nixGL#nixGLIntel -- ./result/bin/solidcraft --sample
+nix run github:nix-community/nixGL#nixGLIntel -- ./result/bin/node-cad --sample
 ```
 
 If a window is black, first verify that you launched the newly wrapped package
@@ -85,7 +83,7 @@ OpenGL rendering uses 1x anti-aliasing to avoid the multisampled black-frame fai
 Vulkan and other backends keep the requested sample count; saved preferences are preserved.
 For older builds, including 0.3.0, set Anti-aliasing to 1x and restart when using OpenGL.
 If that window cannot show the settings dialog, edit only the `msaa` field to `1` in
-`~/.local/share/solidcraft/graphics.json`; preserve any other settings.
+`~/.local/share/nodecad/graphics.json`; preserve any other settings.
 
 ## Wayland, XWayland and niri
 

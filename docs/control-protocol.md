@@ -1,6 +1,6 @@
 # Control protocol
 
-`solidcraft --control PORT` (or `SOLIDCRAFT_CONTROL_PORT=PORT`) listens on `127.0.0.1:PORT` for
+`node-cad --control PORT` (or `SOLIDCRAFT_CONTROL_PORT=PORT`) listens on `127.0.0.1:PORT` for
 JSON lines. Each request is one line `{"id": …, "method": "…", "params": {…}}`; each reply is one
 line `{"id": …, "ok": true, "result": …}` or `{"id": …, "ok": false, "error": "…"}`. Requests are
 handled on the UI thread between frames; pointer and keyboard input is injected as real egui
@@ -14,8 +14,8 @@ launch and writes it, as one line of hex, to a file only the user can read:
 | System | Token file |
 |---|---|
 | Linux | `$XDG_DATA_HOME/solidcraft/control/PORT.token` (`~/.local/share/solidcraft/control/PORT.token`) |
-| macOS | `~/Library/Application Support/SolidCraft/control/PORT.token` |
-| Windows | `%LOCALAPPDATA%\SolidCraft\control\PORT.token` |
+| macOS | `~/Library/Application Support/NODE CAD/control/PORT.token` |
+| Windows | `%LOCALAPPDATA%\NODE CAD\control\PORT.token` |
 
 On Unix the folder is `0700` and the file `0600`; on Windows the file's inherited permissions are
 replaced by a single entry for the user. `SOLIDCRAFT_CONTROL_DIR` moves the folder. The file is
@@ -28,7 +28,7 @@ connection may leave it out. A first line without the right token is answered wi
 `{"ok": false, "error": "unauthorized: …"}` and the connection is closed, without running
 anything. Tokens are compared in constant time.
 
-`solidcraft-cli mcp --connect 127.0.0.1:PORT` reads the token file for that port by itself
+`node-cad-cli mcp --connect 127.0.0.1:PORT` reads the token file for that port by itself
 (`--token T` or `SOLIDCRAFT_CONTROL_TOKEN` give one explicitly). For a test harness, or a
 sandboxed package whose data folder the client can't see, start the app with
 `SOLIDCRAFT_CONTROL_TOKEN` set to at least 32 hex characters (for example
@@ -97,7 +97,7 @@ MCP server sends its folders this way on every request ([mcp.md](mcp.md)). Witho
 | `engine.commands` | — | every command: id, label, tab, panel, icon, shortcut, params doc, enabled |
 | `document.inspect` | `measure?`: bool | parameters, timeline (errors, timings), bodies, sketches, selection (assembly joints: `engine.execute` `joint.inspect {joint?}`, which reads only: each joint's two origins with the occurrence, the snap as saved, the feature, face, edge or sketch curve its names refer to, and whether it resolves or why not; kind, offset, angle, flip, values, limits, expressions and motion links) |
 
-Commands never open dialogs when run this way. `solidcraft-cli commands` prints the same registry.
+Commands never open dialogs when run this way. `node-cad-cli commands` prints the same registry.
 
 ### Slow commands and the window (#1989)
 
@@ -197,7 +197,7 @@ labels; `prefs:measure_axis_distances` identifies the checkbox.
 | `ui.key` | `key` (egui key name, `Enter`, `Escape`…), `cmd?`, `shift?` | |
 | `ui.text` | `text` | typed text |
 | `ui.screenshot` | `path?` | PNG of the window (needs a presented frame: a minimised or fully covered window answers at once with `hidden: true` and an error; use `ui.render`) |
-| `ui.render` | `path`, `width?`, `height?`, `grid?`, `axes?` | Render of the model with the current camera (no window needed), drawn on the app's GPU device with the viewport's pipelines (the reply's `renderer`: `gpu`, or `gpu-software` on a software adapter), in the window's theme (light or dark; `solidcraft-cli snapshot` keeps the light colours); cut by the section the viewport shows (`inspect.section`, an open Section Analysis dialog's preview, a sketch's Slice), with the cut face capped. The ground grid and the origin's axes are drawn as the window shows them (`ui.set` `showGrid` and `showOrigin`, `hiddenOrigin`); `grid` and `axes` (booleans) say otherwise for this render |
+| `ui.render` | `path`, `width?`, `height?`, `grid?`, `axes?` | Render of the model with the current camera (no window needed), drawn on the app's GPU device with the viewport's pipelines (the reply's `renderer`: `gpu`, or `gpu-software` on a software adapter), in the window's theme (light or dark; `node-cad-cli snapshot` keeps the light colours); cut by the section the viewport shows (`inspect.section`, an open Section Analysis dialog's preview, a sketch's Slice), with the cut face capped. The ground grid and the origin's axes are drawn as the window shows them (`ui.set` `showGrid` and `showOrigin`, `hiddenOrigin`); `grid` and `axes` (booleans) say otherwise for this render |
 | `ui.confirm` | `accept?`: bool | answers the Delete confirmation (shown when a delete takes other features with it or makes some fail); without `accept`, what it lists |
 | `ui.messages` | `clear?`: `true` (empty the list), `open?`: bool (show or hide the Messages window) | every status message of this run, oldest first (the last 200; a message repeated in a row is one entry with a `count`): `messages` `[{text, error, at, count}]` (`at` in ms since the Unix epoch), and whether the window is `open` (#2763) |
 | `ui.documents` | `action?`: `new`, `switch`, `close`, `quit`; `index?`; `force?` (close without asking); `answer?`: `save`, `dont_save`, `cancel` (answers "save changes?") | the open designs (tabs): names, unsaved flags, the active one, a pending "save changes?" prompt, whether a quit is asking |
@@ -231,7 +231,7 @@ document edits, undo steps or a success-log entry per movement.
 
 ## MCP
 
-`solidcraft-cli mcp --connect 127.0.0.1:PORT` bridges an MCP client (an AI agent) to this
+`node-cad-cli mcp --connect 127.0.0.1:PORT` bridges an MCP client (an AI agent) to this
 channel; see [mcp.md](mcp.md).
 
 ## Example

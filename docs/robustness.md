@@ -7,8 +7,8 @@ robustness runs build random but realistic designs and check every step.
 ## How it runs
 
 ```
-solidcraft-cli fuzz --from 0 --count 1000 --jobs 8 --timeout 90 --out runs/ --report report.md
-solidcraft-cli fuzz-one <seed> --minimise      # one design, cut down to the steps that matter
+node-cad-cli fuzz --from 0 --count 1000 --jobs 8 --timeout 90 --out runs/ --report report.md
+node-cad-cli fuzz-one <seed> --minimise      # one design, cut down to the steps that matter
 ```
 
 `--count` seeds are run starting at `--from`. A range that exceeds `u64::MAX` is

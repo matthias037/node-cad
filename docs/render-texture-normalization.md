@@ -107,7 +107,7 @@ The same [Black Oak Veneer](https://polyhaven.com/a/black_oak_veneer) 1K diffuse
 files that the legacy utility refused now complete normalization with their actual
 embedded ICC profile. Author: Jenelle van Heerden; asset license:
 [Poly Haven CC0](https://polyhaven.com/license), verified at retrieval. Provider API
-calls identified SolidCraft; this is an offline validation probe, not live API integration.
+calls identified NØDE CAD; this is an offline validation probe, not live API integration.
 Files, generated output and probe harness are not bundled or committed.
 
 | Input | Source SHA-256 | Completed result |

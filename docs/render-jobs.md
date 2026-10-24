@@ -104,8 +104,8 @@ Controls and phase messages use stable offline catalog IDs in English, Japanese,
 German and Korean; command IDs and scenario handles remain unchanged.
 
 ```sh
-solidcraft-cli render examples/render-studio.json --out product.png --width 800 --height 600
-solidcraft-cli render design.solidcraft --setup Studio --out product.png --transparent
+node-cad-cli render examples/render-studio.json --out product.png --width 800 --height 600
+node-cad-cli render design.nodecad --setup Studio --out product.png --transparent
 ```
 
 The CLI follows preflight/start/native wait/export, with a default 120-second wait

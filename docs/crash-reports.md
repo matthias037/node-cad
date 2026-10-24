@@ -8,24 +8,24 @@ until you review and submit it, and the design is not part of the draft.
 
 To send a report:
 
-1. Review the title, report text and screenshot in SolidCraft, then click **Open GitHub draft**.
-   For long reports, SolidCraft copies the text to your clipboard; paste it into the GitHub draft.
+1. Review the title, report text and screenshot in NØDE CAD, then click **Open GitHub draft**.
+   For long reports, NØDE CAD copies the text to your clipboard; paste it into the GitHub draft.
 2. Attach the screenshot if you want to share it: use **Copy screenshot** and paste it into
    GitHub, or use **Save screenshot…** and upload the PNG. Screenshots are not attached automatically.
 3. Click **Submit new issue** on GitHub to publish the report. Opening the draft alone does not send it.
 
 ## Where they are
 
-`<data dir>/solidcraft/crashes/`, next to the recovery folder:
+The `crashes` folder in the per-user data folder, next to the recovery folder:
 
 | System | Folder |
 |---|---|
 | Linux | `~/.local/share/solidcraft/crashes` (or `$XDG_DATA_HOME/solidcraft/crashes`) |
-| Windows | `%LOCALAPPDATA%\SolidCraft\crashes` |
-| macOS | `~/Library/Application Support/SolidCraft/crashes` |
+| Windows | `%LOCALAPPDATA%\NODE CAD\crashes` |
+| macOS | `~/Library/Application Support/NODE CAD/crashes` |
 
-`SOLIDCRAFT_CRASH_DIR` overrides the folder. `solidcraft --crash-log` and
-`solidcraft-cli crashes dir` print it.
+`SOLIDCRAFT_CRASH_DIR` overrides the folder. `node-cad --crash-log` and
+`node-cad-cli crashes dir` print it.
 
 ## For agents
 
@@ -35,12 +35,12 @@ All of these read the same folder:
 |---|---|---|---|
 | Engine command (MCP `execute`, control channel, scripts) | `diagnostics.crash_reports {limit?}` | `diagnostics.crash_report {id}` | `diagnostics.crash_reports.clear {id?}` |
 | MCP tool | `crash_reports {limit?}` | `crash_reports {id}` | — |
-| CLI | `solidcraft-cli crashes [--json]` | `solidcraft-cli crashes show <id>` | `solidcraft-cli crashes clear [<id>]` |
+| CLI | `node-cad-cli crashes [--json]` | `node-cad-cli crashes show <id>` | `node-cad-cli crashes clear [<id>]` |
 | Control channel (UI) | `ui.help {"item": "crashes"}` opens the window | | |
 
-**Reproduce:** `solidcraft-cli crashes replay <id>` opens the report's design, runs its
+**Reproduce:** `node-cad-cli crashes replay <id>` opens the report's design, runs its
 commands, and reports whether the same internal error happens again (same place and message).
-Without the CLI, run `solidcraft-cli run <report>/replay.json --in <report>/design.solidcraft`.
+Without the CLI, run `node-cad-cli run <report>/replay.json --in <report>/design.nodecad`.
 A fixed crash turns into a regression test with the same two files.
 
 **Check that reporting works:** with `SOLIDCRAFT_CRASH_TEST=1` set for the app, the command
@@ -77,7 +77,7 @@ A folder `crashes/<YYYYMMDD-HHMMSS>-<signature>/`:
   - `native` (Windows): what the exception filter caught: `code`, `name`, `address`, `module`,
     `offset` (into the module), `detail` (for an access violation, the address read or written)
     and `thread`. The `backtrace` then shows the same in two lines.
-- `design.solidcraft`: the design the replay starts from
+- `design.nodecad`: the design the replay starts from
 - `replay.json`: `{"commands": [{command, params}, …]}`
 - `minidump.dmp` (Windows, native crashes): the threads' stacks and the loaded modules at the
   crash, for WinDbg or Visual Studio. It holds stack memory only, not the design, but it stays

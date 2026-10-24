@@ -3,12 +3,12 @@
 A design with components and joints exports as a robot description in URDF (Unified Robot
 Description Format), the format ROS, Gazebo, Isaac Sim, PyBullet and MuJoCo read. Each part
 becomes a link with its mesh, mass and inertia. Each joint becomes a URDF joint, or a short
-chain of them, that moves the parts the way SolidCraft does.
+chain of them, that moves the parts the way NØDE CAD does.
 
 - **Desktop:** **File → Export URDF…**
 - **Commands:** `file.export {"path": "robot.urdf"}` (or `"format": "urdf"`)
 - **MCP:** the `export` tool with a `.urdf` path or `format: "urdf"`
-- **CLI:** `solidcraft-cli run script.json --out robot.urdf`
+- **CLI:** `node-cad-cli run script.json --out robot.urdf`
 
 URDF always exports the whole assembly, so `bodies` is refused.
 
@@ -59,7 +59,7 @@ defaults are written and a warning says so. A value that is not a positive numbe
 
 ## Joints
 
-| SolidCraft joint | URDF |
+| NØDE CAD joint | URDF |
 |---|---|
 | Rigid | `fixed` |
 | Revolute | `revolute` about z with limits, or `continuous` without |
@@ -74,7 +74,7 @@ defaults are written and a warning says so. A value that is not a positive numbe
 - **Chains:** a joint with several values becomes one URDF joint per value. Between them sit
   links named `<joint>_link1`, `<joint>_link2`. The steps before the last are named
   `<joint>_dof1`, `<joint>_dof2`, and the last one keeps the joint's name.
-- **Values:** each URDF joint value equals the SolidCraft value it comes from: the same angle
+- **Values:** each URDF joint value equals the NØDE CAD value it comes from: the same angle
   (in radians) or distance (in metres). This holds whichever side of the joint is nearer the
   base. When the tree reaches a joint from its B side, the chain runs backwards with its axes
   reversed, so the values still match.
@@ -85,7 +85,7 @@ defaults are written and a warning says so. A value that is not a positive numbe
 The URDF is written at the design's current joint values, with every part where it is shown,
 including moves not captured yet. The exception is a part the joints place: it exports where its
 joints put it, since they put it back as soon as one moves, and a warning says so. Moving a joint in a simulator puts
-the parts the joint solver places where SolidCraft's **Drive Joints** would.
+the parts the joint solver places where NØDE CAD's **Drive Joints** would.
 
 ## The tree
 
@@ -97,14 +97,14 @@ the assembly.
    A side of its first joint, as the solver does when nothing is grounded. A warning says the
    part is not grounded.
 3. A part no joint reaches is fixed where it is. A nested one hangs on its parent part, so it
-   moves with it, as in SolidCraft. A top-level one hangs on `base_link`, with a warning.
+   moves with it, as in NØDE CAD. A top-level one hangs on `base_link`, with a warning.
 4. A joint that would close a loop is left out, with a warning, since a tree cannot hold it.
 5. A joint whose snap points no longer resolve (for example, the face it was on is gone) is
    left out, with a warning naming it.
 
 When a component is placed several times, what is nested in it appears in each placement. In
 the URDF the first placement is the one its joints move; the others are copies fixed in their
-parent at their current pose, with a warning when the copied part has a joint. (In SolidCraft
+parent at their current pose, with a warning when the copied part has a joint. (In NØDE CAD
 the copies move together, which a URDF could only express with `<mimic>`.) The export stops copying past
 64 levels or 100 000 placements, with a warning.
 

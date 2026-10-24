@@ -2,7 +2,7 @@
 
 A fillet stores the edges it rounds, a sketch the face it sits on, a shell the faces it opens.
 If those were face and edge *indices*, an upstream edit that adds a face would move the fillet
-to another edge. SolidCraft stores **names**, and finds them again every time the timeline
+to another edge. NØDE CAD stores **names**, and finds them again every time the timeline
 evaluates.
 
 ## Why names follow the kernel's history

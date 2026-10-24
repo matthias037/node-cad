@@ -1,14 +1,14 @@
 # Browser runtime (design)
 
-Design note for SolidCraft in the browser: tiered storage, worker offload, GPU jobs, and
+Design note for NØDE CAD in the browser: tiered storage, worker offload, GPU jobs, and
 agent control that stay aligned with the desktop app, the control channel, and
 [MCP](mcp.md). Implementation lives primarily in
 [craft-libs](https://github.com/storytold/craft-libs) (`craft-tier-store`, `craft-worker-host`,
-`craft-gpu`, `craft-runtime`); SolidCraft wires those crates into
+`craft-gpu`, `craft-runtime`); NØDE CAD wires those crates into
 [`apps/solidcraft-web`](../apps/solidcraft-web) and [`files.rs`](../apps/solidcraft-web/src/files.rs)
 rather than growing a second stack here.
 
-Related: [plugins.md](plugins.md) and [#1221](https://github.com/bherbruck/solidcraft/issues/1221)
+Related: [plugins.md](plugins.md) and upstream #1221
 (desktop WIT + wasmtime first; parametric timeline features in phase 2), [design containers](design-container.md),
 [control protocol](control-protocol.md).
 
@@ -18,11 +18,11 @@ The wasm app today ([`getting-started`](../docs/book/src/guide/getting-started.m
 the origin private file system (OPFS) behind virtual `/opfs/` paths, with optional File System
 Access import/export. That works for small and medium designs but hits three walls:
 
-| Wall | Symptom in SolidCraft |
+| Wall | Symptom in NØDE CAD |
 |------|------------------------|
 | Quota | Large STEP imports and container blobs compete with autosave and cache in OPFS |
 | Main thread | Open, save, and timeline evaluation run synchronously on the UI thread with egui |
-| Agents | MCP runs out of process (`solidcraft-cli mcp`); the tab has no first-class agent session |
+| Agents | MCP runs out of process (`node-cad-cli mcp`); the tab has no first-class agent session |
 
 WebGPU for the viewport already runs on the main thread (wgpu via eframe). Moving the entire UI
 renderer into a worker is out of scope for the first integration; worker GPU is for offload jobs
@@ -42,7 +42,7 @@ renderer into a worker is out of scope for the first integration; worker GPU is 
    reads of cloud blobs through CollabCraft without vendor types in generic crates.
 4. **One worker broker.** A SharedWorker (or dedicated-worker fallback) coordinates storage writes,
    job queues, and shared wasm module compile per origin. Plugins and offload jobs register on the
-   broker; do not spawn one SharedWorker per plugin ([#1221 comment thread](https://github.com/bherbruck/solidcraft/issues/1221)).
+   broker; do not spawn one SharedWorker per plugin (#1221 comment thread).
 
 ## Architecture
 
@@ -65,10 +65,10 @@ Tiers (craft-tier-store)
 ```
 
 On **desktop**, the same `BlobStore` and job envelopes apply: warm/cold map to normal directories;
-[`solidcraft-cli mcp`](mcp.md) and wasmtime plugin hosts ([#1221](https://github.com/bherbruck/solidcraft/issues/1221))
+[`node-cad-cli mcp`](mcp.md) and wasmtime plugin hosts (upstream #1221)
 call the same `run(command, args)` JSON.
 
-## Mapping SolidCraft today
+## Mapping NØDE CAD today
 
 | Today | Target |
 |-------|--------|
@@ -80,7 +80,7 @@ call the same `run(command, args)` JSON.
 
 ## craft-libs crates (reference)
 
-These names follow the craft-libs performance platform design; SolidCraft depends on them as
+These names follow the craft-libs performance platform design; NØDE CAD depends on them as
 published from storytold/craft-libs after cloud contracts land (#48, #52).
 
 | Crate | Role |
@@ -92,7 +92,7 @@ published from storytold/craft-libs after cloud contracts land (#48, #52).
 | `craft-gpu-providers` | Shared readback/composite helpers extracted from Craft app gpu crates |
 | `craft-runtime` | Facade: tier store + worker host + optional `cloud-delegate` hooks |
 
-Generic runtime code must not depend on SolidCraft crates. SolidCraft registers app-specific
+Generic runtime code must not depend on NØDE CAD crates. NØDE CAD registers app-specific
 providers and key namespaces only.
 
 ## GPU and the viewport
@@ -106,14 +106,14 @@ providers and key namespaces only.
 
 | Mode | Transport |
 |------|-----------|
-| Desktop agent | `solidcraft-cli mcp` (stdio) or `--connect` to [control protocol](control-protocol.md) |
+| Desktop agent | `node-cad-cli mcp` (stdio) or `--connect` to [control protocol](control-protocol.md) |
 | Browser agent | RPC to broker session; dialog-free tools only |
 | IDE bridge | Optional local relay (stdio MCP ↔ tab); not required for CollabCraft-hosted wasm |
 
 File policy for web agents mirrors MCP folders: design directory, cold tier roots, recovery;
 never `--allow-any-path` in the tab.
 
-## Plugins ([#1221](https://github.com/bherbruck/solidcraft/issues/1221))
+## Plugins (upstream #1221)
 
 | Host | Runtime |
 |------|---------|
@@ -132,7 +132,7 @@ Static wasm apps on `craft.quasarke.net` ship `craft-worker-host.js` (brotli-pre
 the app bundle. Prefer one global runtime worker per origin once message routing and wasm size are
 budgeted; per-app worker URLs are acceptable for pilots. CSP must allow `worker-src` / SharedWorker.
 
-## Phasing (SolidCraft)
+## Phasing (NØDE CAD)
 
 1. **Document and track** (this file); no user-visible change.
 2. **Tier-store wiring:** replace ad-hoc OPFS glue with `craft-tier-store` keys; keep on-disk layout.
@@ -146,7 +146,7 @@ budgeted; per-app worker URLs are acceptable for pilots. CSP must allow `worker-
 - Moving egui/viewport WebGPU into SharedWorker
 - Second non-wgpu GPU backend in craft-libs
 - **Implementing** parametric `FeatureKind::Plugin` (designed in [plugins.md](plugins.md); follows craft-runtime wiring)
-- Duplicating `craft-cloud` or embedding `craft-nextcloud` in SolidCraft wasm
+- Duplicating `craft-cloud` or embedding `craft-nextcloud` in NØDE CAD wasm
 
 ## Tests
 

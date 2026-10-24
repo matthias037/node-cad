@@ -1,6 +1,6 @@
-# Contributing to SolidCraft
+# Contributing to NØDE CAD
 
-SolidCraft is an open-source parametric 3D CAD app written in pure Rust.
+NØDE CAD is an open-source parametric 3D CAD app written in pure Rust.
 You sketch on a plane, constrain the sketch, turn profiles into solids, and
 change a parameter to watch the timeline rebuild. It runs as a desktop app (Windows, Linux), in
 the browser (wasm + WebGPU/WebGL2), headless from a CLI, and as an MCP server that AI agents can
@@ -13,7 +13,7 @@ needed most.
 Before choosing a task, check the [command inventory](docs/features.md) and
 [roadmap](ROADMAP.md) for implemented capabilities and current priorities.
 
-Questions, ideas or want to say what you're working on? Join the [Discord](https://discord.gg/FtU4NQNVDH).
+Questions, ideas or want to say what you're working on? Open an [issue](https://github.com/matthias037/node-cad/issues).
 
 ## Kernel work is paused
 
@@ -31,18 +31,19 @@ build you also need `rustup target add wasm32-unknown-unknown` and [`trunk`](htt
 ([documentation](https://trunk-rs.github.io/trunk/)).
 
 ```sh
-git clone https://github.com/tangency-labs/solidcraft && cd solidcraft
+git clone https://github.com/matthias037/node-cad && cd node-cad
 cargo run --release -p solidcraft -- --sample      # desktop app with a sample part
 cargo xtask test                                   # unit, engine and UI-scenario tests
 cargo xtask ci                                     # everything a PR must pass (see below)
 ```
 
-SolidCraft is the product, repository, Cargo package and executable name.
+The product is NØDE CAD and its executables are `node-cad` and `node-cad-cli`; the Cargo
+packages keep their `solidcraft` / `solidcraft-*` names so upstream changes still merge.
 Build the desktop app with `cargo build --release -p solidcraft`, or the CLI with
 `cargo build --release -p solidcraft-cli`. Run the CLI with
-`cargo run --release -p solidcraft-cli -- commands` (or `target/release/solidcraft-cli commands`
-after building). The old name appears only in the compatibility shims listed in
-[docs/compatibility.md](docs/compatibility.md); don't add new uses of it.
+`cargo run --release -p solidcraft-cli -- commands` (or `target/release/node-cad-cli commands`
+after building). Older names appear only in the compatibility shims listed in
+[docs/compatibility.md](docs/compatibility.md); don't add new uses of them.
 
 Web: `cd apps/solidcraft-web && trunk serve --release`, then open the printed URL (`?sample`
 opens the sample part, `?webgl` forces WebGL2). Saving and opening files in the browser needs
@@ -71,10 +72,10 @@ may need a matching [nixGL wrapper](https://github.com/nix-community/nixGL).
 The default development shell retains the Rust/C toolchain already on `PATH`;
 `nix develop .#rust` supplies the pinned toolchain and builds in `target/nix`.
 
-To launch, use `nix run .#solidcraft -- --sample`. To install the app's terminal
-commands, desktop entry and generated icons, use `nix profile install .#solidcraft`.
+To launch, use `nix run . -- --sample`. To install the app's terminal
+commands, desktop entry and generated icons, use `nix profile install .`.
 `nix build` alone creates a build result; it does not install a launcher in your
-desktop menu. The installed `solidcraft` command runs the wrapped app; `solidcraft-cli` is included as
+desktop menu. The installed `node-cad` command runs the wrapped app; `node-cad-cli` is included as
 well. See
 [Nix installation and troubleshooting](docs/nix.md) for remote-flake commands,
 desktop integration and how to distinguish an old executable on `PATH`.
@@ -103,14 +104,14 @@ The [architecture page](docs/architecture.md) has the layer table. The short ver
 
 ## Rules that aren't negotiable
 
-1. **Independent.** SolidCraft is independent. Behaviour is designed from public
+1. **Independent.** NØDE CAD is independent. Behaviour is designed from public
    documentation, general CAD conventions and user feedback. Reference tests use analytic values
    and open-source tools. We don't drive, script, automate or extract data from commercial CAD
    products, and we never copy another product's code, icons, artwork, help text, tooltips,
    templates or materials. Command ids are our own (`solid.fillet`).
 2. **No GPL/LGPL/AGPL code, not even reading it.** That rules out OpenCASCADE, FreeCAD
-   (including planegcs), SolveSpace, CadQuery/OCP, LibreCAD and QCAD. SolidCraft is
-   MIT OR Apache-2.0, and its solver and blends are written from the maths. (Running an
+   (including planegcs), SolveSpace, CadQuery/OCP, LibreCAD and QCAD. NØDE CAD's code is
+   Apache-2.0, and its solver and blends are written from the maths. (Running an
    open-source application to get reference values for a test is fine; reading its source is
    not.) Permissive
    dependencies are fine. Note which one you're adding and why in the PR. THIRD-PARTY-LICENSES.txt
@@ -140,7 +141,7 @@ The [architecture page](docs/architecture.md) has the layer table. The short ver
    `hand_rolled_camera_input_is_rejected` test fails if a page does.
 
 Labels, parameter docs, messages and docs use the terms in the
-[glossary](https://docs.solidcraft.io/reference/glossary.html): one term for each idea. A change that adds a new
+[glossary](docs/book/src/reference/glossary.md): one term for each idea. A change that adds a new
 idea adds its term there.
 
 [AGENTS.md](AGENTS.md) has the long form of these rules. It's written for AI agents, but it's
@@ -222,7 +223,7 @@ A pull request that makes an action pass should record it with `cargo xtask acti
 one that makes a passing action fail fails the sample every CI run checks.
 
 **The reference tests** live in [`tests/oracle/`](tests/oracle/), each a `recipe.json`
-in our own format with an `expected.json` beside it. SolidCraft rebuilds the recipe and compares
+in our own format with an `expected.json` beside it. NØDE CAD rebuilds the recipe and compares
 body count, volume, area, centre of mass and bounding box (and, where there is a `reference.stl`,
 the surface itself). Expected values are either worked out in closed form
 (`tools/oracle-analytic/`) or computed by building the same recipe in FreeCAD, run as a separate
@@ -230,7 +231,7 @@ program (`tools/freecad-oracle/`); each file says which. The generated
 [reference test report](docs/oracle.md) has the current case count and results. The reference-test
 CI job runs `cargo xtask oracle` during full validation; pull-request runs skip it. A case that
 fails because of a known bug names its issue in `expected.json` (`"known_failure": "#123"`);
-never change an expected value to match SolidCraft's output.
+never change an expected value to match NØDE CAD's output.
 
 ## Changing the design file format
 
@@ -277,11 +278,11 @@ and a fresh CI run:
 
 ## Sending a change
 
-1. Work is tracked in [GitHub issues](https://github.com/tangency-labs/solidcraft/issues), labelled
+1. Work is tracked in [GitHub issues](https://github.com/matthias037/node-cad/issues), labelled
    by area (`area:kernel`, `area:sketch`, `area:doc`, `area:ui`, `area:infra`). For anything
    bigger than a bug fix that has no issue yet, open one first. **Claim the issue with a draft
    PR** before you start, so two people don't build the same thing:
-   - Check nobody has it: `gh pr list -R tangency-labs/solidcraft --state open --search "#N"`.
+   - Check nobody has it: `gh pr list -R matthias037/node-cad --state open --search "#N"`.
    - Branch from the latest `main`, commit `git commit --allow-empty -m "claim: #N"`, push, and
      open a **draft** PR titled `<summary> (#N)`, e.g. `Fillet: variable radius along a chain (#123)`.
    - **The lowest-numbered open PR for an issue wins.** If yours lost, close it (or offer to help
@@ -335,7 +336,7 @@ Re-run only a job that runner trouble cancelled, with "Re-run failed jobs". Whil
 active, follow an open PR through its status changes; at handoff, clearly identify anything
 still awaiting merge.
 
-Much of SolidCraft so far was written by AI coding agents (Claude) working in parallel, each
+Much of NØDE CAD so far was written by AI coding agents (Claude) working in parallel, each
 owning one area, with a human setting direction and reporting bugs. Their working notes are in
 [AGENTS.md](AGENTS.md). Human contributors are just as welcome. Use whatever tools you like, as
 long as the change meets the rules above.
@@ -359,14 +360,14 @@ correct them freely and it won't put them back.
   steps, removes the label; an issue that stays in `needs-info` for 14 days is closed, and can be
   reopened any time. Feature requests, app reports with their details, and maintainers' issues
   are never asked.
-- `needs-triage` is the queue: [open issues with it](https://github.com/tangency-labs/solidcraft/issues?q=is%3Aopen+label%3Aneeds-triage).
+- `needs-triage` is the queue: [open issues with it](https://github.com/matthias037/node-cad/issues?q=is%3Aopen+label%3Aneeds-triage).
 
 ## Where help is wanted most
 
-**Kernel speed (slow fillets, booleans, STEP):** please don't rewrite the current kernel code for speed; it is being replaced by [solidcore](https://github.com/bherbruck/solidcore) ([progress](https://tangency-labs.github.io/solidcore/)). Report slow cases with a file under the `kernel-perf` label, and put kernel effort into solidcore instead. See [#1597](https://github.com/tangency-labs/solidcraft/issues/1597).
+**Kernel speed (slow fillets, booleans, STEP):** please don't rewrite the current kernel code for speed; it is being replaced by [solidcore](https://github.com/bherbruck/solidcore) ([progress](https://tangency-labs.github.io/solidcore/)). Report slow cases with a file under the `kernel-perf` label, and put kernel effort into solidcore instead. See upstream #1597.
 
-See the [`help wanted`](https://github.com/tangency-labs/solidcraft/labels/help%20wanted) and
-[`good first issue`](https://github.com/tangency-labs/solidcraft/labels/good%20first%20issue) labels.
+See the [`help wanted`](https://github.com/matthias037/node-cad/labels/help%20wanted) and
+[`good first issue`](https://github.com/matthias037/node-cad/labels/good%20first%20issue) labels.
 In order of how much they'd help users:
 
 1. **Fillet and blend robustness.** Fillets are our own code (truck has no fillet operation).
@@ -394,5 +395,5 @@ unchanged. The initial switch to sorted rows is a one-time larger diff.
 
 ## Licence
 
-By contributing you agree that your contribution is licensed as MIT OR Apache-2.0, like the rest
-of SolidCraft. SolidCraft isn't affiliated with any CAD vendor; product names are trademarks of their owners (see NOTICE).
+By contributing you agree that your contribution is licensed under the Apache License 2.0, like
+the rest of NØDE CAD. NØDE CAD isn't affiliated with any CAD vendor; product names are trademarks of their owners (see NOTICE).

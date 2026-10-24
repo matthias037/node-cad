@@ -44,8 +44,8 @@ an interactive browser importer or download workflow.
 All programmatic calls use JSON and never open a file picker:
 
 ```json
-{"command":"library.export","params":{"path":"my-library.solidcraft-library.json"}}
-{"command":"library.inspect","params":{"path":"my-library.solidcraft-library.json"}}
+{"command":"library.export","params":{"path":"my-library.json"}}
+{"command":"library.inspect","params":{"path":"my-library.json"}}
 ```
 
 Inspection/export returns a `catalog` with qualified entry IDs and exact revisions. Use
@@ -53,7 +53,7 @@ the returned values when applying; do not replace an unknown revision with a gue
 
 ```json
 {"command":"library.apply","params":{
-  "path":"my-library.solidcraft-library.json",
+  "path":"my-library.json",
   "entry":"user.local/appearance-<returned-id>",
   "revision":"<returned-64-character-revision>",
   "targets":{"bodies":["Body1"]}

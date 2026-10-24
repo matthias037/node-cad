@@ -1,6 +1,6 @@
 # A tour of the window
 
-![The SolidCraft window](../generated/sample-plate.png)
+![The NØDE CAD window](../generated/sample-plate.png)
 
 - **Title bar.** On Windows and Linux the application bar is the window's title bar. On the left:
   the File menu (New, Open, Save, Save As, Export…), undo and redo, the Home tab (the start page)
@@ -55,7 +55,7 @@
   setting; switching presets restores that setting. Release the modifier to stop navigating.
   Shift+click and Shift+left-drag still select. Combined Shift+Alt or Ctrl/Cmd modifiers do not
   start pointer-only navigation.
-  The axis view shows the world's X/Y/Z directions in SolidCraft's colors. Click a signed
+  The axis view shows the world's X/Y/Z directions in NØDE CAD's colors. Click a signed
   axis tip to look along that axis; click the aligned tip again to look from the opposite side.
   Drag the axis view to orbit around the view centre, with Shift for snapping. Top and bottom
   keep the nearest quarter-turn heading. The house, the navigation bar's Home button and a middle-button double-click in the view go

@@ -1,4 +1,4 @@
-# SolidCraft UI kit
+# NØDE CAD UI kit
 
 `crates/ui-egui/src/ui_kit/` contains the tokenised controls used by feature dialogs,
 preferences, manager cards, prompts, context menus and the sketch palette. Import through

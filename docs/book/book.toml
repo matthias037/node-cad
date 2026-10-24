@@ -1,7 +1,7 @@
 [book]
-title = "SolidCraft"
+title = "NØDE CAD"
 description = "An open-source parametric 3D CAD application in pure Rust: user guide and developer guide."
-authors = ["SolidCraft contributors"]
+authors = ["NØDE CAD contributors"]
 language = "en"
 src = "src"
 
@@ -10,8 +10,8 @@ build-dir = "../../target/book"
 create-missing = false
 
 [output.html]
-git-repository-url = "https://github.com/tangency-labs/solidcraft"
-edit-url-template = "https://github.com/tangency-labs/solidcraft/edit/main/docs/book/{path}"
+git-repository-url = "https://github.com/matthias037/node-cad"
+edit-url-template = "https://github.com/matthias037/node-cad/edit/main/docs/book/{path}"
 site-url = "/"
 no-section-label = false
 
@@ -23,7 +23,7 @@ enable = true
 # links; these send them to the right place.
 "/dev/mcp.html" = "../guide/mcp.html"
 "/dev/docs/oracle.html" = "../oracle.html"
-"/dev/README.html" = "https://github.com/tangency-labs/solidcraft/blob/main/README.md"
-"/dev/ATTRIBUTION.html" = "https://github.com/tangency-labs/solidcraft/blob/main/ATTRIBUTION.md"
-"/dev/AGENTS.html" = "https://github.com/tangency-labs/solidcraft/blob/main/AGENTS.md"
-"/dev/ROADMAP.html" = "https://github.com/tangency-labs/solidcraft/blob/main/ROADMAP.md"
+"/dev/README.html" = "https://github.com/matthias037/node-cad/blob/main/README.md"
+"/dev/ATTRIBUTION.html" = "https://github.com/matthias037/node-cad/blob/main/ATTRIBUTION.md"
+"/dev/AGENTS.html" = "https://github.com/matthias037/node-cad/blob/main/AGENTS.md"
+"/dev/ROADMAP.html" = "https://github.com/matthias037/node-cad/blob/main/ROADMAP.md"

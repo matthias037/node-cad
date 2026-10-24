@@ -2,9 +2,9 @@
 
 Each directory is one case:
 
-- `recipe.json`: the part, written in SolidCraft's recipe format (sketches in sketch-local
+- `recipe.json`: the part, written in NØDE CAD's recipe format (sketches in sketch-local
   coordinates, features with their parameters, faces and edges picked by a world-space point).
-  `cargo xtask oracle` replays it through SolidCraft's command engine.
+  `cargo xtask oracle` replays it through NØDE CAD's command engine.
 - `expected.json`: what the part must measure, and where those numbers come from.
 - `reference.stl` (optional): a fine triangulation of the expected part, used to check the
   shape itself (surface distance), not only its totals.

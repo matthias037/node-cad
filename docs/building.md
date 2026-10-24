@@ -5,7 +5,7 @@ cargo run --release -p solidcraft -- --sample          # desktop app with a samp
 cargo run --release -p solidcraft-cli -- commands      # the command registry
 cargo run --release -p solidcraft-cli -- run examples/bracket.json --out bracket.step
 cargo run --release -p solidcraft-cli -- snapshot examples/bracket.json --out bracket.png
-cargo run --release -p solidcraft-cli -- snapshot part.solidcraft --out preview.png --tool Pin --section z=12
+cargo run --release -p solidcraft-cli -- snapshot part.nodecad --out preview.png --tool Pin --section z=12
 cargo run --release -p solidcraft-cli -- render examples/render-studio.json --out product.png
 cargo run --release -p solidcraft -- part.step          # open a STEP file as a new design
 cargo run --release -p solidcraft-cli -- eval part.step # measure an imported STEP file
@@ -22,7 +22,7 @@ Windows builds: `cargo xwin build --release --target x86_64-pc-windows-msvc -p s
 In the browser: `cd apps/solidcraft-web && trunk build --release --public-url ./` (WebGPU, or
 WebGL2 with `?webgl`; `?sample` opens the sample part).
 
-Agents can control the document open in a browser tab through `window.solidcraft.execute(...)`
-and `window.solidcraft.request(...)`; see the [browser command API](browser-api.md).
+Agents can control the document open in a browser tab through `window.nodecad.execute(...)`
+and `window.nodecad.request(...)`; see the [browser command API](browser-api.md).
 
 See [CONTRIBUTING](../CONTRIBUTING.md) for the test and review workflow.

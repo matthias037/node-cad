@@ -104,4 +104,4 @@ Run the original procedural `examples/render-studio.json` through the engine/CLI
 open its saved design in the app. Select Render, adjust its background or camera and
 save a setup. The fixture uses original boxes/cylinders and simple colour/opacity
 assignments; no commercial CAD files, artwork or materials are used. Actual Windows
-Vulkan/MSAA evidence is attached to [#673](https://github.com/bherbruck/solidcraft/issues/673).
+Vulkan/MSAA evidence is attached to upstream #673.

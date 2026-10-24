@@ -45,7 +45,7 @@ the actual window with `ui.screenshot` when reviewing it.
 
 On an Apple M3 Pro (18-core GPU, 36 GiB unified memory), macOS 27.0
 (26A428), both unchanged main `0872eb95` and this branch merged with that
-revision reproduce the same startup defect: `solidcraft --sample` shows the
+revision reproduce the same startup defect: `node-cad --sample` shows the
 plate's edges and ground shadow but no opaque faces. AO is disabled on the
 branch and does not exist on main. Both were built with `--profile ci`, launched
 separately on Metal with MSAA 4x, and captured at 1200 × 850 logical pixels

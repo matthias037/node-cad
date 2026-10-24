@@ -1,10 +1,12 @@
 # Neutral section geometry (W01a)
 
-W01a, [#2053][issue] / [PR #2085][pr], adds the L0
+Issue and PR numbers on this page refer to the upstream project's tracker.
+
+W01a, #2053 / PR #2085, adds the L0
 [`solidcraft_geom::section`][section-source] representation and structural validation. See the
 [foundation ledger](drawing-foundations.md) for dependencies and the remaining
 W01 work. This contract is deliberately smaller than the eventual section and
-projection result described in the [Drawing plan][plan].
+projection result described in the Drawing plan.
 
 The module can hold geometry supplied by a caller, validate its structure and
 convert selected closed wires/regions to existing `Loop2`/`Region2` values. It does
@@ -230,7 +232,7 @@ checks the converted result too: a reversed radius-`1e12` arc with start `0.1` a
 sweep `1.0` radians fails at `tol=1e-9` mm but is accepted at `0.01` mm. This is an
 arithmetic/closure regression, not evidence of that accuracy against a source.
 
-[NOWN-DEV's PR #2068][producer-pr], reviewed as an open proposal rather than
+NOWN-DEV's PR #2068, reviewed as an open proposal rather than
 merged code, contains Stage A producer/export work and a tilted-cylinder test.
 Review that evidence and its actual mesh/fitting guarantees before reusing it.
 Its body-name/loop/`sweep_deg` output is a distinct schema; W01a supplies no adapter
@@ -242,10 +244,6 @@ need the producer contract for source/provenance, outcomes, completeness and
 accuracy, plus an agreed kernel/solidcore boundary. Persistent Drawing files,
 fonts, profiles and PDF are not prerequisites for standalone section work.
 
-[issue]: https://github.com/tangency-labs/solidcraft/issues/2053
-[pr]: https://github.com/tangency-labs/solidcraft/pull/2085
-[plan]: https://github.com/tangency-labs/solidcraft/issues/860#issuecomment-6234779815
-[producer-pr]: https://github.com/tangency-labs/solidcraft/pull/2068
 [section-source]: ../crates/geom/src/section.rs
 [tests-source]: ../crates/geom/src/section_tests.rs
 [plane-source]: ../crates/geom/src/plane.rs

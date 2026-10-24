@@ -1,6 +1,6 @@
 # Interface fonts
 
-SolidCraft bundles IBM Plex Sans as its default interface font on desktop and web.
+NØDE CAD bundles IBM Plex Sans as its default interface font on desktop and web.
 The unmodified variable font provides regular (400), medium (500), semibold (600)
 and bold (700) faces. Titles and selected labels use semibold; compass letters
 and the primary OK action use bold. Selection fields and status messages use
@@ -13,7 +13,7 @@ are in `assets/fonts/ibm-plex-sans/OFL.txt` and
 
 The `ui_font` preference puts the chosen font first in every sans family,
 including the three weighted families. A chosen static font retains its own
-weight; SolidCraft does not simulate bold by drawing text twice. Clearing the
+weight; NØDE CAD does not simulate bold by drawing text twice. Clearing the
 preference restores Plex. Monospace fields keep Plex Mono.
 
 Egui's symbol and emoji fallbacks remain available. Desktop also appends the

@@ -2,8 +2,8 @@
 
 ## Supported versions
 
-SolidCraft is young and moves quickly, so only the latest release gets security fixes. Please
-update to the [latest release](https://github.com/bherbruck/solidcraft/releases/latest) before
+NØDE CAD is young and moves quickly, so only the latest release gets security fixes. Please
+update to the [latest release](https://github.com/matthias037/node-cad/releases/latest) before
 reporting, and check whether the problem is still on `main`.
 
 | Version | Supported |
@@ -15,9 +15,9 @@ reporting, and check whether the problem is still on `main`.
 ## Reporting a vulnerability
 
 Please **don't open a public issue** for a security problem. Report it privately through GitHub:
-open the repository's [Security tab](https://github.com/bherbruck/solidcraft/security) and choose
+open the repository's [Security tab](https://github.com/matthias037/node-cad/security) and choose
 **Report a vulnerability**
-([direct link](https://github.com/bherbruck/solidcraft/security/advisories/new)).
+([direct link](https://github.com/matthias037/node-cad/security/advisories/new)).
 
 Please include what you found, how to reproduce it (a design file, command or MCP request), the
 version and platform, and the impact you expect. I'll acknowledge the report as soon as I can,

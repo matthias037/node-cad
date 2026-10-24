@@ -1,6 +1,6 @@
 # Mutation testing
 
-SolidCraft will move from truck to solidcore (#1597). The tests that have to catch regressions
+NØDE CAD will move from truck to solidcore (#1597). The tests that have to catch regressions
 across that switch are the ones that don't depend on the kernel: the reference tests
 ([docs/oracle.md](oracle.md)), the robustness goldens ([docs/robustness.md](robustness.md)) and
 the engine's command tests. Most of the kernel's own unit tests call truck-specific code and go

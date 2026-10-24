@@ -16,7 +16,7 @@ CommandSpec::new("solid.fillet", "Fillet", fillet)
 
 `run` is `fn(&mut Session, &Value) -> Result<Value>`, and `enabled` is
 `fn(&Session) -> Result<(), String>`; the error string is the disabled-button tooltip. The
-`params` string is the one-line documentation shown by `solidcraft-cli commands`, MCP's
+`params` string is the one-line documentation shown by `node-cad-cli commands`, MCP's
 `list_commands` and the [command reference](../reference/commands.md).
 
 A command that changes the design is undoable by default: the session snapshots the document

@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in SolidCraft does the wrong thing
+description: Something in NØDE CAD does the wrong thing
 labels: [bug]
 body:
   - type: markdown
@@ -18,7 +18,7 @@ body:
     attributes:
       label: Steps to reproduce
       description: |
-        What you clicked or typed, in order. For a problem on a particular design, `solidcraft-cli script design.solidcraft --out repro.json` turns its history into a script that `solidcraft-cli eval repro.json` replays; attach it, trimmed to the failing step if you can.
+        What you clicked or typed, in order. For a problem on a particular design, `node-cad-cli script design.nodecad --out repro.json` turns its history into a script that `node-cad-cli eval repro.json` replays; attach it, trimmed to the failing step if you can.
       placeholder: |
         1. Sketch a circle on the XY plane
         2. Extrude it 10 mm
@@ -28,7 +28,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: SolidCraft version and OS
+      label: NØDE CAD version and OS
       description: Help → About shows the version.
       placeholder: 0.15.0, Windows 11
     validations:

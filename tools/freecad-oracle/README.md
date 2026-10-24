@@ -9,10 +9,10 @@ see [`tools/oracle-analytic/`](../oracle-analytic/)).
 ## FreeCAD is an external tool, not a dependency
 
 FreeCAD is run as a separate program (`freecadcmd`) that executes `build.py` through FreeCAD's
-public Python scripting API (Part, PartDesign, Sketcher, MeshPart). SolidCraft does not use,
+public Python scripting API (Part, PartDesign, Sketcher, MeshPart). NØDE CAD does not use,
 link, vendor or ship any code, library or binary from FreeCAD or OpenCASCADE, and nothing in
 this directory is part of the build. FreeCAD's LGPL licence therefore does not apply to
-SolidCraft's code. The scripts here are our own; they were written against FreeCAD's public
+NØDE CAD's code. The scripts here are our own; they were written against FreeCAD's public
 API documentation only, never its sources.
 
 Only values for our own recipes are produced: the numbers in `expected.json` (body count,
@@ -21,7 +21,7 @@ volume, area, centre of mass, bounding box) and the triangulated surface in `ref
 ## Files
 
 - `build.py`: runs inside FreeCAD. Reads a case's `recipe.json` and builds the part with
-  FreeCAD's modelling operations, following the meaning SolidCraft gives the recipe
+  FreeCAD's modelling operations, following the meaning NØDE CAD gives the recipe
   (`apps/solidcraft-cli/src/recipe.rs`): sketches (solved by FreeCAD's sketcher when the recipe
   constrains them, otherwise at their recorded coordinates), extrude (distance, symmetric, two
   sides, through all, taper), revolve, sweep, loft, holes (simple, drilled tip, counterbore,
@@ -53,5 +53,5 @@ AppImage (`./FreeCAD_*.AppImage --appimage-extract`) and point `FREECADCMD` at
 script; it needs no display.
 
 The values were produced with FreeCAD 1.1.4. A different FreeCAD version may differ in the last
-digits; regenerate only when a recipe changes, and check the new values against SolidCraft
-(`solidcraft-cli oracle`) before committing them.
+digits; regenerate only when a recipe changes, and check the new values against NØDE CAD
+(`node-cad-cli oracle`) before committing them.

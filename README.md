@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/icons/app/linux/exports/hicolor/256x256/apps/ai.storyteller.solidcraft.png" width="96" height="96" alt="NØDE CAD" />
+  <img src="assets/icons/app/linux/exports/hicolor/256x256/apps/fr.node_os.cad.png" width="96" height="96" alt="NØDE CAD" />
 </p>
 
 <h1 align="center">NØDE CAD</h1>
@@ -73,12 +73,12 @@ l'application de bureau ; la version web ne le propose pas.
 
 ## IA et agents (MCP)
 
-`solidcraft-cli mcp` est un serveur [Model Context Protocol](https://modelcontextprotocol.io).
+`node-cad-cli mcp` est un serveur [Model Context Protocol](https://modelcontextprotocol.io).
 Sans interface, il ouvre sa propre session de conception ; avec `--connect`, il pilote
 l'application ouverte et vous voyez l'agent modéliser.
 
 ```sh
-claude mcp add node-cad -- solidcraft-cli mcp
+claude mcp add node-cad -- node-cad-cli mcp
 ```
 
 Outils, règles d'accès et exemple de session : [docs/mcp.md](docs/mcp.md).
@@ -86,14 +86,12 @@ Outils, règles d'accès et exemple de session : [docs/mcp.md](docs/mcp.md).
 ## Compiler depuis les sources
 
 ```sh
-cargo run --release -p solidcraft -- --sample      # l'application avec une pièce d'exemple
-cargo run --release -p solidcraft-cli -- commands  # la liste des commandes
-cargo run --release -p solidcraft-cli -- run examples/bracket.json --out bracket.step
+cargo run --release --bin node-cad -- --sample         # l'application avec une pièce d'exemple
+cargo run --release --bin node-cad-cli -- commands    # la liste des commandes
+cargo run --release --bin node-cad-cli -- run examples/bracket.json --out bracket.step
 ```
 
 Navigateur, compilation Windows et autres commandes : [docs/building.md](docs/building.md).
-Les noms internes (`solidcraft-*`) sont ceux du projet d'origine, gardés pour suivre ses
-évolutions.
 
 ## Contribuer
 
@@ -106,10 +104,8 @@ et [AGENTS.md](AGENTS.md) ; `cargo deny check licenses` refuse toute dépendance
 
 Le code de NØDE CAD est distribué sous la **[licence Apache 2.0](LICENSE-APACHE)**.
 
-NØDE CAD est construit sur **[SolidCraft](https://github.com/tangency-labs/solidcraft)**, distribué
-sous MIT OR Apache-2.0 ; ses auteurs et les composants tiers sont crédités dans [NOTICE](NOTICE)
-et [THIRD-PARTY-LICENSES.txt](THIRD-PARTY-LICENSES.txt). NØDE CAD est un projet indépendant, ni
-affilié à SolidCraft ni approuvé par ses auteurs.
+Crédits : les auteurs du code d'origine et les composants tiers sont cités dans [NOTICE](NOTICE)
+et [THIRD-PARTY-LICENSES.txt](THIRD-PARTY-LICENSES.txt).
 
 **Les noms NØDE, NØDE CAD et NØDE OS ainsi que le logo sont des marques de NØDE OS et ne sont pas
 couverts par la licence Apache.** Vous pouvez reprendre le code, mais une version modifiée
@@ -123,6 +119,7 @@ propriétaires respectifs, nommés uniquement pour décrire la compatibilité.
 ### In English
 
 **NØDE CAD** is a free, open-source parametric 3D CAD application written in Rust, with a
-built-in MCP server for AI agents. Code: Apache-2.0. Based on SolidCraft (MIT OR Apache-2.0).
-The NØDE names and logo are trademarks and are not licensed. Downloads and the web app:
+built-in MCP server for AI agents. Code: Apache-2.0; credits in [NOTICE](NOTICE) and
+[THIRD-PARTY-LICENSES.txt](THIRD-PARTY-LICENSES.txt). The NØDE names and logo are trademarks and
+are not licensed. Downloads and the web app:
 [node-os.fr/cad](https://node-os.fr/cad).

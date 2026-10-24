@@ -5,9 +5,9 @@ colour/opacity and density/look definitions. Its separate v1 catalog is not the 
 resource-pack/provenance/update system proposed below. Texture/environment descriptors
 remain coordinated with the maintainer's renderer work.
 
-Proposal for [#785](https://github.com/bherbruck/solidcraft/issues/785),
-[#786](https://github.com/bherbruck/solidcraft/issues/786) and
-[#787](https://github.com/bherbruck/solidcraft/issues/787). This page describes planned
+Proposal for upstream #785,
+upstream #786 and
+upstream #787. This page describes planned
 contracts and acceptance gates, not an implemented pack format or new commands. It does
 not bring the deferred Simulation or Render workspaces into scope.
 
@@ -28,7 +28,7 @@ not a texture, and a reusable component is not executable plugin code.
 
 Use one versioned, offline pack envelope for three kinds: physical material, appearance
 and component family. Both project contributors and users can author packs without
-rebuilding SolidCraft. Start with a directory and JSON manifest, not a new archive format
+rebuilding NØDE CAD. Start with a directory and JSON manifest, not a new archive format
 or an online marketplace. The exact schema belongs in the bounded-loader PR, accompanied
 by machine-checked examples; the following are its design requirements:
 
@@ -48,7 +48,7 @@ explicit namespace and preservation rules before being accepted.
 
 Provide three independent scopes:
 
-- **Bundled:** reviewed with SolidCraft and read-only in the library editor.
+- **Bundled:** reviewed with NØDE CAD and read-only in the library editor.
 - **Project:** packs explicitly opened for the current project/team; never discovered
   by silently executing or trusting files beside a design.
 - **User:** local packs the user creates, imports, edits or exports. Native file access
@@ -100,7 +100,7 @@ Non-finite or degenerate frames refuse; automatic choice remains a suggestion.
 
 Visual grain does not rotate the body, its geometric bounding box or a manufacturing
 stock frame. Structural grain direction and grain-aware nesting/cut lists are distinct
-features, coordinated with [#137](https://github.com/bherbruck/solidcraft/issues/137).
+features, coordinated with upstream #137.
 An anisotropic shading effect also does not imply mechanical anisotropy.
 
 After basic wood mapping, add sheet-specific top/bottom/edge looks: MDF, chipboard,
@@ -111,7 +111,7 @@ Face/edge assignments require durable identities and must refuse a lost associat
 rather than paint a nearby replacement face.
 
 Keep texture role, color space, normal-map convention and physical scale explicit.
-Coordinate with the [render capability contract](https://github.com/bherbruck/solidcraft/blob/main/docs/render-backends.md):
+Coordinate with the [render capability contract](https://github.com/matthias037/node-cad/blob/main/docs/render-backends.md):
 the existing color/opacity viewport is not proof of PBR or texture support. A renderer
 must report what it supports; unavailable maps use a documented preview fallback with
 a visible notice. Export either preserves supported mapping/resources or reports loss.
@@ -140,7 +140,7 @@ envelopes, must remain distinguishable from detailed/manufacturing-ready models.
 
 ## Sources and licensing
 
-SolidCraft is MIT OR Apache-2.0. Code and generated recipes must follow the clean-room
+NØDE CAD's code is Apache-2.0. Code and generated recipes must follow the clean-room
 rules; never copy commercial CAD materials, templates, geometry, icons or catalogs.
 Third-party assets retain their own licenses. Every bundled resource needs its author,
 source, license and `ATTRIBUTION.md` row, even if attribution is optional under CC0.
@@ -157,7 +157,7 @@ Sources checked on 2026-10-13; no external assets or datasets are bundled by thi
 | [USDA Wood Handbook, revised 2021](https://research.fs.usda.gov/fpl/wood-handbook) | Reference for moisture, physical and mechanical wood properties. Verify the specific table's rights, species, units and conditions before importing data; no wholesale dataset approval is implied. |
 | [NIST data/publication rights](https://www.nist.gov/open/copyright-fair-use-and-licensing-statements-srd-data-software-and-technical-series-publications) and [repository terms](https://materialsdata.nist.gov/terms/) | Candidate property references only. Uploaded data use provider-selected terms; public availability is not a blanket redistribution license. Review each dataset. |
 | [Khronos PBR overview](https://www.khronos.org/gltf/pbr) | Public rendering conventions for texture roles and shading properties; a design reference, not a source of CAD material data. |
-| Original SolidCraft recipes / user measurements | Preferred initial component recipes and illustrative procedural previews; preserve authorship and label illustrative versus measured values. |
+| Original NØDE CAD recipes / user measurements | Preferred initial component recipes and illustrative procedural previews; preserve authorship and label illustrative versus measured values. |
 
 Prefer CC0 resources for the starter texture pack and original recipes for the starter
 component pack. Defer uncertain or restrictive data rather than scrape supplier sites,

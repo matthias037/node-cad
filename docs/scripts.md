@@ -12,4 +12,4 @@ A script is a JSON list of commands, the same ones the UI runs:
 ]}
 ```
 
-Run one with `solidcraft-cli run script.json --out part.step`; see [building](building.md) and the [command list](features.md).
+Run one with `node-cad-cli run script.json --out part.step`; see [building](building.md) and the [command list](features.md).

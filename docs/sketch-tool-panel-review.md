@@ -1,6 +1,6 @@
 # Sketch tool panel review
 
-Inventory before the port, checked against `solidcraft-cli commands`, `dialogs::Kind`,
+Inventory before the port, checked against `node-cad-cli commands`, `dialogs::Kind`,
 the sketch tool dispatchers, and all sketch sources' window/area helpers.
 Control requests below are JSON lines sent to an already running app. Add the launch
 token to the first request on each connection and use distinct request IDs.

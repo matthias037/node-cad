@@ -4,9 +4,9 @@ Agent chat is a side panel where you talk to a coding agent you already use (Cla
 Codex, Google Antigravity, OpenCode, Grok Build and others), or to a model behind an
 OpenAI-compatible or Anthropic-compatible endpoint you choose (Ollama or LM Studio on your
 computer, OpenAI, Anthropic, any other URL), and have it work on the design that's open. A
-coding agent runs on your computer under **your own account** with that agent: SolidCraft
+coding agent runs on your computer under **your own account** with that agent: NØDE CAD
 doesn't sell or proxy a model and needs no key for it. An endpoint's key, if it needs one, goes
-into your system keychain, never into SolidCraft's settings.
+into your system keychain, never into NØDE CAD's settings.
 
 Desktop app only.
 
@@ -14,7 +14,7 @@ Desktop app only.
 
 Everything about it is on one page: **Preferences → AI**.
 
-- **Show AI features** (on by default) is the master switch. Turned off, SolidCraft shows nothing
+- **Show AI features** (on by default) is the master switch. Turned off, NØDE CAD shows nothing
   of it: no AI button, no shortcut, no menu entry, no panel, and nothing is looked for or
   started. The page stays, so you can turn it back on.
 - **Show Assistant button in application bar** (on by default): the **Assistant** icon in the application bar
@@ -27,7 +27,7 @@ With AI features on, the panel opens from:
 - **Ctrl+Shift+A** (Cmd+Shift+A on a Mac), which also works from the chat's own text box;
 - **View settings** (the last button of the navigation bar under the view) → **Agent chat**.
 
-Nothing runs until you need it: SolidCraft looks for installed agents (a quick `--version`
+Nothing runs until you need it: NØDE CAD looks for installed agents (a quick `--version`
 each, in the background) when the panel or the AI page first opens, and starts an agent only
 when you send a message or press **Connect**.
 
@@ -40,13 +40,13 @@ clicks and scrolling over the panel stay in the chat. The docked layout retains 
 - **Docking:** on the left, Assistant is the first panel, before vertical history and the browser.
   The drag highlight shows the actual destination bounds. Drag the panel's header (the dotted grip and the title) to the other half of the
   window and let go. The side it would land on lights up while you drag. You can also pick
-  **Left** or **Right** under Preferences → AI → Panel. SolidCraft remembers the side.
-- **Width:** drag the panel's inner edge. SolidCraft remembers it.
+  **Left** or **Right** under Preferences → AI → Panel. NØDE CAD remembers the side.
+- **Width:** drag the panel's inner edge. NØDE CAD remembers it.
 - **Its own window:** the pop-out button in the header (a window with an arrow) moves the chat
   into a window of its own, named after the design, which you can move anywhere, including
   another screen. The window's own close button closes the chat, which opens there again next
   time; **Dock** (the same place in its header) puts it back in the side panel. You can also
-  pick **Own window** under Preferences → AI → Panel. SolidCraft remembers where the window
+  pick **Own window** under Preferences → AI → Panel. NØDE CAD remembers where the window
   was and how big.
 - **Minimise** (the line in the header) folds the panel into a small floating strip (a side strip in the docked layout) that keeps the chat
   icon, the agent's state, and a count of anything waiting for your answer. Click the icon to
@@ -55,13 +55,13 @@ clicks and scrolling over the panel stay in the chat. The docked layout retains 
   the one running. Next to it, when the agent has modes of its own (Claude Code has *Default*,
   *Accept Edits*, *Plan*…), a second drop-down sets the agent's mode. When the agent reports its models (an ACP agent's
   model list, or an endpoint's `/models`), a model drop-down shows the one in use and changes it;
-  SolidCraft remembers the last choice for each agent and puts it back on the next session. An
+  NØDE CAD remembers the last choice for each agent and puts it back on the next session. An
   endpoint's agent also keeps it as its default model. An agent that reports no models shows no
   drop-down.
 
 Messages use right-aligned user bubbles and plain assistant text. Consecutive tool calls share
 an activity group: click a row to inspect its output; failed calls have an error tint. Approval
-cards retain the agent’s permission choices, and SolidCraft’s own approvals offer Deny, Always
+cards retain the agent’s permission choices, and NØDE CAD’s own approvals offer Deny, Always
 allow and Allow once. The composer’s permission menu uses the same Ask / Edits / All policy as
 Preferences, for the selected agent, and shows the actual changes used against the configured
 turn limit. Queue, Send now and Stop keep their existing behavior.
@@ -131,17 +131,17 @@ conversation starts with), its own permission setting, and **Remove** for the on
 
 ### Found by themselves
 
-SolidCraft looks for agents that speak the [Agent Client Protocol](https://agentclientprotocol.com)
+NØDE CAD looks for agents that speak the [Agent Client Protocol](https://agentclientprotocol.com)
 on your `PATH` and in the usual install folders a desktop app's `PATH` often misses (npm's
 global folder, nvm, Volta, bun, `~/.local/bin`, `~/.grok/bin`, Homebrew, `%APPDATA%\npm`). For each one it
 shows its **version** (from `--version`, given three seconds) and whether it looks **signed in**.
 Version checks and agent sessions also use those folders on their `PATH`, so adapters can find
-runtimes such as Node when SolidCraft is opened from Finder or the Dock. Existing absolute
+runtimes such as Node when NØDE CAD is opened from Finder or the Dock. Existing absolute
 `PATH` entries keep their order; no shell startup files are run.
-SolidCraft only checks whether the agent's own login file (`~/.claude/.credentials.json`,
+NØDE CAD only checks whether the agent's own login file (`~/.claude/.credentials.json`,
 `~/.codex/auth.json`, `~/.gemini/oauth_creds.json`, …) or one of its key variables exists. It never
 reads the file and never starts the agent to find out. On macOS Claude Code keeps its login in
-the keychain, so SolidCraft doesn't guess there.
+the keychain, so NØDE CAD doesn't guess there.
 
 | Agent | What to install |
 |---|---|
@@ -159,14 +159,14 @@ session and ends it again.
 ### Flatpak
 
 The Flatpak sandbox has no home-folder or network access by default. Agents installed
-through nvm or `~/.local/bin` can therefore work in a terminal while SolidCraft reports
+through nvm or `~/.local/bin` can therefore work in a terminal while NØDE CAD reports
 that no agent was found. For Claude Code and its ACP adapter, run:
 
 ```sh
-flatpak override --user ai.storyteller.solidcraft --filesystem=~/.nvm:ro --filesystem=~/.local/bin:ro --filesystem=~/.local/share/claude:ro --filesystem=~/.claude --filesystem=~/.claude.json --share=network
+flatpak override --user fr.node_os.cad --filesystem=~/.nvm:ro --filesystem=~/.local/bin:ro --filesystem=~/.local/share/claude:ro --filesystem=~/.claude --filesystem=~/.claude.json --share=network
 ```
 
-These permissions apply to SolidCraft for your user account:
+These permissions apply to NØDE CAD for your user account:
 
 - `~/.nvm:ro` exposes Node and globally installed npm adapters read-only.
 - `~/.local/bin:ro` exposes locally installed executables read-only.
@@ -174,30 +174,30 @@ These permissions apply to SolidCraft for your user account:
   including the targets of links in `~/.local/bin`.
 - `~/.claude` and `~/.claude.json` allow Claude Code to read and update its sign-in
   and configuration files.
-- `--share=network` lets the adapter reach its service. It also gives SolidCraft
+- `--share=network` lets the adapter reach its service. It also gives NØDE CAD
   network access, including making an enabled control server reachable from the host.
 
-Restart SolidCraft after applying the override. Other agents or installation folders
+Restart NØDE CAD after applying the override. Other agents or installation folders
 may need different filesystem permissions.
 
 ### XAI Grok
 
 Install **Grok Build** and run `grok login` in a terminal to sign in with your Grok account.
-In SolidCraft, open **AI → Refresh**, select
+In NØDE CAD, open **AI → Refresh**, select
 **XAI Grok**, then **Connect**. You can make it the default under
 **Preferences → AI → Agents**.
 
-SolidCraft reuses Grok Build's sign-in in `~/.grok/auth.json`; it checks only whether that file
+NØDE CAD reuses Grok Build's sign-in in `~/.grok/auth.json`; it checks only whether that file
 exists and does not read or copy its tokens. If sign-in is needed, the panel offers Grok's own
 sign-in methods. You can also run `grok login` again and reconnect. Grok controls model access
-and usage limits for your account. This connection does not require an API key in SolidCraft.
+and usage limits for your account. This connection does not require an API key in NØDE CAD.
 Grok Build also supports `XAI_API_KEY` for users who choose API authentication.
 
 ### Add agent…
 
 - **Installed agent:** your own entry for an installed agent, for example with other arguments.
 - **Custom command:** any other program that speaks ACP on stdin and stdout, such as
-  `my-agent --acp`. SolidCraft starts it directly, not through a shell.
+  `my-agent --acp`. NØDE CAD starts it directly, not through a shell.
 - **OpenAI-compatible API:** a preset (Ollama `http://localhost:11434/v1`, LM Studio
   `http://localhost:1234/v1`, OpenAI) or a custom URL, the model name, and an optional key.
 - **Anthropic-compatible API:** a preset (Anthropic) or a custom URL, for an endpoint that
@@ -207,7 +207,7 @@ Grok Build also supports `XAI_API_KEY` for users who choose API authentication.
   Secret Service on Linux) and is only ever sent over HTTPS or to this computer. **Test** asks an
   OpenAI-compatible endpoint for its models; an Anthropic-compatible one gets a short message,
   because not every such endpoint lists models (Qwen's has no model list). For these agents
-  SolidCraft runs the conversation itself, with the same tools, limits and questions as for a
+  NØDE CAD runs the conversation itself, with the same tools, limits and questions as for a
   coding agent, and at most 24 model requests per message.
 
 ## Signing in
@@ -225,9 +225,9 @@ Whatever you typed before signing in is sent once the agent is ready.
 
 ## What the agent can do
 
-The agent reaches the open design only through SolidCraft's own tools (the
-[MCP server](mcp.md)), which SolidCraft hands it when the chat starts. That server is named
-`solidcraft-app`, so an MCP server you set up yourself under the name `solidcraft` (as in
+The agent reaches the open design only through NØDE CAD's own tools (the
+[MCP server](mcp.md)), which NØDE CAD hands it when the chat starts. That server is named
+`node-cad-app`, so an MCP server you set up yourself under the name `node-cad` (as in
 [client configuration](mcp.md#client-configuration)) doesn't take its place:
 
 - **Read the design:** list commands, inspect features, sketches and parameters, measure,
@@ -264,9 +264,9 @@ each agent can have its own setting in its row.
 **Always allow** remembers that command for that agent. The page lists what you allowed this way,
 per agent, with **Reset**.
 
-These settings cover SolidCraft's tools. A coding agent's own tools (its shell, its file edits)
+These settings cover NØDE CAD's tools. A coding agent's own tools (its shell, its file edits)
 follow the agent's own mode, which you pick in the panel's header. When an agent asks before
-using one of SolidCraft's tools, SolidCraft answers for you, since its own gate checks the call,
+using one of NØDE CAD's tools, NØDE CAD answers for you, since its own gate checks the call,
 and notes it in the chat as *Auto-allowed*. With **Allow everything**, or after **Always allow**,
 the agent's other questions are answered the same way and noted too.
 
@@ -289,21 +289,21 @@ saves, opens or inserts. A sweep's or pattern's `path` (curve ids) and an occurr
   paths.
 - **Not the rest of the app.** It can't click the interface, change settings, quit, or drive the
   chat itself.
-- **Its own tools stay off where we can turn them off.** SolidCraft declares no file system and
+- **Its own tools stay off where we can turn them off.** NØDE CAD declares no file system and
   no terminal to the agent, runs it in an empty working folder of its own, and asks the Claude
   Code adapter to turn off its shell, file and web tools for the session.
 
-When the panel's agent is stopped, another agent is picked, or SolidCraft quits, the agent and
+When the panel's agent is stopped, another agent is picked, or NØDE CAD quits, the agent and
 every program it started (the CLI it wraps, its MCP server) are stopped.
 
 ## Privacy
 
-Nothing goes anywhere except to the agent you run, or the endpoint you added. SolidCraft starts
+Nothing goes anywhere except to the agent you run, or the endpoint you added. NØDE CAD starts
 a coding agent as a program on your computer and talks to it over its standard input and
 output. What the agent sends to its own service, under your account and that service's terms,
-is between you and that service, exactly as when you use the agent in a terminal. SolidCraft
+is between you and that service, exactly as when you use the agent in a terminal. NØDE CAD
 never sees, stores or passes on a coding agent's password, token or key. An endpoint's key is
-kept in the system keychain and sent only to that endpoint. SolidCraft's own connection to the
+kept in the system keychain and sent only to that endpoint. NØDE CAD's own connection to the
 agent's tools uses a random per-launch token in a file only you can read, which never passes
 through the agent.
 

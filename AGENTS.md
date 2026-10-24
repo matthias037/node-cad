@@ -1,25 +1,29 @@
-# SolidCraft — instructions for agents
+# NØDE CAD — instructions for agents
 
-SolidCraft is a clean-room, open-source, pure-Rust parametric 3D CAD application:
+NØDE CAD is a clean-room, open-source, pure-Rust parametric 3D CAD application:
 sketches with a constraint solver, a parametric timeline of features, a B-rep
 kernel, and a desktop UI that agents can drive. Projects published by
 [storytold](https://github.com/storytold) can serve as references for implementation conventions.
 Any code adapted from other projects (MIT OR Apache-2.0) is noted in ATTRIBUTION.md.
 
 ## Product name
-This fork ships as **NØDE CAD** (NØDE OS brand). Everything a user sees says NØDE CAD: window
-title, menus, dialogs, every locale, the MCP server (`node-cad`), the macOS bundle
-(`NØDE CAD.app`, id `fr.node-os.cad`) and the app icon (`assets/icons/app/shared/source/app_icon.rs`).
-Text written into files, folder names, user agents and driver ids uses ASCII `NODE CAD` /
-`NODE-CAD`. Crate, binary and environment names stay `solidcraft-*` / `SOLIDCRAFT_*` so upstream
-changes still merge; never put "SolidCraft" back into user-visible text. Upstream rules:
+This fork ships as **NØDE CAD** (NØDE OS brand). Everything a user, a customer or an AI client
+sees says NØDE CAD: window title, menus, dialogs, every locale, crash and issue reports, headers
+written into exported files, the executables (`node-cad`, `node-cad-cli`), design files
+(`.nodecad`), the MCP server (`node-cad`, resources `nodecad://…`, the agent chat's bridge
+`node-cad-app`), the macOS bundle (`NØDE CAD.app`, id `fr.node-os.cad`), the Linux app id
+(`fr.node_os.cad`) and the app icon (`assets/icons/app/shared/source/app_icon.rs`). Text written
+into files, folder names, user agents and driver ids uses ASCII `NODE CAD` / `NODE-CAD`. Never put
+"SolidCraft" back into anything a user or an AI client can see.
 
-SolidCraft everywhere: crates `solidcraft-*`, binaries `solidcraft` and `solidcraft-cli`,
-`.solidcraft` designs, the `solidcraft/N` format tag, `SOLIDCRAFT_*` environment variables,
-settings and recovery folders, the MCP server name, docs, CI and packaging. The old name
-survives only in the explicit compatibility shims listed in `docs/compatibility.md`; don't add
-new uses of it anywhere else. Public docs/web/Flatpak deployments use project Pages
-`/solidcraft/`; do not add permanent old-name Pages aliases.
+What keeps the upstream (SolidCraft) name, so upstream changes still merge and nobody's data is
+lost: Cargo package and crate names (`solidcraft`, `solidcraft-cli`, `solidcraft-*`: `cargo run -p
+solidcraft` still works) and Rust paths, `SOLIDCRAFT_*` environment variables, settings, recovery
+and data folder names, storage and preference keys, keychain service names, and the format tags
+written inside files (`solidcraft/N`, `solidcraft-theme/1`, …). Earlier names survive only as the
+compatibility shims listed in `docs/compatibility.md` (`.solidcraft` and `.solvecraft` designs
+still open; `solidcraft-cli` and `solvecraft-cli` forward to `node-cad-cli`); don't add new uses of
+them anywhere else. SolidCraft's copyright stays in LICENSE-*, NOTICE and THIRD-PARTY-LICENSES.txt.
 
 ## Start every session here
 1. Read `plan/STATUS.md` (current milestone, next task), then the task in `plan/execution-plan.md`
@@ -32,7 +36,7 @@ new uses of it anywhere else. Public docs/web/Flatpak deployments use project Pa
 `plan/` is gitignored (local only).
 
 ## Never crash
-People trust SolidCraft with their designs; a crash loses their work. **This outranks feature work.**
+People trust NØDE CAD with their designs; a crash loses their work. **This outranks feature work.**
 - **No panics in non-test code:** no `unwrap()`, `expect()`, `panic!`, `unreachable!`, `todo!`,
   `unimplemented!`; no `unsafe` (`unsafe_code = "forbid"`). The exceptions, in the app crate and in
   `crates/threedx-client` (which deny it instead), have no safe API: the macOS-only
@@ -55,17 +59,17 @@ People trust SolidCraft with their designs; a crash loses their work. **This out
   panic restores the design and reports `EngineError::Internal`.
 - **Crash reports:** the desktop app writes every panic and every unclean exit to a local crash folder,
   with the design and the commands that reproduce it (`solidcraft_engine::crash`, docs/crash-reports.md).
-  When someone says the app crashed, look there first: `solidcraft-cli crashes`, `crashes show <id>`,
+  When someone says the app crashed, look there first: `node-cad-cli crashes`, `crashes show <id>`,
   `crashes replay <id>` (or the `diagnostics.crash_reports` command / MCP `crash_reports` tool).
 - **Prove it:** every crash fix lands with a regression test (see `hostile_params_never_panic`); a
-  crash report's `design.solidcraft` + `replay.json` is the test's starting point.
+  crash report's `design.nodecad` + `replay.json` is the test's starting point.
 - **Where tests go:** a regression test goes into the existing test file for its area (booleans, blends,
   shell, sweep, STEP, naming…), never a new file named after the bug (#3226).
 - Every production crate root carries
   `#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]`.
 
 ## Non-negotiables
-- **Independent.** SolidCraft is independent. Behaviour is designed from public documentation,
+- **Independent.** NØDE CAD is independent. Behaviour is designed from public documentation,
   general CAD conventions and user feedback. Reference tests use analytic values and open-source
   tools. Never copy another product's code, icons, artwork, help text, tooltips, templates or
   materials. File formats come from public specifications.
@@ -77,7 +81,7 @@ People trust SolidCraft with their designs; a crash loses their work. **This out
   runs FreeCAD as a separate program through its public scripting API to compute reference values;
   nothing from FreeCAD is linked, vendored or shipped.) The sketch solver and the blend
   operations are our own.
-- **Assets — absolutely essential.** SolidCraft contains **no iconography, images, fonts or
+- **Assets — absolutely essential.** NØDE CAD contains **no iconography, images, fonts or
   artwork from commercial CAD products — ever.** Command icons are the original SVG masters in
   `assets/icons/ui/design/svg/`, compiled through `crates/ui-egui/src/icon_svg.rs`.
   **Before any icon, icon assignment or media edit, read `assets/AGENTS.md`,
@@ -117,10 +121,10 @@ People trust SolidCraft with their designs; a crash loses their work. **This out
   Keep them minimal; `cargo xtask web-offline-test` covers the service worker.
 - **Quality gates** before every commit: `cargo xtask ci` (fmt, clippy -D warnings, tests,
   assets, layers). Commit after every feature arc that builds.
-- **Publishing**: the repository is github.com/tangency-labs/solidcraft. Changes land through
+- **Publishing**: the repository is github.com/matthias037/node-cad. Changes land through
   **pull requests** and the **merge queue**: push a branch and open a PR. The heavy CI jobs start
   when a maintainer adds `approved-for-ci` after reviewing the code. Approved PRs go into the queue
-  with `gh pr merge N -R tangency-labs/solidcraft --squash --auto`; the queue runs the full suite
+  with `gh pr merge N -R matthias037/node-cad --squash --auto`; the queue runs the full suite
   on each group before it lands on `main`. Keep each PR to one topic and one issue, and never
   force-push `main`. Never commit `plan/`, build dirs (`target*/`) or generated reference data;
   check `git ls-files` before pushing.
@@ -155,15 +159,15 @@ People trust SolidCraft with their designs; a crash loses their work. **This out
 
 ## Before you start: look at what is already open
 - Work with an authenticated GitHub CLI (`gh auth status`) and `git`; the checks below need both.
-- Pull the whole list, not one search: `gh pr list -R tangency-labs/solidcraft --state open --limit 500`
-  (drafts included) and `gh issue list -R tangency-labs/solidcraft --state open --limit 500`. Look for
+- Pull the whole list, not one search: `gh pr list -R matthias037/node-cad --state open --limit 500`
+  (drafts included) and `gh issue list -R matthias037/node-cad --state open --limit 500`. Look for
   work on the same issue, the same feature under another number, and PRs that change the files
   you are about to change (`gh pr list ... --json number,title,files`).
 - If someone already has it, comment on their PR or issue instead of opening a second one. Two
   PRs for one change can't both land, and one of them is wasted work and CI.
 
 ## Claim = a draft PR
-- Before working on issue #N, check nobody has it: `gh pr list -R tangency-labs/solidcraft --state open --search "#N"`.
+- Before working on issue #N, check nobody has it: `gh pr list -R matthias037/node-cad --state open --search "#N"`.
 - If none, branch from the latest `origin/main`, `git commit --allow-empty -m "claim: #N"`, push,
   and open a **draft** PR titled `<summary> (#N)` right away. **The lowest-numbered open PR for an
   issue wins**; if yours lost, close it. Opening the PR is the claim: the bot assigns you and
@@ -203,9 +207,9 @@ before the draft is verified.
   - `{"id":2,"method":"ui.start","params":{"command":"sketch.create"}}` then `ui.click {x, y}`
   - `{"id":3,"method":"ui.screenshot","params":{"path":"/tmp/shot.png"}}` then read the PNG.
 - **For UI work, look at the result** (screenshot, read the PNG). Without a window use
-  `ui.render` or `solidcraft-cli snapshot`.
-- Headless: `solidcraft-cli run script.json --out part.step`, `solidcraft-cli eval design.solidcraft`,
-  `solidcraft-cli snapshot script.json --out shot.png`, `solidcraft-cli commands`.
+  `ui.render` or `node-cad-cli snapshot`.
+- Headless: `node-cad-cli run script.json --out part.step`, `node-cad-cli eval design.nodecad`,
+  `node-cad-cli snapshot script.json --out shot.png`, `node-cad-cli commands`.
 - Reference tests: `cargo xtask oracle` replays `tests/oracle/*/recipe.json` and compares with
   each case's `expected.json` (analytic or FreeCAD values; writes `docs/oracle.md`). Expected
   values never come from a commercial CAD product.
@@ -213,7 +217,7 @@ before the draft is verified.
 
 ## Roadmap
 `ROADMAP.md` (committed) tracks status, milestones and estimates. Update it whenever a
-milestone task lands. `docs/features.md` (SolidCraft's commands by area, from the registry) and
+milestone task lands. `docs/features.md` (NØDE CAD's commands by area, from the registry) and
 `THIRD-PARTY-LICENSES.txt` are regenerated on `main` after each merge by the Generated files
 workflow; never regenerate them in a PR.
 

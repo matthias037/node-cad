@@ -6,16 +6,16 @@ prefix `ft`.
 A tessellated body loses its faces: a plain mesh says where the surface is, not which B-rep face
 each triangle came from. Downstream tools that mesh or analyse a part need that back. They apply
 loads and boundary conditions to faces, keep face boundaries as feature edges, and group
-results by face. SolidCraft therefore exports a 3MF in which every triangle carries the index of
+results by face. NØDE CAD therefore exports a 3MF in which every triangle carries the index of
 the B-rep face it lies on (**File → Export 3MF…**, then the format **3MF with face tags**, or `file.export` with
 `format: "3mf-tagged"`).
 
 ## Why 3MF
 
 The file is an ordinary **3MF package** (3MF Consortium, *3D Manufacturing Format Core
-Specification* 1.3). The tags are one attribute in a namespace of SolidCraft's. The Core
+Specification* 1.3). The tags are one attribute in a namespace of NØDE CAD's. The Core
 specification allows that attribute on `<triangle>` and `<object>`, and every consumer ignores it
-because the namespace is not listed in `requiredextensions`. Slicers, viewers and SolidCraft's
+because the namespace is not listed in `requiredextensions`. Slicers, viewers and NØDE CAD's
 own mesh import open the file as plain 3MF. A tool that knows the namespace gets the faces too.
 A purpose-built binary format would have needed its own specification and readers, and would
 open nowhere else. Decimal coordinates lose nothing: written in shortest round-trip form, every
@@ -28,7 +28,7 @@ open nowhere else. Decimal coordinates lose nothing: written in shortest round-t
 <model unit="millimeter" xml:lang="en-US"
        xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
        xmlns:ft="https://github.com/bherbruck/solidcraft/formats/3mf-face-tags/2026/10">
- <metadata name="Application">SolidCraft</metadata>
+ <metadata name="Application">NODE CAD</metadata>
  <resources>
   <object id="2" type="model" name="Body1" ft:faces="7">
    <mesh>
@@ -59,7 +59,7 @@ open nowhere else. Decimal coordinates lose nothing: written in shortest round-t
 An object's triangles are either all tagged or none. A reader treats an object without tags as a
 single face (tag 0).
 
-## What SolidCraft writes
+## What NØDE CAD writes
 
 - `unit="millimeter"`, Z up. There is one `<object type="model">` with a `<mesh>` per body,
   named after the body, and one `<item>` per object, with no transform and no components.

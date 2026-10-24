@@ -53,4 +53,4 @@ suppressed features, physical materials and body appearances, switched with `con
 The table's Library picker selects material or appearance values. Choose **Follow material**
 to clear an appearance override. Custom looks retain their colour and opacity across
 activation, undo and save/reopen. See
-[configuration commands and examples](https://github.com/bherbruck/solidcraft/blob/main/docs/configurations.md).
+[configuration commands and examples](https://github.com/matthias037/node-cad/blob/main/docs/configurations.md).
