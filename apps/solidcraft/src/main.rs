@@ -699,8 +699,9 @@ fn main() -> eframe::Result {
             }
             app.integrated_titlebar = cfg!(target_os = "macos");
             app.cpu_meshing = safe_mode;
-            if let Some(p) = cc.storage.and_then(|s| solidcraft_ui_egui::prefs::stored(|k| s.get_string(k))).filter(|_| !safe_mode) {
-                app.load_prefs(&p);
+            match cc.storage.and_then(|s| solidcraft_ui_egui::prefs::stored(|k| s.get_string(k))).filter(|_| !safe_mode) {
+                Some(p) => app.load_prefs(&p),
+                None => app.preferences.language = solidcraft_ui_egui::prefs::FIRST_LANGUAGE.into(),
             }
             mark("app state and prefs");
             let gpu = cc.wgpu_render_state.as_ref().map(|rs| LostWatch {

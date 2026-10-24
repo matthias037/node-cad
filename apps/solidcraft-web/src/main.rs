@@ -636,8 +636,9 @@ mod web {
                         solidcraft_ui_egui::gpu::install_cpu_picture_renderer();
                         let (sender, receiver) = std::sync::mpsc::channel();
                         let mut app = SolveApp::new(Session::default(), services).with_control(receiver);
-                        if let Some(p) = cc.storage.and_then(|s| solidcraft_ui_egui::prefs::stored(|k| s.get_string(k))) {
-                            app.load_prefs(&p);
+                        match cc.storage.and_then(|s| solidcraft_ui_egui::prefs::stored(|k| s.get_string(k))) {
+                            Some(p) => app.load_prefs(&p),
+                            None => app.preferences.language = solidcraft_ui_egui::prefs::FIRST_LANGUAGE.into(),
                         }
                         if let Some(rs) = &cc.wgpu_render_state {
                             // eframe's web painter has no stencil buffer.

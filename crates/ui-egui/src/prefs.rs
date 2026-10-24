@@ -13,6 +13,9 @@ pub const STORAGE_KEY: &str = "solidcraft.prefs";
 /// current key is missing, never written.
 pub const LEGACY_STORAGE_KEY: &str = "solvecraft.prefs";
 
+/// The interface language of a first launch, before any preference is saved: NØDE's own.
+pub const FIRST_LANGUAGE: &str = "fr";
+
 /// The stored preferences, from the current key or else the legacy one.
 pub fn stored(get: impl Fn(&str) -> Option<String>) -> Option<String> {
     get(STORAGE_KEY).or_else(|| get(LEGACY_STORAGE_KEY))
@@ -489,7 +492,7 @@ preference_settings! {
     theme: String = "dark".into(), PAGE_INTERFACE;
     /// Imported theme files (`theme_files`), kept here so they also work in the browser.
     custom_themes: Vec<crate::theme_files::ThemeFile> = Vec::new();
-    /// Interface language (a registered locale ID).
+    /// Interface language (a registered locale ID). A first launch speaks [`FIRST_LANGUAGE`].
     language: String = "en".into(), 0;
     /// Shared workspace composition; system windows and popups retain their purpose.
     layout: crate::shell::LayoutMode = Default::default(), PAGE_INTERFACE;
