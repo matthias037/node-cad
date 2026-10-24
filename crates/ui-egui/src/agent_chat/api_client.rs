@@ -409,12 +409,22 @@ impl Worker {
             self.no_reasoning.set(true);
             body["reasoning_effort"] = json!("none");
             let (status, v) = self.post(&body)?;
-            return if status == 200 { Ok(reply(self.cfg.protocol, &v)) } else { Err(http_error(status, &v)) };
+            return if status == 200 { Ok(reply(self.cfg.protocol, &v)) } else { Err(self.explain(status, http_error(status, &v))) };
         }
         if status != 200 {
-            return Err(http_error(status, &v));
+            return Err(self.explain(status, http_error(status, &v)));
         }
         Ok(reply(self.cfg.protocol, &v))
+    }
+
+    /// A refused key on Mistral, said with what to check there: most refusals are a key made for
+    /// another of its services, a workspace without a plan, or a key a minute old.
+    fn explain(&self, status: u16, error: String) -> String {
+        if matches!(status, 401 | 403) && super::mistral::is_mistral(&self.cfg.base_url) {
+            format!("{error}. {}", crate::i18n::tr("ui.ai_mistral_key_hint"))
+        } else {
+            error
+        }
     }
 
     /// The request body in the endpoint's shape: the system note is a message for OpenAI and a

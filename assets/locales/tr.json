@@ -1286,6 +1286,7 @@
   "ui.ai_key_needs_https": "Anahtar yalnızca HTTPS üzerinden veya bu bilgisayara gönderilir.",
   "ui.ai_key_note": "NØDE CAD ayarlarında değil, sistem anahtar zincirinde saklanır. Yerel bir sunucu için boş bırakın.",
   "ui.ai_keychain_error": "Sistem anahtar zinciri reddetti: {error}",
+  "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",
   "ui.ai_mode_all": "Her şeye izin ver",
   "ui.ai_mode_all_note": "Hiçbir işlem için önceden onay istenmez. Çökme raporlarına yine erişilemez ve klasör sınırları geçerliliğini korur.",
   "ui.ai_mode_all_warning": "Ajan tasarımınızı sormadan kaydedebilir, üzerine yazabilir, dışa aktarabilir ve değiştirebilir. Bunu yalnızca güvendiğiniz bir ajanla ve kaydedilmiş tasarımlarla kullanın.",

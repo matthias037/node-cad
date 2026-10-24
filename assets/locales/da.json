@@ -1287,6 +1287,7 @@
   "ui.ai_key_needs_https": "En nøgle sendes kun via HTTPS eller til denne computer.",
   "ui.ai_key_note": "Gemmes i systemets nøglering, aldrig i NØDE CADs indstillinger. Lad feltet være tomt ved en lokal server.",
   "ui.ai_keychain_error": "Systemets nøglering afviste anmodningen: {error}",
+  "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",
   "ui.ai_mode_all": "Tillad alt",
   "ui.ai_mode_all_note": "Intet kræver godkendelse først. Nedbrudsrapporter er stadig utilgængelige, og mappebegrænsningerne gælder fortsat.",
   "ui.ai_mode_all_warning": "Agenten kan gemme, overskrive, eksportere og erstatte dit design uden at spørge. Brug kun dette med en agent, du har tillid til, og på designs, du har gemt.",

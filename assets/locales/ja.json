@@ -1592,6 +1592,7 @@
   "ui.ai_key_note": "システムのキーチェーンに保存され、NØDE CAD の設定には保存されません。ローカルサーバーの場合は空欄のままにします。",
   "ui.ai_keychain_error": "システムのキーチェーンが拒否しました: {error}",
   "ui.ai_kind": "種類",
+  "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",
   "ui.ai_mode_all": "すべて許可",
   "ui.ai_mode_all_note": "確認なしで実行します。クラッシュレポートは引き続き対象外で、フォルダー制限も有効です。",
   "ui.ai_mode_all_warning": "エージェントは確認なしでデザインの保存・上書き・エクスポート・置き換えができます。信頼できるエージェントで、保存済みのデザインに対してのみ使ってください。",

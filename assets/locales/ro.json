@@ -1286,6 +1286,7 @@
   "ui.ai_key_needs_https": "O cheie se trimite doar prin HTTPS sau către acest calculator.",
   "ui.ai_key_note": "Stocată în depozitul de chei al sistemului, niciodată în setările NØDE CAD. Lăsați gol pentru un server local.",
   "ui.ai_keychain_error": "Depozitul de chei al sistemului a refuzat: {error}",
+  "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",
   "ui.ai_mode_all": "Permite tot",
   "ui.ai_mode_all_note": "Nimic nu întreabă mai întâi. Rapoartele de blocare rămân interzise și limitele de dosar se aplică în continuare.",
   "ui.ai_mode_all_warning": "Agentul poate salva, suprascrie, exporta și înlocui proiectul fără să întrebe. Folosiți asta doar cu un agent de încredere, pe proiecte salvate.",

@@ -1287,6 +1287,7 @@
   "ui.ai_key_needs_https": "Klíč se odesílá pouze přes HTTPS nebo na tento počítač.",
   "ui.ai_key_note": "Ukládá se v systémové klíčence, nikdy v nastavení NØDE CADu. Pro místní server nechte prázdné.",
   "ui.ai_keychain_error": "Systémová klíčenka odmítla: {error}",
+  "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",
   "ui.ai_mode_all": "Povolit vše",
   "ui.ai_mode_all_note": "Nic se nejdřív neptá. Hlášení o pádech zůstávají nepřístupná a limity složek stále platí.",
   "ui.ai_mode_all_warning": "Agent může bez ptaní ukládat, přepisovat, exportovat a nahradit váš návrh. Používejte to jen s agentem, kterému důvěřujete, a na uložených návrzích.",

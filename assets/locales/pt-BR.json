@@ -1287,6 +1287,7 @@
   "ui.ai_key_needs_https": "Uma chave só é enviada por HTTPS ou para este computador.",
   "ui.ai_key_note": "Guardada no chaveiro do sistema, nunca nas configurações do NØDE CAD. Deixe em branco para um servidor local.",
   "ui.ai_keychain_error": "O chaveiro do sistema recusou: {error}",
+  "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",
   "ui.ai_mode_all": "Permitir tudo",
   "ui.ai_mode_all_note": "Nada pergunta antes. Os relatórios de falha continuam fora de alcance e os limites de pasta ainda valem.",
   "ui.ai_mode_all_warning": "O agente pode salvar, sobrescrever, exportar e substituir seu projeto sem perguntar. Use isto só com um agente em que você confie e em projetos que você já salvou.",

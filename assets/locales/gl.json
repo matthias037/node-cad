@@ -1287,6 +1287,7 @@
   "ui.ai_key_needs_https": "A clave só se envía por HTTPS ou a este ordenador.",
   "ui.ai_key_note": "Gárdase no chaveiro do sistema, nunca nos axustes de NØDE CAD. Déixaa baleira para un servidor local.",
   "ui.ai_keychain_error": "O chaveiro do sistema rexeitouno: {error}",
+  "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",
   "ui.ai_mode_all": "Permitir todo",
   "ui.ai_mode_all_note": "Nada pregunta antes. Os informes de fallos seguen fóra do seu alcance e os límites de cartafoles seguen aplicándose.",
   "ui.ai_mode_all_warning": "O axente pode gardar, sobrescribir, exportar e substituír o teu deseño sen preguntar. Usa isto só cun axente no que confíes e con deseños que teñas gardados.",

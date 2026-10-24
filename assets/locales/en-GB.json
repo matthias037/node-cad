@@ -19,6 +19,7 @@
   "pattern.alignment_hint": "Counts include the original. Centre balances copies; Flip chooses the extra side for even totals.",
   "render.opaque_preview_help": "Opaque PBR and simple colours; blended transparency. Refraction, HDRI and final rendering are not available yet.",
   "sketch_text.align_center": "Centre",
+  "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",
   "ui.center": "Centre",
   "ui.centerline": "Centreline",
   "ui.customizeToolbar": "Customise Toolbar…",

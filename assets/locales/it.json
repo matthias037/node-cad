@@ -1290,6 +1290,7 @@
   "ui.ai_key_needs_https": "La chiave viene inviata solo tramite HTTPS o a questo computer.",
   "ui.ai_key_note": "Memorizzata nel portachiavi di sistema, mai nelle impostazioni di NØDE CAD. Lascia vuoto per un server locale.",
   "ui.ai_keychain_error": "Il portachiavi di sistema ha rifiutato l'operazione: {error}",
+  "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",
   "ui.ai_mode_all": "Consenti tutto",
   "ui.ai_mode_all_note": "Nessuna richiesta di conferma. I rapporti di arresto anomalo restano inaccessibili e i limiti delle cartelle restano validi.",
   "ui.ai_mode_all_warning": "L'agente può salvare, sovrascrivere, esportare e sostituire il progetto senza chiedere. Usa questa opzione solo con un agente fidato e su progetti già salvati.",

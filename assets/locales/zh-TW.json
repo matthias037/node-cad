@@ -1286,6 +1286,7 @@
   "ui.ai_key_needs_https": "金鑰只會透過 HTTPS 傳送，或傳送到本機。",
   "ui.ai_key_note": "儲存在系統鑰匙圈中，絕不儲存在 NØDE CAD 的設定裡。本機伺服器可留空。",
   "ui.ai_keychain_error": "系統鑰匙圈拒絕：{error}",
+  "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",
   "ui.ai_mode_all": "全部允許",
   "ui.ai_mode_all_note": "不再詢問。當機報告仍不可存取，資料夾限制仍然有效。",
   "ui.ai_mode_all_warning": "代理可以不經詢問儲存、覆蓋、匯出和取代您的設計。只在您信任的代理和已儲存的設計上使用。",

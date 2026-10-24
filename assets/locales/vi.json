@@ -1287,6 +1287,7 @@
   "ui.ai_key_needs_https": "Khóa chỉ được gửi qua HTTPS, hoặc trực tiếp trên máy tính này.",
   "ui.ai_key_note": "Được lưu an toàn trong Keychain hệ thống, không lưu trong cài đặt của NØDE CAD. Để trống nếu dùng máy chủ cục bộ.",
   "ui.ai_keychain_error": "Chuỗi khóa hệ thống từ chối: {error}",
+  "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",
   "ui.ai_mode_all": "Cho phép tất cả",
   "ui.ai_mode_all_note": "Không yêu cầu xác nhận trước. Báo cáo sự cố và các thư mục giới hạn vẫn được bảo vệ.",
   "ui.ai_mode_all_warning": "Tác tử có thể lưu, ghi đè, xuất tệp và thay thế thiết kế của bạn mà không cần hỏi. Chỉ sử dụng chế độ này với tác tử bạn tin tưởng và trên các thiết kế đã được lưu.",

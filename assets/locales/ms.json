@@ -1287,6 +1287,7 @@
   "ui.ai_key_needs_https": "Kunci hanya dihantar melalui HTTPS, atau ke komputer ini.",
   "ui.ai_key_note": "Disimpan dalam rantai kunci sistem, bukan dalam tetapan NØDE CAD. Biarkan kosong untuk pelayan setempat.",
   "ui.ai_keychain_error": "Rantai kunci sistem menolak: {error}",
+  "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",
   "ui.ai_mode_all": "Benarkan semua",
   "ui.ai_mode_all_note": "Tiada permintaan izin. Laporan ranap masih disekat dan had folder kekal.",
   "ui.ai_mode_all_warning": "Ejen boleh simpan, tulis ganti, eksport dan ganti reka bentuk tanpa izin. Guna hanya dengan ejen dipercayai, pada reka bentuk yang sudah disimpan.",

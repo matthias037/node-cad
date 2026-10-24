@@ -1291,6 +1291,7 @@
   "ui.ai_key_needs_https": "키는 HTTPS를 통해서만, 또는 이 컴퓨터로만 전송됩니다.",
   "ui.ai_key_note": "NØDE CAD 설정이 아닌 시스템 키체인에 저장됩니다. 로컬 서버라면 비워 두세요.",
   "ui.ai_keychain_error": "시스템 키체인이 거부했습니다: {error}",
+  "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",
   "ui.ai_mode_all": "모두 허용",
   "ui.ai_mode_all_note": "묻지 않고 실행합니다. 충돌 보고서는 계속 제외되고 폴더 제한도 그대로 적용됩니다.",
   "ui.ai_mode_all_warning": "에이전트가 묻지 않고 디자인을 저장, 덮어쓰기, 내보내기, 교체할 수 있습니다. 신뢰하는 에이전트와 저장된 디자인에서만 사용하세요.",

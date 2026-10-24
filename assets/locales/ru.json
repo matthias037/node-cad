@@ -1286,6 +1286,7 @@
   "ui.ai_key_needs_https": "Ключ отправляется только по HTTPS или на этот компьютер.",
   "ui.ai_key_note": "Хранится в системной связке ключей, а не в настройках NØDE CAD. Для локального сервера оставьте пустым.",
   "ui.ai_keychain_error": "Системная связка ключей отказала: {error}",
+  "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",
   "ui.ai_mode_all": "Разрешать всё",
   "ui.ai_mode_all_note": "Ничего не спрашивается. Отчёты о сбоях остаются недоступными, ограничения по папкам действуют.",
   "ui.ai_mode_all_warning": "Агент может сохранять, перезаписывать, экспортировать и заменять ваш дизайн без запроса. Используйте это только с доверенным агентом и для сохранённых дизайнов.",

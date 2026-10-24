@@ -1408,6 +1408,7 @@
   "ui.ai_key_needs_https": "Ein Schlüssel wird nur über HTTPS oder an diesen Computer gesendet.",
   "ui.ai_key_note": "Im Schlüsselbund des Systems gespeichert, nie in den Einstellungen von NØDE CAD. Für einen lokalen Server leer lassen.",
   "ui.ai_keychain_error": "Der Schlüsselbund des Systems hat abgelehnt: {error}",
+  "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",
   "ui.ai_mode_all": "Alles erlauben",
   "ui.ai_mode_all_note": "Nichts fragt vorher. Absturzberichte bleiben tabu, und die Ordnergrenzen gelten weiter.",
   "ui.ai_mode_all_warning": "Der Agent kann Ihr Design ohne Nachfrage speichern, überschreiben, exportieren und ersetzen. Nutzen Sie das nur mit einem Agenten, dem Sie vertrauen, und mit gespeicherten Designs.",

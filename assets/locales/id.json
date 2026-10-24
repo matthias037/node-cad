@@ -1286,6 +1286,7 @@
   "ui.ai_key_needs_https": "Key hanya dikirim lewat HTTPS, atau ke komputer ini.",
   "ui.ai_key_note": "Disimpan di keychain sistem, tidak pernah di pengaturan NØDE CAD. Kosongkan untuk server lokal.",
   "ui.ai_keychain_error": "Keychain sistem menolak: {error}",
+  "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",
   "ui.ai_mode_all": "Izinkan semuanya",
   "ui.ai_mode_all_note": "Tidak ada yang bertanya dulu. Laporan crash tetap terlarang dan batas folder tetap berlaku.",
   "ui.ai_mode_all_warning": "Agen dapat menyimpan, menimpa, mengekspor, dan mengganti desain Anda tanpa bertanya. Gunakan hanya dengan agen yang Anda percaya, pada desain yang sudah disimpan.",

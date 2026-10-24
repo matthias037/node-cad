@@ -1592,6 +1592,7 @@
   "ui.ai_key_note": "Stored in the system keychain, never in NØDE CAD's settings. Leave it empty for a local server.",
   "ui.ai_keychain_error": "The system keychain refused: {error}",
   "ui.ai_kind": "Kind",
+  "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",
   "ui.ai_mode_all": "Allow everything",
   "ui.ai_mode_all_note": "Nothing asks first. Crash reports stay off limits and the folder limits still apply.",
   "ui.ai_mode_all_warning": "The agent can save, overwrite, export and replace your design without asking. Use this only with an agent you trust, on designs you have saved.",

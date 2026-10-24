@@ -1471,6 +1471,7 @@
   "ui.ai_key_needs_https": "Klucz jest wysyłany tylko przez HTTPS albo do tego komputera.",
   "ui.ai_key_note": "Przechowywany w systemowym pęku kluczy, nigdy w ustawieniach NØDE CAD. Dla serwera lokalnego zostaw puste.",
   "ui.ai_keychain_error": "Systemowy pęk kluczy odmówił: {error}",
+  "ui.ai_mistral_key_hint": "Mistral refused this key. Check that it is an API key made at console.mistral.ai (a Codestral key only works on codestral.mistral.ai), that the workspace has a plan (the free Experiment plan is enough), and wait a few minutes after creating it.",
   "ui.ai_mode_all": "Zezwalaj na wszystko",
   "ui.ai_mode_all_note": "Nic nie pyta wcześniej. Raporty o awariach pozostają niedostępne, a ograniczenia folderów nadal obowiązują.",
   "ui.ai_mode_all_warning": "Agent może zapisywać, nadpisywać, eksportować i zastępować projekt bez pytania. Używaj tego tylko z zaufanym agentem i na zapisanych projektach.",
