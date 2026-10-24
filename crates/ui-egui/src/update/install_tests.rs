@@ -25,11 +25,8 @@ fn hex(bytes: &[u8]) -> String {
 #[test]
 fn checksum_lists_are_read() {
     let h = "a".repeat(64);
-    let sums = format!(
-        "{h}  node-cad-linux-x86_64.AppImage\n{}  *node-cad-windows-x64.msi\nnot a line\n{}  short.txt\n",
-        "B".repeat(64),
-        "c".repeat(10)
-    );
+    let sums =
+        format!("{h}  node-cad-linux-x86_64.AppImage\n{}  *node-cad-windows-x64.msi\nnot a line\n{}  short.txt\n", "B".repeat(64), "c".repeat(10));
     assert_eq!(expected_sha256(&sums, "node-cad-linux-x86_64.AppImage"), Some(h));
     assert_eq!(expected_sha256(&sums, "node-cad-windows-x64.msi"), Some("b".repeat(64)), "binary-mode marker and upper case");
     assert_eq!(expected_sha256(&sums, "short.txt"), None, "not a SHA-256");

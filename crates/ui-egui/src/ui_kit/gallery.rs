@@ -294,13 +294,7 @@ const ELEMENTS: &[Element] = &[
                 FileView::recent_row(
                     ui,
                     id,
-                    RecentRow {
-                        title: "Sample Plate",
-                        path: "Designs/sample-plate.nodecad",
-                        when: "Open now",
-                        workspace: "Design",
-                        thumbnail: None,
-                    },
+                    RecentRow { title: "Sample Plate", path: "Designs/sample-plate.nodecad", when: "Open now", workspace: "Design", thumbnail: None },
                 );
             }
         });

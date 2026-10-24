@@ -192,10 +192,7 @@ fn each_installation_gets_its_own_file() {
         Some("sudo snap install --dangerous ./node-cad-linux-x86_64.snap")
     );
     assert_eq!(InstallKind::Flatpak(APP_ID.into()).update_command(None).as_deref(), Some("flatpak update fr.node_os.cad"));
-    assert_eq!(
-        InstallKind::Deb.update_command(Some("node-cad-linux-x86_64.deb")).as_deref(),
-        Some("sudo apt install ./node-cad-linux-x86_64.deb")
-    );
+    assert_eq!(InstallKind::Deb.update_command(Some("node-cad-linux-x86_64.deb")).as_deref(), Some("sudo apt install ./node-cad-linux-x86_64.deb"));
     assert_eq!(InstallKind::WindowsMsi.update_command(None), None);
 }
 

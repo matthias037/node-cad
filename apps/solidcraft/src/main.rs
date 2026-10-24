@@ -357,8 +357,9 @@ fn agent_http(r: &solidcraft_ui_egui::agent_chat::backend::HttpRequest) -> Resul
         .max_redirects(0)
         .build()
         .into();
-    let mut response = if r.method == "POST" {
-        let mut req = agent.post(&r.url);
+    // POST for the endpoints, PUT for NØDE IA's sign-in code (`agent_chat/node_ia.rs`).
+    let mut response = if r.method == "POST" || r.method == "PUT" {
+        let mut req = if r.method == "PUT" { agent.put(&r.url) } else { agent.post(&r.url) };
         for (k, v) in &r.headers {
             req = req.header(k, v);
         }
@@ -698,6 +699,9 @@ fn main() -> eframe::Result {
                 }
             }
             app.integrated_titlebar = cfg!(target_os = "macos");
+            // The official app's assistant is NØDE IA, by subscription; `agents-libres` builds keep
+            // the installed agents and the endpoints a person adds.
+            app.agent_chat.node_ia_only = !cfg!(feature = "agents-libres");
             app.cpu_meshing = safe_mode;
             match cc.storage.and_then(|s| solidcraft_ui_egui::prefs::stored(|k| s.get_string(k))).filter(|_| !safe_mode) {
                 Some(p) => app.load_prefs(&p),

@@ -302,9 +302,7 @@ impl InstallKind {
         match self {
             InstallKind::Flatpak(id) => Some(format!("flatpak update {id}")),
             InstallKind::Snap { store: true } => Some("sudo snap refresh node-cad".into()),
-            InstallKind::Snap { store: false } => {
-                Some(format!("sudo snap install --dangerous ./{}", asset.unwrap_or("node-cad-linux-x86_64.snap")))
-            }
+            InstallKind::Snap { store: false } => Some(format!("sudo snap install --dangerous ./{}", asset.unwrap_or("node-cad-linux-x86_64.snap"))),
             InstallKind::Deb => Some(format!("sudo apt install ./{}", asset.unwrap_or("node-cad-linux-x86_64.deb"))),
             InstallKind::Rpm => Some(format!("sudo dnf install ./{}", asset.unwrap_or("node-cad-linux-x86_64.rpm"))),
             _ => None,
@@ -400,13 +398,7 @@ impl Release {
                 is_release_url(&url).then(|| Asset { name, url, size: a.get("size").and_then(Value::as_u64).unwrap_or(0) })
             })
             .collect();
-        Ok(Release {
-            name: Some(s("name")).filter(|n| !n.trim().is_empty()).unwrap_or_else(|| format!("NØDE CAD {tag}")),
-            tag,
-            notes,
-            page,
-            assets,
-        })
+        Ok(Release { name: Some(s("name")).filter(|n| !n.trim().is_empty()).unwrap_or_else(|| format!("NØDE CAD {tag}")), tag, notes, page, assets })
     }
 
     /// The version without the `v`.

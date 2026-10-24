@@ -157,6 +157,9 @@ impl Entry {
 
 /// Every agent the chat can use: the installed ones found, then the ones the user added.
 pub fn entries(app: &crate::SolveApp) -> Vec<Entry> {
+    if app.agent_chat.node_ia_only {
+        return vec![super::node_ia::entry(app)];
+    }
     let mut out = Vec::new();
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(d) = &app.agent_chat.detection {

@@ -913,7 +913,7 @@ fn switcher(app: &mut SolveApp, ui: &mut egui::Ui) {
                         }
                     }
                     ui.separator();
-                    if ui_kit::list_picker(ui, "add", tr("ui.ai_add_agent"), false).clicked() {
+                    if !app.agent_chat.node_ia_only && ui_kit::list_picker(ui, "add", tr("ui.ai_add_agent"), false).clicked() {
                         add = true;
                     }
                     if ui_kit::list_picker(ui, "settings", tr("ui.ai_settings"), false).clicked() {
@@ -1035,6 +1035,16 @@ pub(super) fn no_agents(ui: &mut egui::Ui) {
 fn picker(app: &mut SolveApp, ui: &mut egui::Ui) {
     let open = app.agent_chat.picking.unwrap_or(!app.agent_chat.state().running() && app.agent_chat.items.is_empty());
     if !open {
+        return;
+    }
+    // NØDE IA only: nothing to pick or install; sign in first if needed.
+    if app.agent_chat.node_ia_only {
+        if !super::node_ia::signed_in(app) {
+            ui_kit::text(ui, tr("ui.node_ia_sign_in_first"), ui_kit::Text::Note("node_ia_sign_in_first"));
+            if ui_kit::button(ui, tr("ui.node_ia_sign_in"), ui_kit::Button::Primary).clicked() {
+                crate::prefs::open_at(app, crate::prefs::PAGE_AI);
+            }
+        }
         return;
     }
     let all = agents::entries(app);

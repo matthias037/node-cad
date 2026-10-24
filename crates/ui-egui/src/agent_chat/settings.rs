@@ -151,7 +151,9 @@ pub fn page(app: &mut SolveApp, ui: &mut egui::Ui) {
     });
     if !cfg!(target_arch = "wasm32") && app.preferences.ai_features {
         #[cfg(not(target_arch = "wasm32"))]
-        {
+        if app.agent_chat.node_ia_only {
+            super::node_ia::section(app, ui);
+        } else {
             if app.agent_chat.detection.is_none() && app.agent_chat.detecting.is_none() {
                 refresh(app, &ui.ctx().clone());
             }

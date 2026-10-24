@@ -572,6 +572,9 @@ preference_settings! {
     agents: Vec<crate::agent_chat::agents::AgentConfig> = Vec::new();
     /// The agent a new conversation starts with (an agent's id; empty: the first one available).
     agent_default: String = String::new();
+    /// The NØDE account NØDE IA is signed in with (its token is in the system keychain); empty:
+    /// signed out.
+    node_ia_email: String = String::new();
     /// How much the agent may do without asking (`ask`, `edits`, `all`), and per agent.
     ai_permissions: crate::agent_chat::agents::Mode = crate::agent_chat::agents::Mode::Edits, PAGE_AI;
     agent_permissions: std::collections::BTreeMap<String, crate::agent_chat::agents::Mode> = Default::default(), PAGE_AI;

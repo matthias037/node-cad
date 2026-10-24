@@ -211,7 +211,7 @@ impl Worker {
 
     /// Whether this endpoint reads attached documents: Mistral does, through its OCR.
     fn reads_documents(&self) -> bool {
-        self.cfg.protocol == Protocol::OpenAi && super::mistral::is_mistral(&self.cfg.base_url)
+        self.cfg.protocol == Protocol::OpenAi && (super::mistral::is_mistral(&self.cfg.base_url) || super::node_ia::is_node_ia(&self.cfg.base_url))
     }
 
     fn emit_documents(&self) {
@@ -413,17 +413,25 @@ impl Worker {
             self.no_reasoning.set(true);
             body["reasoning_effort"] = json!("none");
             let (status, v) = self.post(&body)?;
-            return if status == 200 { Ok(reply(self.cfg.protocol, &v)) } else { Err(self.explain(status, http_error(status, &v))) };
+            return if status == 200 { Ok(reply(self.cfg.protocol, &v)) } else { Err(self.explain(status, &v)) };
         }
         if status != 200 {
-            return Err(self.explain(status, http_error(status, &v)));
+            return Err(self.explain(status, &v));
         }
         Ok(reply(self.cfg.protocol, &v))
     }
 
     /// A refused key on Mistral, said with what to check there: most refusals are a key made for
     /// another of its services, a workspace without a plan, or a key a minute old.
-    fn explain(&self, status: u16, error: String) -> String {
+    fn explain(&self, status: u16, body: &Value) -> String {
+        let error = http_error(status, body);
+        // NØDE IA's relay writes its refusals for the person (subscription, trial, allowance):
+        // they are shown as they are.
+        if super::node_ia::is_node_ia(&self.cfg.base_url)
+            && let Some(message) = body.pointer("/error/message").and_then(Value::as_str).filter(|m| !m.is_empty())
+        {
+            return message.to_string();
+        }
         if matches!(status, 401 | 403) && super::mistral::is_mistral(&self.cfg.base_url) {
             format!("{error}. {}", crate::i18n::tr("ui.ai_mistral_key_hint"))
         } else {

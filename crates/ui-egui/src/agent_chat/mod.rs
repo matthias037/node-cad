@@ -30,6 +30,7 @@ pub mod gate;
 mod markdown;
 mod markdown_view;
 pub mod mistral;
+pub mod node_ia;
 mod panel;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod paste;
@@ -298,6 +299,11 @@ impl Loading {
 pub struct AgentChat {
     /// The panel is shown (View menu, the application bar's chat button, Ctrl+Shift+A).
     pub open: bool,
+    /// The official app: NØDE IA is the only agent (`node_ia`). Off (tests, and builds with the
+    /// `agents-libres` feature): the installed agents and the endpoints the person adds.
+    pub node_ia_only: bool,
+    /// The NØDE account part of Preferences > AI.
+    pub node_ia: node_ia::State,
     pub items: Vec<Item>,
     pub input: String,
     /// The viewer, open on one message's pictures.
@@ -744,6 +750,13 @@ pub fn connect(app: &mut SolveApp, ctx: &egui::Context) {
         app.agent_chat.notice(tr("ui.agent_chat_none_found"), true);
         return;
     };
+    // NØDE IA answers a signed-in account: say where to sign in rather than send a request
+    // the relay would refuse.
+    if entry.id == node_ia::ID && !node_ia::signed_in(app) {
+        app.agent_chat.notice(tr("ui.node_ia_sign_in_first"), true);
+        app.agent_chat.state = Some(State::Exited);
+        return;
+    }
     // An API agent's key comes from the keychain for this connection only.
     let key = if entry.kind.is_api() && entry.key {
         match app.services.secrets.as_ref().map(|s| s.get(&entry.id)) {
@@ -1478,6 +1491,11 @@ pub fn poll(app: &mut SolveApp, ctx: &egui::Context) {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn refresh(app: &mut SolveApp, ctx: &egui::Context) {
     if app.agent_chat.detecting.is_some() {
+        return;
+    }
+    // NØDE IA only: no other agent is looked for, nothing is started to find one.
+    if app.agent_chat.node_ia_only {
+        app.agent_chat.detection = Some(discover::Detection::default());
         return;
     }
     let (tx, rx) = std::sync::mpsc::channel();
