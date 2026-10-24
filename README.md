@@ -51,25 +51,29 @@ Jeune, mais déjà utilisable pour des pièces simples.
 **En préparation :** la FAO (contournage, poche, G-code avec post-processeurs) et des outils IA
 avancés proposés en option sur node-os.fr, comme la création d'une pièce à partir d'un plan.
 
-## Assistant IA intégré (Mistral)
+## NØDE IA, l'assistant intégré (en option)
 
-Le panneau de l'agent (bouton IA) se branche sur **Mistral** par défaut : ajoutez un agent, gardez
-« Mistral », collez votre clé d'API (rangée dans le trousseau du système, jamais dans les
-préférences). Le modèle proposé est `mistral-large-latest` ; la liste des modèles de votre compte
-s'affiche dans le panneau.
+Le logiciel est gratuit ; son assistant intégré, **NØDE IA**, est proposé par abonnement
+(**29 € HT par mois**, sans engagement, ou essai gratuit sur demande) sur
+[node-os.fr/cad](https://node-os.fr/cad#ia). Dans *Préférences > IA*, connectez-vous avec votre
+adresse et le code reçu par e-mail : pas de mot de passe, pas de clé à coller.
 
-L'assistant répond en français, pour l'atelier, et lit ce que vous lui joignez :
+NØDE IA répond en français, pour l'atelier, et lit ce que vous lui joignez :
 
-- **PDF, Word et PowerPoint** : lus par l'OCR de Mistral (`mistral-ocr-latest`) — le texte des pages,
-  puis les images qu'elles contiennent (un plan scanné, un dessin), regardées par le modèle ;
-- **photos et images** : regardées telles quelles (plan, pièce, plaque de machine) ;
-- **Excel et LibreOffice** (`.xlsx`, `.xlsm`, `.xls`, `.ods`) : chaque feuille en tableau de texte ;
-- **programmes CN** (`.nc`, `.ngc`, `.gcode`, `.tap`, `.h`, `.mpf`, `.iso`…) : le texte, avec la
-  commande numérique probable (Heidenhain, Sinumerik, ISO type Fanuc, LinuxCNC, GRBL) ;
-- **STEP, IGES, STL, 3MF, Rhino, FreeCAD** : importés dans la conception, que l'agent mesure.
+- **plans PDF, Word et PowerPoint**, scannés ou non : le texte des pages, puis les dessins qu'elles
+  contiennent ;
+- **photos et images** : un plan, une pièce, une plaque de machine ;
+- **Excel et LibreOffice** (`.xlsx`, `.xlsm`, `.xls`, `.ods`) : chaque feuille en tableau ;
+- **programmes CN** (`.nc`, `.ngc`, `.gcode`, `.tap`, `.h`, `.mpf`, `.iso`…), avec la commande
+  numérique probable (Heidenhain, Sinumerik, ISO type Fanuc, LinuxCNC, GRBL) ;
+- **STEP, IGES, STL, 3MF, Rhino, FreeCAD** : importés dans la conception, que l'assistant mesure.
 
-Il modifie la pièce avec les mêmes commandes que vos clics. L'agent par clé d'API fonctionne dans
-l'application de bureau ; la version web ne le propose pas.
+Il modifie la pièce avec les mêmes commandes que vos clics. Il fonctionne dans l'application de
+bureau ; la version web ne le propose pas.
+
+Vous compilez NØDE CAD vous-même ? `cargo build --release -p solidcraft --features agents-libres`
+garde l'ancien fonctionnement : vos agents installés (Claude Code, Codex…) et vos propres points
+d'accès (Ollama, LM Studio, une clé d'API).
 
 ## IA et agents (MCP)
 
