@@ -160,6 +160,7 @@ fn batch(app: &mut SolveApp, p: &Value) -> Outcome {
     let mut rows = Vec::new();
     let clock = timing::Clock::start();
     let checkpoint = if rollback { app.run("edit.checkpoint", json!({})).ok().and_then(|v| v["checkpoint"].as_u64()) } else { None };
+    let undo_before = app.session.undo.len();
     let mut results = Vec::with_capacity(steps.len());
     for (i, step) in steps.iter().enumerate() {
         let (r, took) = timing::time(profile, || match command(step) {
@@ -184,7 +185,9 @@ fn batch(app: &mut SolveApp, p: &Value) -> Outcome {
     if let Some(id) = checkpoint {
         let _ = app.run("edit.restore_checkpoint", json!({"checkpoint": id, "forget": true}));
     }
-    ok(with_timings(json!({"completed": results.len(), "results": results, "undone": 0}), timed, rows, clock.ms()))
+    // `undo_steps`: the undos that take the whole batch back (the agent's `undo {steps}`).
+    let undo_steps = app.session.undo.len().saturating_sub(undo_before);
+    ok(with_timings(json!({"completed": results.len(), "results": results, "undone": 0, "undo_steps": undo_steps}), timed, rows, clock.ms()))
 }
 
 /// A batch reply with `timings` and `total_ms` when they were asked for.

@@ -821,10 +821,127 @@ fn round_of(doc: &Document, st: &ModelState, o: &JointOrigin) -> Result<face::Ro
             };
             off(a).total_cmp(&off(b))
         })
-        .ok_or_else(|| DocError::Invalid("joint origin: no cylindrical face there".into()))?;
+        .ok_or_else(|| DocError::Invalid(format!("joint origin: no cylindrical face there{}", round_faces_hint(doc, st, comp, o.occurrence))))?;
     let s = (pick - cyl.axis_point).dot(cyl.axis);
     let (at, dir) = if (s - cyl.start).abs() <= (cyl.end - s).abs() { (cyl.start, -1.0) } else { (cyl.end, 1.0) };
     Ok(face::Round { cylinder: cyl, centre: cyl.axis_point + cyl.axis * at, z: cyl.axis * dir })
+}
+
+/// A point on the wall of the component's cylinder whose axis `pick` lies on, between its ends
+/// (component coordinates; a body moved in placed by its offset). Agents give a pin's or a
+/// hole's centre for `circle`, where no face lies; a round end's centre keeps its own handling
+/// (`round_end_at`). `None` when no cylinder's axis passes there.
+pub fn wall_from_axis(doc: &Document, st: &ModelState, component: u64, pick: Vec3) -> Option<Vec3> {
+    let mut best: Option<(f64, Vec3)> = None;
+    for b in component_bodies(doc, st, component) {
+        if b.body.is_mesh() {
+            continue;
+        }
+        let mesh = b.mesh();
+        for f in 0..b.body.face_count() {
+            let Some(c) = solidcraft_kernel::cylinder_face(&b.body, &mesh, f) else { continue };
+            let c = doc.model_body_offset(b).map_or(c, |m| face::placed(m, c));
+            let axis = *c.axis;
+            let v = pick - c.axis_point;
+            let along = v.dot(axis);
+            let off = v - axis * along;
+            // Near the axis (a fifth of the radius), and clear of both ends.
+            let end_slack = 1e-3 * (c.end - c.start).abs() + 1e-6;
+            if off.len() > 0.2 * c.radius || along <= c.start + end_slack || along >= c.end - end_slack {
+                continue;
+            }
+            let side = off
+                .normalized()
+                .or_else(|| axis.cross(if axis.z.abs() < 0.9 { Vec3::Z } else { Vec3::X }).normalized())
+                .unwrap_or(Vec3::X);
+            if best.as_ref().is_none_or(|(d, _)| off.len() < *d) {
+                best = Some((off.len(), c.axis_point + axis * along + side * c.radius));
+            }
+        }
+    }
+    best.map(|(_, wall)| wall)
+}
+
+/// The round faces of the part an occurrence places, in world coordinates.
+fn world_cylinders(doc: &Document, st: &ModelState, occurrence: u64) -> Vec<solidcraft_kernel::CylinderFace> {
+    let Ok(comp) = component_of(doc, occurrence) else { return Vec::new() };
+    let world = if occurrence == 0 { IDENTITY } else { occurrence_world(doc, occurrence) };
+    let mut out = Vec::new();
+    for b in component_bodies(doc, st, comp) {
+        if b.body.is_mesh() {
+            continue;
+        }
+        let mesh = b.mesh();
+        for f in 0..b.body.face_count() {
+            if let Some(c) = solidcraft_kernel::cylinder_face(&b.body, &mesh, f) {
+                out.push(face::placed(&world, doc.model_body_offset(b).map_or(c, |m| face::placed(m, c))));
+            }
+        }
+    }
+    out
+}
+
+/// A point (world) on the wall of `a`'s round face that shares its axis with one of `b`'s, half
+/// way along where they overlap: a pin in a hole, a wheel's bore on an axle. The pair whose axes
+/// lie closest wins, then the longer overlap. `None` when the two parts share no axis.
+pub fn shared_axis_wall(doc: &Document, st: &ModelState, a: u64, b: u64) -> Option<Vec3> {
+    let (ca, cb) = (world_cylinders(doc, st, a), world_cylinders(doc, st, b));
+    let mut best: Option<(f64, f64, Vec3)> = None;
+    for x in &ca {
+        let axis = *x.axis;
+        for y in &cb {
+            if axis.dot(*y.axis).abs() < 1.0 - 1e-6 {
+                continue;
+            }
+            // How far y's axis line passes from x's, and where y's extent falls along x's axis.
+            let v = y.axis_point - x.axis_point;
+            let apart = (v - axis * v.dot(axis)).len();
+            if apart > 0.05 * x.radius.min(y.radius) + 1e-6 {
+                continue;
+            }
+            let (e0, e1) = (y.axis_point + *y.axis * y.start, y.axis_point + *y.axis * y.end);
+            let (s0, s1) = ((e0 - x.axis_point).dot(axis), (e1 - x.axis_point).dot(axis));
+            let (lo, hi) = (x.start.max(s0.min(s1)), x.end.min(s0.max(s1)));
+            if hi - lo <= 1e-6 {
+                continue;
+            }
+            let side = axis.cross(if axis.z.abs() < 0.9 { Vec3::Z } else { Vec3::X }).normalized().unwrap_or(Vec3::X);
+            let wall = x.axis_point + axis * ((lo + hi) / 2.0) + side * x.radius;
+            if best.as_ref().is_none_or(|(d, len, _)| apart < *d - 1e-9 || (apart <= *d + 1e-9 && hi - lo > *len)) {
+                best = Some((apart, hi - lo, wall));
+            }
+        }
+    }
+    best.map(|(.., wall)| wall)
+}
+
+/// The round faces of a part, for a pick that missed them: each one's diameter, its axis and a
+/// point on its wall, in world coordinates, so that an agent's next pick lands on one.
+fn round_faces_hint(doc: &Document, st: &ModelState, comp: u64, occurrence: u64) -> String {
+    let world = if occurrence == 0 { IDENTITY } else { occurrence_world(doc, occurrence) };
+    let r = |x: f64| (x * 100.0).round() / 100.0 + 0.0;
+    let v = |p: Vec3| format!("[{}, {}, {}]", r(p.x), r(p.y), r(p.z));
+    let (mut seen, mut lines) = (BTreeSet::new(), Vec::new());
+    for b in component_bodies(doc, st, comp) {
+        let mesh = b.mesh();
+        for f in 0..b.body.face_count() {
+            let Some(c) = solidcraft_kernel::cylinder_face(&b.body, &mesh, f) else { continue };
+            let c = face::placed(&world, doc.model_body_offset(b).map_or(c, |m| face::placed(m, c)));
+            let axis = *c.axis;
+            // The halves of one cylinder share its axis line and radius.
+            let foot = c.axis_point - axis * c.axis_point.dot(axis);
+            let what = format!("{}Ø{} along {}", if c.internal { "hole " } else { "" }, r(2.0 * c.radius), v(axis));
+            if !seen.insert(format!("{what} {}", v(foot))) {
+                continue;
+            }
+            let side = axis.cross(if axis.z.abs() < 0.9 { Vec3::Z } else { Vec3::X }).normalized().unwrap_or(Vec3::X);
+            lines.push(format!("{what}, a point on its wall {}", v(c.axis_point + axis * ((c.start + c.end) / 2.0) + side * c.radius)));
+        }
+    }
+    match lines.len() {
+        0 => ". This part has no round face".into(),
+        n => format!(". Its round faces (world): {}{}", lines.iter().take(4).cloned().collect::<Vec<_>>().join("; "), if n > 4 { "; …" } else { "" }),
+    }
 }
 
 /// The cylindrical face of a circle-centre snap (component coordinates).

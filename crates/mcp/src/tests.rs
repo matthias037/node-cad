@@ -469,6 +469,55 @@ fn batch_rolls_back_with_a_full_undo_history() {
     assert_eq!(d["undo"], undo);
 }
 
+/// A batch reports what it left wrong in `check`: a body joined from pieces that do not touch,
+/// and, after assembly steps, parts linked to nothing and parts that overlap. A batch with
+/// nothing wrong and no part that can move carries no check.
+#[test]
+fn a_batch_reports_split_bodies_free_parts_and_overlaps() {
+    let mut s = server();
+    let c = |cmd: &str, p: Value| json!({"command": cmd, "params": p});
+    let ok = tool(&mut s, "batch", json!({"commands": [c("solid.box", json!({"length": 10, "width": 10, "height": 10}))]}));
+    assert!(ok.get("check").is_none(), "{ok}");
+    let r = tool(
+        &mut s,
+        "batch",
+        json!({"commands": [
+            c("component.activate", json!({"component": "root"})),
+            c("component.create", json!({"name": "Leaf"})),
+            c("solid.box", json!({"length": 60, "width": 40, "height": 3, "corner": [0, 43, 0], "body_name": "Leaf"})),
+            // Nowhere near the leaf: joined, the leaf is in two solids.
+            c("solid.cylinder", json!({"base": [0, 23, 0], "axis": "Y", "diameter": 8, "height": 3, "operation": "join"})),
+            c("component.activate", json!({"component": "root"})),
+            c("component.create", json!({"name": "Pin"})),
+            c("solid.cylinder", json!({"base": [30, 50, -5], "axis": "Z", "diameter": 6, "height": 20, "body_name": "Pin"})),
+        ]}),
+    );
+    let check = &r["check"];
+    assert_eq!(check["split_bodies"], json!([{"body": "Leaf", "solids": 2}]), "{r}");
+    assert_eq!(check["free_parts"], json!(["Leaf:1", "Pin:1"]), "{r}");
+    assert_eq!(check["interferences"], 1, "{r}");
+    assert_eq!(check["overlaps"][0]["volume_mm3"].as_f64().map(f64::round), Some((std::f64::consts::PI * 9.0 * 3.0).round()), "{r}");
+    assert_eq!(check["fix_before_reporting"].as_array().map(Vec::len), Some(3), "{r}");
+    // Linked and ground, the free parts are gone; the pin's rotation is reported.
+    let r = tool(
+        &mut s,
+        "batch",
+        json!({"commands": [
+            c("occurrence.ground", json!({"occurrence": "Leaf:1", "grounded": true})),
+            c("joint.as_built", json!({"type": "revolute", "a": "Leaf:1", "b": "Pin:1", "at": {"occurrence": "Pin:1", "circle": [33, 50, 5]}})),
+        ]}),
+    );
+    assert!(r["check"].get("free_parts").is_none(), "{r}");
+    assert_eq!(r["check"]["degrees_of_freedom"], json!({"Pin:1": 1}), "{r}");
+    // `undo {steps}` takes several changes back at once.
+    let u = tool(&mut s, "undo", json!({"steps": 2}));
+    assert_eq!(u["completed"], 2, "{u}");
+    let joints = tool(&mut s, "execute", json!({"command": "joint.list"}));
+    assert_eq!(joints["joints"], json!([]), "{joints}");
+    let bad = raw_tool(&mut s, "undo", json!({"steps": 0}));
+    assert_eq!(bad["result"]["isError"], true, "{bad}");
+}
+
 /// Regression (#3242): a failed batch containing `file.new` reported `rolled_back: true` and
 /// kept the replacement design. The checkpoint survives the new document, so the design the
 /// batch started in — the 1 mm cube — is back when the batch fails.
@@ -1147,7 +1196,8 @@ fn compact_execute_keeps_changes_ids_and_default_replies() {
     }
 }
 
-/// A connected app sees exactly one engine call; no inventory inspection is needed.
+/// A connected app sees one engine call for the change, then only the read-only check of the
+/// bodies it changed (`design_check`); no inventory inspection is needed.
 #[test]
 fn compact_execute_uses_one_backend_call_and_keeps_removed_bodies() {
     struct ReplyOnly {
@@ -1156,6 +1206,10 @@ fn compact_execute_uses_one_backend_call_and_keeps_removed_bodies() {
     impl crate::backend::Backend for ReplyOnly {
         fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
             assert_eq!(method, "engine.execute");
+            if params["command"] == "inspect.measure" {
+                assert_eq!(params["params"], json!({"bodies": ["Base"]}));
+                return Ok(json!({"bodies": [{"name": "Base", "kernel": {"shells": 1}}]}));
+            }
             assert_eq!(params, json!({"command": "test.feature", "params": {}}));
             self.calls += 1;
             Ok(
@@ -1409,13 +1463,15 @@ fn running_asks_the_app() {
     assert!(r["content"][0]["text"].as_str().is_some_and(|t| t.starts_with("unknown method")), "{r}");
 }
 
-/// #743: bridged to an app that has `engine.batch`, a batch is one control request.
+/// #743: bridged to an app that has `engine.batch`, a batch is one control request; only the
+/// read-only check of the bodies it made follows.
 #[test]
 fn batch_is_one_engine_batch_call() {
     let reply = json!({"completed": 2, "results": [{"feature": 1, "bodies": ["B"], "created_bodies": ["B"]}, {"x": 2}], "undone": 0});
     let steps = json!([{"command": "a.one", "params": {"v": 1}}, {"command": "a.two"}]);
     let (b, body, is_error) = recorded_batch(Ok(reply.clone()), json!({"commands": steps}));
-    assert_eq!(methods(&b), ["engine.batch"]);
+    assert_eq!(methods(&b), ["engine.batch", "engine.execute"]);
+    assert_eq!(b.calls[1].1, json!({"command": "inspect.measure", "params": {"bodies": ["B"]}}));
     assert_eq!(b.calls[0].1, json!({"commands": steps, "rollback": true}));
     assert!(!is_error);
     assert_eq!(body, json!({"ok": true, "completed": 2, "results": reply["results"]}));

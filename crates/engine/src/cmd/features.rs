@@ -1074,8 +1074,20 @@ fn prim_box(s: &mut Session, p: &Value) -> Result<Value> {
     add_feature(s, p, FeatureKind::Box { corner, length: l, width: w, height: h, operation: operation(p, cmd)? })
 }
 
+/// Refuse a parameter a primitive does not read, naming those it does: an agent's `corner` on a
+/// cylinder was dropped without a word and the part built at the origin (banc NØDE IA,
+/// 24/10/2026).
+fn known_params(p: &Value, cmd: &str, own: &[&str], hint: &str) -> Result<()> {
+    const COMMON: &[&str] = &["operation", "targets", "participants", "name", "body_name", "body_names"];
+    match p.as_object().and_then(|o| o.keys().find(|k| !own.contains(&k.as_str()) && !COMMON.contains(&k.as_str()))) {
+        Some(key) => Err(bad(cmd, format!("unknown parameter `{key}`; accepted parameters: {}, operation, targets, name, body_name{hint}", own.join(", ")))),
+        None => Ok(()),
+    }
+}
+
 fn prim_cylinder(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "solid.cylinder";
+    known_params(p, cmd, &["radius", "diameter", "height", "base", "axis"], " (base: the centre of its bottom face, [x, y, z])")?;
     let radius = radius_expr(s, p, cmd)?;
     let height = req_expr(cmd, p, "height")?;
     check_expr(s, &radius, Kind::Length, cmd, "radius")?;
@@ -1087,6 +1099,7 @@ fn prim_cylinder(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn prim_sphere(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "solid.sphere";
+    known_params(p, cmd, &["radius", "diameter", "center"], " (center: [x, y, z])")?;
     let radius = radius_expr(s, p, cmd)?;
     check_expr(s, &radius, Kind::Length, cmd, "radius")?;
     let center = point_param(s, p, "center", cmd)?.unwrap_or_else(|| point_expr(Vec3::ZERO));

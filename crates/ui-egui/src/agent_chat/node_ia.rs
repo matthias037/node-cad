@@ -12,7 +12,7 @@ use super::agents::{Entry, Kind};
 pub const ID: &str = "node-ia";
 pub const NAME: &str = "NØDE IA";
 /// The model a conversation starts with; the relay offers its list (`/models`).
-pub const DEFAULT_MODEL: &str = "mistral-medium-latest";
+pub const DEFAULT_MODEL: &str = "mistral-large-latest";
 const SITE: &str = "https://node-os.fr";
 
 /// The site that sells NØDE IA: node-os.fr, or `NODE_CAD_IA_SITE` to try a local copy of it.

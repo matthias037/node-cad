@@ -388,7 +388,7 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
     let size = str_(p, "size").ok_or_else(|| bad(cmd, "`size` is required"))?.to_string();
     let sh = shape(&family, &size, length_param(p, cmd)?).map_err(|e| bad(cmd, e))?;
     // A pick on a hole's rim also touches its end face: step onto the wall just inside the rim.
-    let at = p.get("at").and_then(vec3).map(|a| hole_wall(s, a).unwrap_or(a));
+    let at = p.get("at").and_then(vec3).map(|a| hole_wall(s, a).or_else(|| hole_wall_from_centre(s, a)).unwrap_or(a));
     // The occurrence the hole belongs to, found before the part exists.
     let host = match at {
         Some(a) => Some(super::joints::occurrence_at(s, a).ok_or_else(|| bad(cmd, "no body at `at` (pick a hole's rim or wall)"))?),
@@ -450,6 +450,42 @@ fn hole_wall(s: &Session, a: Vec3) -> Option<Vec3> {
         }
     }
     None
+}
+
+/// A point on the wall of the hole whose axis `a` lies on (the hole's centre, on its face or
+/// inside it), a little in from the end nearer `a`: agents give a hole's centre, where no face
+/// lies (banc NØDE IA, 24/10/2026).
+fn hole_wall_from_centre(s: &Session, a: Vec3) -> Option<Vec3> {
+    let st = s.model.state();
+    let mut best: Option<(f64, Vec3)> = None;
+    for b in &st.bodies {
+        if b.body.is_mesh() {
+            continue;
+        }
+        let mesh = b.mesh();
+        for f in 0..b.body.face_count() {
+            let Some(c) = solidcraft_doc::kernel::cylinder_face(&b.body, &mesh, f).filter(|c| c.internal) else { continue };
+            let axis = *c.axis;
+            let v = a - c.axis_point;
+            let along = v.dot(axis);
+            let off = v - axis * along;
+            let len = (c.end - c.start).abs();
+            let slack = 1e-3 * len + 1e-6;
+            if off.len() > 0.2 * c.radius || along < c.start - slack || along > c.end + slack {
+                continue;
+            }
+            let inset = (len / 4.0).min(0.5);
+            let at = if along - c.start <= c.end - along { c.start + inset } else { c.end - inset };
+            let side = off
+                .normalized()
+                .or_else(|| axis.cross(if axis.z.abs() < 0.9 { Vec3::Z } else { Vec3::X }).normalized())
+                .unwrap_or(Vec3::X);
+            if best.as_ref().is_none_or(|(d, _)| off.len() < *d) {
+                best = Some((off.len(), c.axis_point + axis * at + side * c.radius));
+            }
+        }
+    }
+    best.map(|(_, wall)| wall)
 }
 
 fn shape_len(sh: &Shape) -> Option<f64> {
@@ -574,6 +610,25 @@ mod tests {
         let (lo, hi) = bbox(&s, "SHCS M8x25");
         assert!((hi.z - 18.0).abs() < 1e-6 && (lo.z + 15.0).abs() < 1e-6, "{lo:?} {hi:?}");
         assert!(s.model.state().threads.iter().any(|t| t.designation == "M8" && (t.pitch - 1.25).abs() < 1e-9));
+    }
+
+    /// `at` the hole's centre on its face (where agents put it, and no face lies) seats the
+    /// screw as a pick on the rim does.
+    #[test]
+    fn a_screw_seats_at_a_holes_centre() {
+        let mut s = Session::default();
+        run(&mut s, "solid.box", json!({"length": 40, "width": 30, "height": 10, "body_name": "Plate"}));
+        run(&mut s, "solid.hole", json!({"position": [20, 15, 10], "diameter": 6.6}));
+        let r = run(&mut s, "parts.insert", json!({"family": "socket_head_cap_screw", "size": "M6", "length": 20, "at": [20, 15, 10]}));
+        assert!(r["joint"].is_number(), "{r}");
+        let (lo, hi) = bbox(&s, "SHCS M6x20");
+        assert!((hi.z - 16.0).abs() < 1e-6 && (lo.z + 10.0).abs() < 1e-6, "{lo:?} {hi:?}");
+        assert!(((lo.x + hi.x) / 2.0 - 20.0).abs() < 1e-6 && ((lo.y + hi.y) / 2.0 - 15.0).abs() < 1e-6);
+        // Under the plate, the bottom end's centre: a nut seats from below.
+        let r = run(&mut s, "parts.insert", json!({"family": "hex_nut", "size": "M6", "at": [20, 15, 0]}));
+        assert!(r["joint"].is_number(), "{r}");
+        let (lo, hi) = bbox(&s, "Hex Nut M6");
+        assert!(hi.z <= 1e-6 && lo.z < -4.0, "{lo:?} {hi:?}");
     }
 
     #[test]

@@ -249,6 +249,8 @@ struct Turn {
     requests: u32,
     limit_told: bool,
     label: String,
+    /// The design had no body when the message was sent.
+    started_empty: bool,
 }
 
 /// A message typed while the agent works: shown in the transcript as "Queued" until it is sent.
@@ -1074,7 +1076,15 @@ fn start_turn_with(app: &mut SolveApp, text: String, image: bool, at: Option<usi
     let first_line = text.lines().find(|l| !l.trim().is_empty()).or_else(|| files.first().map(|f| f.name.as_str())).unwrap_or("");
     let label: String = first_line.chars().take(48).collect();
     app.agent_chat.turn =
-        Some(Turn { start_doc: app.session.doc.clone(), start_undo: app.session.undo.len(), changes: 0, requests: 0, limit_told: false, label });
+        Some(Turn {
+            start_doc: app.session.doc.clone(),
+            start_undo: app.session.undo.len(),
+            changes: 0,
+            requests: 0,
+            limit_told: false,
+            label,
+            started_empty: app.session.model.state().bodies.is_empty(),
+        });
     app.agent_chat.last = Some((text, image, at, files));
     app.agent_chat.state = Some(State::Busy);
     app.agent_chat.stopped = false;
@@ -1294,6 +1304,11 @@ fn end_turn(app: &mut SolveApp) {
     if steps > 0 {
         let doc = app.session.doc.clone();
         app.agent_chat.push(Item::Changes { steps, doc, undone: false });
+    }
+    // The agent built the first parts of an empty design: frame them, as opening a file does,
+    // rather than leaving the view on a corner of what it made.
+    if turn.started_empty && !app.session.model.state().bodies.is_empty() {
+        app.fit_view();
     }
 }
 

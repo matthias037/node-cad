@@ -4177,3 +4177,18 @@ fn a_rectangle_takes_its_corners_as_expressions() {
     let e = s.execute("sketch.rectangle.center", &json!({"center": [0, 0], "corner": ["W", 3]})).unwrap_err().to_string();
     assert!(e.contains("corner") && e.contains("W"), "{e}");
 }
+
+/// A cylinder or sphere given a parameter it does not read is refused, with the ones it reads:
+/// an agent's `corner` was dropped without a word and the part built at the origin.
+#[test]
+fn a_primitive_refuses_a_parameter_it_does_not_read() {
+    let mut s = Session::default();
+    let e = s.execute("solid.cylinder", &json!({"diameter": 16, "height": 250, "corner": [0, 0, 200]})).unwrap_err().to_string();
+    assert!(e.contains("unknown parameter `corner`") && e.contains("base"), "{e}");
+    let e = s.execute("solid.sphere", &json!({"diameter": 10, "base": [0, 0, 5]})).unwrap_err().to_string();
+    assert!(e.contains("unknown parameter `base`") && e.contains("center"), "{e}");
+    assert!(s.model.state().bodies.is_empty());
+    s.execute("solid.cylinder", &json!({"diameter": 16, "height": 25, "base": [0, 0, 200], "axis": "Z", "operation": "new", "name": "Tige", "body_name": "Tige"})).unwrap();
+    s.execute("solid.sphere", &json!({"radius": 5, "center": [0, 0, 300], "body_name": "Boule"})).unwrap();
+    assert_eq!(s.model.state().bodies.len(), 2);
+}

@@ -376,6 +376,8 @@ pub(crate) fn origin_param(s: &Session, v: Option<&Value>, cmd: &str) -> Result<
     let snap = match what {
         "face" | "circle" => {
             let pick = local(world);
+            // A circle given by a point on its axis (a pin's or a hole's centre): on its wall.
+            let pick = if what == "circle" { joints::wall_from_axis(&s.doc, &st, component, pick).unwrap_or(pick) } else { pick };
             // The face's name, which it is found by from then on (a circle's is its wall's).
             let face = joints::face_name_at(&s.doc, &st, component, pick, what == "circle");
             let x = x_param(s, v, component, &inv, cmd)?;
@@ -737,8 +739,34 @@ fn as_built(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "joint.as_built";
     let kind = kind_param(p, cmd)?;
     let (oa, ob) = (occurrence_id(s, p.get("a"), cmd)?, occurrence_id(s, p.get("b"), cmd)?);
-    // The joint's frame in the world: the given origin, or B's component origin.
-    let at = p.get("at").map(|v| origin_param(s, Some(v), cmd)).transpose()?;
+    // The joint's frame in the world: the given origin; for a pivot given none, the axis the two
+    // parts share (a pin in a hole: agents misplace the pick, banc NØDE IA, 24/10/2026); else
+    // B's component origin.
+    let pivot = matches!(kind, JointKind::Revolute | JointKind::Cylindrical);
+    let shared = |s: &Session| -> Result<Option<JointOrigin>> {
+        match joints::shared_axis_wall(&s.doc, &s.model.state(), oa, ob) {
+            Some(w) => Ok(Some(origin_param(s, Some(&json!({"occurrence": oa, "circle": [w.x, w.y, w.z]})), cmd)?)),
+            None => Ok(None),
+        }
+    };
+    let mut warning = None;
+    let at = match p.get("at") {
+        Some(v) => match origin_param(s, Some(v), cmd) {
+            Ok(o) => Some(o),
+            // A pivot's pick that missed every round face, between parts that share an axis:
+            // that axis, said in a warning, rather than a failure the agent repeats.
+            Err(e) if pivot && e.to_string().contains("no cylindrical face") => match shared(s)? {
+                Some(o) => {
+                    warning = Some("`at` lay on no round face: the joint turns about the axis the two parts share".to_string());
+                    Some(o)
+                }
+                None => return Err(e),
+            },
+            Err(e) => return Err(e),
+        },
+        None if pivot => shared(s)?,
+        None => None,
+    };
     let w = match &at {
         Some(o) => s.doc.origin_world(&s.model.state(), o).map_err(|e| bad(cmd, e.to_string()))?,
         None => joints::occurrence_world(&s.doc, ob),
@@ -770,7 +798,13 @@ fn as_built(s: &mut Session, p: &Value) -> Result<Value> {
         suppressed: false,
         exprs: Default::default(),
     };
-    add_joint(s, j, p)
+    let mut out = add_joint(s, j, p)?;
+    if let Some(w) = warning {
+        let mut all = out["warnings"].as_array().cloned().unwrap_or_default();
+        all.push(json!(w));
+        out["warnings"] = Value::Array(all);
+    }
+    Ok(out)
 }
 
 fn rigid_group(s: &mut Session, p: &Value) -> Result<Value> {

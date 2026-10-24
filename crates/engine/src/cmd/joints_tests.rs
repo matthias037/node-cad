@@ -88,6 +88,80 @@ fn circle_given_by_its_centre_takes_that_round_end() {
     run(&mut s, "joint.screw", json!({"joint": "J", "pitch": {"occurrence": "Knob", "circle": [0, 0, 6]}}));
 }
 
+/// `circle` at a point on a pin's axis, between its ends (where agents put it), takes that pin:
+/// the knuckle of a hinge leaf by its centre line.
+#[test]
+fn circle_on_a_pins_axis_takes_that_pin() {
+    let mut s = Session::default();
+    leaf(&mut s, "LeafA");
+    leaf(&mut s, "LeafB");
+    run(&mut s, "component.activate", json!({"component": "root"}));
+    run(&mut s, "occurrence.ground", json!({"occurrence": "LeafA:1", "grounded": true}));
+    let r = run(
+        &mut s,
+        "joint.as_built",
+        json!({"type": "revolute", "a": "LeafA:1", "b": "LeafB:1", "at": {"occurrence": "LeafA:1", "circle": [20, 33, 4]}, "name": "Hinge"}),
+    );
+    assert_eq!(r["conflicts"].as_array().map(Vec::len), Some(0), "{r}");
+    let list = run(&mut s, "joint.list", json!({}));
+    let frame = &list["joints"][0]["frame_a"];
+    let (o, z) = (frame["origin"].as_array().unwrap(), frame["z"].as_array().unwrap());
+    // On the knuckle's axis (y 33, z 4), pointing along it.
+    assert!((o[1].as_f64().unwrap() - 33.0).abs() < 1e-6 && (o[2].as_f64().unwrap() - 4.0).abs() < 1e-6, "{frame}");
+    assert!((z[0].as_f64().unwrap().abs() - 1.0).abs() < 1e-9, "{frame}");
+    // A point on the plate, far from any round face, is still refused.
+    assert!(s.execute("joint.origin", &json!({"occurrence": "LeafA:1", "circle": [20, 15, 3]})).is_err());
+}
+
+/// A pivot given no `at` turns about the axis its two parts share: a shaft in a bearing's bore.
+#[test]
+fn a_pivot_without_at_takes_the_shared_axis() {
+    let mut s = Session::default();
+    run(&mut s, "component.create", json!({"name": "Bearing"}));
+    run(&mut s, "solid.box", json!({"length": 40, "width": 60, "height": 50, "corner": [-20, -30, 0]}));
+    run(&mut s, "solid.cylinder", json!({"base": [-20, 0, 35], "axis": "X", "diameter": 20.5, "height": 40, "operation": "cut"}));
+    run(&mut s, "component.activate", json!({"component": "root"}));
+    run(&mut s, "component.create", json!({"name": "Shaft"}));
+    run(&mut s, "solid.cylinder", json!({"base": [-50, 0, 35], "axis": "X", "diameter": 20, "height": 100}));
+    run(&mut s, "component.activate", json!({"component": "root"}));
+    run(&mut s, "occurrence.ground", json!({"occurrence": "Bearing:1", "grounded": true}));
+    run(&mut s, "joint.as_built", json!({"type": "revolute", "a": "Bearing:1", "b": "Shaft:1", "name": "Pivot"}));
+    let list = run(&mut s, "joint.list", json!({}));
+    let frame = &list["joints"][0]["frame_a"];
+    let (o, z) = (frame["origin"].as_array().unwrap(), frame["z"].as_array().unwrap());
+    assert!((o[1].as_f64().unwrap()).abs() < 1e-6 && (o[2].as_f64().unwrap() - 35.0).abs() < 1e-6, "{frame}");
+    assert!((z[0].as_f64().unwrap().abs() - 1.0).abs() < 1e-9, "{frame}");
+    // Driven, the shaft turns about its own axis: its end centre stays put.
+    run(&mut s, "joint.drive", json!({"joint": "Pivot", "value": 90}));
+    assert!(near(place(&s, "Shaft", Vec3::new(50.0, 0.0, 35.0)), Vec3::new(50.0, 0.0, 35.0)), "{:?}", place(&s, "Shaft", Vec3::new(50.0, 0.0, 35.0)));
+}
+
+/// A pivot whose `at` misses every round face, between parts that share an axis, takes that axis
+/// and says so; with no shared axis the miss is still refused.
+#[test]
+fn a_pivot_whose_at_misses_takes_the_shared_axis() {
+    let mut s = Session::default();
+    run(&mut s, "component.create", json!({"name": "Bearing"}));
+    run(&mut s, "solid.box", json!({"length": 40, "width": 40, "height": 30, "corner": [-20, -20, -15]}));
+    run(&mut s, "solid.cylinder", json!({"base": [-20, 0, 0], "axis": "X", "diameter": 25.5, "height": 40, "operation": "cut"}));
+    run(&mut s, "component.activate", json!({"component": "root"}));
+    run(&mut s, "component.create", json!({"name": "Shaft"}));
+    run(&mut s, "solid.cylinder", json!({"base": [-50, 0, 0], "axis": "X", "diameter": 25, "height": 150}));
+    run(&mut s, "component.activate", json!({"component": "root"}));
+    // On the block's top edge, 15 mm above the bore's axis.
+    let r = run(
+        &mut s,
+        "joint.as_built",
+        json!({"type": "revolute", "a": "Bearing:1", "b": "Shaft:1", "at": {"occurrence": "Bearing:1", "circle": [0, 0, 15]}, "name": "Pivot"}),
+    );
+    assert!(r["warnings"].as_array().is_some_and(|w| w.iter().any(|w| w.as_str().is_some_and(|w| w.contains("share")))), "{r}");
+    let list = run(&mut s, "joint.list", json!({}));
+    let o = list["joints"][0]["frame_a"]["origin"].as_array().cloned().unwrap();
+    assert!(o[1].as_f64().unwrap().abs() < 1e-6 && o[2].as_f64().unwrap().abs() < 1e-6, "{list}");
+    let e = s.execute("joint.as_built", &json!({"type": "rigid", "a": "Bearing:1", "b": "Shaft:1", "at": {"occurrence": "Bearing:1", "circle": [0, 0, 15]}}));
+    assert!(e.is_err());
+}
+
 #[test]
 fn revolute_hinge_turns_about_the_knuckle() {
     let mut s = Session::default();

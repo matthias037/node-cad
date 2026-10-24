@@ -265,7 +265,13 @@ pub fn tool_definitions() -> Vec<Value> {
             obj(json!({}), &[]),
             Effect::ReadOnly,
         ),
-        tool("undo", "Undo", "Undo the last change to the design.", obj(json!({}), &[]), Effect::Edits),
+        tool(
+            "undo",
+            "Undo",
+            "Undo the last change to the design; with steps, that many changes (a batch's check gives the number that takes it back).",
+            obj(json!({"steps": {"type": "integer", "minimum": 1, "maximum": 500}}), &[]),
+            Effect::Edits,
+        ),
         tool("redo", "Redo", "Redo the last undone change.", obj(json!({}), &[]), Effect::Edits),
         tool(
             "new_design",
@@ -378,6 +384,17 @@ pub fn call_tool(b: &mut dyn Backend, name: &str, args: &Value) -> Value {
     let r = match name {
         "screenshot" => return screenshot(b, a),
         "batch" => return batch(b, a),
+        // Several undos as one batch: one request, so one change of the app's agent chat (a
+        // loop of single undos used up its changes for the message), all or nothing.
+        "undo" if a.get("steps").is_some() => {
+            let Some(n) = a.get("steps").and_then(Value::as_u64).filter(|n| (1..=500).contains(n)) else {
+                return text_result(&json!("`steps` must be a whole number from 1 to 500"), true);
+            };
+            let steps = vec![json!({"command": "edit.undo"}); usize::try_from(n).unwrap_or(1)];
+            let mut args = Map::new();
+            args.insert("commands".into(), Value::Array(steps));
+            return batch(b, &args);
+        }
         _ => dispatch(b, name, a),
     };
     match r {
@@ -415,7 +432,15 @@ fn dispatch(b: &mut dyn Backend, name: &str, a: &Map<String, Value>) -> Result<V
         }
         "execute" => {
             let id = str_arg(a, "command").ok_or("`command` is required")?;
-            let v = exec(b, id, a.get("params").cloned().filter(Value::is_object).unwrap_or(json!({})))?;
+            let mut v = exec(b, id, a.get("params").cloned().filter(Value::is_object).unwrap_or(json!({})))?;
+            // A change checked as a batch's is (`design_check`); a read-only command is not.
+            if v.is_object()
+                && (places_parts(id) && !matches!(id, "joint.list" | "joint.inspect" | "component.list" | "component.activate" | "component.create")
+                    || v.get("created_bodies").is_some())
+                && let Some(check) = design_check(b, places_parts(id), std::slice::from_ref(&v))
+            {
+                v["check"] = check;
+            }
             Ok(if a.get("verbose").and_then(Value::as_bool).unwrap_or(true) { v } else { compact(v) })
         }
         "inspect_design" => {
@@ -566,7 +591,14 @@ fn batch(b: &mut dyn Backend, a: &Map<String, Value>) -> Value {
     }
     if params.to_string().len() + 64 * 1024 <= solidcraft_engine::MAX_LINE {
         match b.call("engine.batch", params) {
-            Ok(r) => return batch_reply(&r, rollback, verbose),
+            Ok(r) => {
+                let (mut reply, error) = batch_reply(&r, rollback, verbose);
+                if !error {
+                    let results = r["results"].as_array().cloned().unwrap_or_default();
+                    with_check(b, &mut reply, steps, &results, r["undo_steps"].as_u64());
+                }
+                return text_result(&reply, error);
+            }
             // Older apps and the headless session, or the app wants the steps one by one.
             Err(e) if e.starts_with("unknown method") || e.starts_with("engine.batch unavailable") => {}
             // Never sent: no app to send it to.
@@ -603,8 +635,125 @@ fn batch(b: &mut dyn Backend, a: &Map<String, Value>) -> Value {
         }
     }
     start.finish(b);
-    let reply = json!({"ok": true, "completed": results.len(), "results": results});
+    let mut reply = json!({"ok": true, "completed": results.len(), "results": results});
+    let results = reply["results"].as_array().cloned().unwrap_or_default();
+    with_check(b, &mut reply, steps, &results, None);
     text_result(&with_timings(reply, timed, rows, clock.ms()), false)
+}
+
+/// Commands that place, link or insert parts: after one, the design is checked as an assembly.
+fn places_parts(command: &str) -> bool {
+    ["component.", "occurrence.", "joint."].iter().any(|p| command.starts_with(p)) || matches!(command, "parts.insert" | "parts.fastener")
+}
+
+/// `reply["check"]`: what the steps that went through left wrong, so that an agent sees a fault
+/// before it reports the work done, without a call of its own. Bodies they made or changed that
+/// are in several separate solids (a shape joined where it does not touch the body); after an
+/// assembly step, parts linked to nothing and parts that overlap, with the degrees of freedom of
+/// the parts that can move. Nothing is added when there is nothing to check. A batch with faults
+/// was kept all the same: the check says so, and how many undos (`undo_steps`, from the app)
+/// take it back, as an agent that sends it again on top doubles every part (banc NØDE IA,
+/// 24/10/2026).
+fn with_check(b: &mut dyn Backend, reply: &mut Value, steps: &[Value], results: &[Value], undo_steps: Option<u64>) {
+    let assembly = steps.iter().filter_map(|s| s.get("command").or_else(|| s.get("id")).and_then(Value::as_str)).any(places_parts);
+    let Some(mut check) = design_check(b, assembly, results) else { return };
+    if check.get("fix_before_reporting").is_some() {
+        check["kept"] = json!(match undo_steps.filter(|n| *n > 0) {
+            Some(n) => format!(
+                "This batch was kept: never send it again on top. Fix the faults with new steps, or take the whole batch back with undo {{steps: {n}}} and send a corrected one."
+            ),
+            None => "This batch was kept: never send it again on top. Fix the faults with new steps, or undo it and send a corrected one.".into(),
+        });
+    }
+    reply["check"] = check;
+}
+
+fn design_check(b: &mut dyn Backend, assembly: bool, results: &[Value]) -> Option<Value> {
+    let mut touched: Vec<&str> = Vec::new();
+    for r in results {
+        for name in ["created_bodies", "changed_bodies"].iter().flat_map(|k| r[*k].as_array().into_iter().flatten()).filter_map(Value::as_str) {
+            if !touched.contains(&name) {
+                touched.push(name);
+            }
+        }
+    }
+    let mut check = Map::new();
+    let mut faults: Vec<&str> = Vec::new();
+    if !touched.is_empty()
+        && let Ok(m) = exec(b, "inspect.measure", json!({ "bodies": touched }))
+    {
+        let split: Vec<Value> = m["bodies"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|x| x["kernel"]["shells"].as_u64().is_some_and(|n| n > 1))
+            .map(|x| json!({"body": x["name"], "solids": x["kernel"]["shells"]}))
+            .collect();
+        if !split.is_empty() {
+            check.insert("split_bodies".into(), Value::Array(split));
+            faults.push("split_bodies: a shape joined to these bodies does not touch them, so each is in separate solids (move it until it overlaps)");
+        }
+    }
+    if assembly {
+        // Occurrence names by id, for the degrees of freedom `joint.list` gives by id.
+        let mut names = std::collections::BTreeMap::new();
+        if let Ok(c) = exec(b, "component.list", json!({})) {
+            for comp in c["components"].as_array().into_iter().flatten() {
+                for o in ["occurrences", "children"].iter().flat_map(|k| comp[*k].as_array().into_iter().flatten()) {
+                    if let (Some(id), Some(n)) = (o["id"].as_u64(), o["name"].as_str()) {
+                        names.insert(id, n.to_string());
+                    }
+                }
+            }
+        }
+        if let Ok(j) = exec(b, "joint.list", json!({})) {
+            let (mut free, mut moving) = (Vec::new(), Map::new());
+            for d in j["dof"].as_array().into_iter().flatten() {
+                let (Some(id), Some(n)) = (d["occurrence"].as_u64(), d["dof"].as_u64()) else { continue };
+                let Some(name) = names.get(&id) else { continue };
+                match n {
+                    0 => {}
+                    6 => free.push(json!(name)),
+                    n => {
+                        moving.insert(name.clone(), json!(n));
+                    }
+                }
+            }
+            if !free.is_empty() {
+                check.insert("free_parts".into(), Value::Array(free));
+                faults.push("free_parts: linked to nothing (6 degrees of freedom): link each one (joint.as_built) or ground it");
+            }
+            if !moving.is_empty() {
+                check.insert("degrees_of_freedom".into(), Value::Object(moving));
+            }
+            for k in ["conflicts", "errors"] {
+                if j[k].as_array().is_some_and(|v| !v.is_empty()) {
+                    check.insert(format!("joint_{k}"), j[k].clone());
+                    faults.push("joint conflicts or errors: see joint.list");
+                }
+            }
+        }
+        if names.len() > 1
+            && let Ok(i) = exec(b, "inspect.interference", json!({"budget_s": 10}))
+        {
+            let hits: Vec<Value> = i["interferences"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|h| json!({"a": h["a"], "b": h["b"], "volume_mm3": h["volume_mm3"].as_f64().map(|v| (v * 10.0).round() / 10.0)}))
+                .collect();
+            check.insert("interferences".into(), json!(hits.len()));
+            if !hits.is_empty() {
+                check.insert("overlaps".into(), Value::Array(hits));
+                faults.push("overlaps: these bodies share volume: move or resize a part (a hole a little larger than its shaft)");
+            }
+        }
+    }
+    if !faults.is_empty() {
+        faults.dedup();
+        check.insert("fix_before_reporting".into(), json!(faults));
+    }
+    (!check.is_empty()).then_some(Value::Object(check))
 }
 
 /// A failed batch's reply. Rolled back, the steps that had run are gone with the failure: their
@@ -631,8 +780,9 @@ fn with_timings(mut reply: Value, timed: bool, rows: Vec<Value>, total_ms: f64) 
     reply
 }
 
-/// The `batch` reply from the app's `engine.batch` answer, shaped as the per-step path shapes it.
-fn batch_reply(r: &Value, rollback: bool, verbose: bool) -> Value {
+/// The `batch` reply from the app's `engine.batch` answer, shaped as the per-step path shapes it,
+/// and whether it is an error.
+fn batch_reply(r: &Value, rollback: bool, verbose: bool) -> (Value, bool) {
     let results: Vec<Value> =
         r["results"].as_array().cloned().unwrap_or_default().into_iter().map(|v| if verbose { v } else { compact(v) }).collect();
     let (mut reply, error) = match r.get("failed").filter(|f| !f.is_null()) {
@@ -654,7 +804,7 @@ fn batch_reply(r: &Value, rollback: bool, verbose: bool) -> Value {
             }
         }
     }
-    text_result(&reply, error)
+    (reply, error)
 }
 
 /// A command's result without what the design already had (`execute` or `batch` with `verbose: false`): a
