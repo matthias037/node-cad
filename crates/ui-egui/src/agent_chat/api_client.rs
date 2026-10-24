@@ -177,6 +177,7 @@ impl Worker {
             self.emit(Event::Error(e));
         }
         self.emit(Event::Ready { agent: format!("{} · {}", self.cfg.name, self.cfg.model), images: true });
+        self.emit_documents();
         // The endpoint's models for the picker; an endpoint that does not list them shows none.
         if let Ok(list) = self.model_list() {
             let mut available = list;
@@ -195,12 +196,43 @@ impl Worker {
                     self.history.clear();
                     self.cancel.store(false, Ordering::Relaxed);
                     self.emit(Event::Ready { agent: format!("{} · {}", self.cfg.name, self.cfg.model), images: true });
+                    self.emit_documents();
                 }
             }
         }
         if let Some(mut m) = self.mcp.take() {
             m.shutdown(false);
         }
+    }
+
+    /// Whether this endpoint reads attached documents: Mistral does, through its OCR.
+    fn reads_documents(&self) -> bool {
+        self.cfg.protocol == Protocol::OpenAi && super::mistral::is_mistral(&self.cfg.base_url)
+    }
+
+    fn emit_documents(&self) {
+        self.emit(Event::Documents(self.reads_documents()));
+    }
+
+    /// The message's documents read by Mistral's OCR (text, then the pictures in them); for any
+    /// other endpoint they stay out, as the chat names them in the message.
+    fn read_documents(&self, parts: Vec<PromptPart>) -> Vec<PromptPart> {
+        if !self.reads_documents() || !parts.iter().any(|p| matches!(p, PromptPart::Document { .. })) {
+            return parts;
+        }
+        let mut out = Vec::with_capacity(parts.len());
+        for p in parts {
+            match p {
+                PromptPart::Document { name, mime, base64, .. } => {
+                    if self.cancel.load(Ordering::Relaxed) {
+                        continue;
+                    }
+                    out.extend(super::mistral::read_document(&self.cfg.http, &self.cfg.base_url, self.cfg.key.as_deref(), &name, &mime, &base64));
+                }
+                other => out.push(other),
+            }
+        }
+        out
     }
 
     /// The endpoint's models, in the shape its protocol lists them.
@@ -264,6 +296,7 @@ impl Worker {
     }
 
     fn turn(&mut self, parts: Vec<PromptPart>) {
+        let parts = self.read_documents(parts);
         self.history.push(user_message(self.cfg.protocol, &parts));
         self.trim_history();
         for _ in 0..MAX_REQUESTS_PER_TURN {

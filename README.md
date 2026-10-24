@@ -51,6 +51,26 @@ Jeune, mais déjà utilisable pour des pièces simples.
 **En préparation :** la FAO (contournage, poche, G-code avec post-processeurs) et des outils IA
 avancés proposés en option sur node-os.fr, comme la création d'une pièce à partir d'un plan.
 
+## Assistant IA intégré (Mistral)
+
+Le panneau de l'agent (bouton IA) se branche sur **Mistral** par défaut : ajoutez un agent, gardez
+« Mistral », collez votre clé d'API (rangée dans le trousseau du système, jamais dans les
+préférences). Le modèle proposé est `mistral-large-latest` ; la liste des modèles de votre compte
+s'affiche dans le panneau.
+
+L'assistant répond en français, pour l'atelier, et lit ce que vous lui joignez :
+
+- **PDF, Word et PowerPoint** : lus par l'OCR de Mistral (`mistral-ocr-latest`) — le texte des pages,
+  puis les images qu'elles contiennent (un plan scanné, un dessin), regardées par le modèle ;
+- **photos et images** : regardées telles quelles (plan, pièce, plaque de machine) ;
+- **Excel et LibreOffice** (`.xlsx`, `.xlsm`, `.xls`, `.ods`) : chaque feuille en tableau de texte ;
+- **programmes CN** (`.nc`, `.ngc`, `.gcode`, `.tap`, `.h`, `.mpf`, `.iso`…) : le texte, avec la
+  commande numérique probable (Heidenhain, Sinumerik, ISO type Fanuc, LinuxCNC, GRBL) ;
+- **STEP, IGES, STL, 3MF, Rhino, FreeCAD** : importés dans la conception, que l'agent mesure.
+
+Il modifie la pièce avec les mêmes commandes que vos clics. L'agent par clé d'API fonctionne dans
+l'application de bureau ; la version web ne le propose pas.
+
 ## IA et agents (MCP)
 
 `solidcraft-cli mcp` est un serveur [Model Context Protocol](https://modelcontextprotocol.io).

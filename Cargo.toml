@@ -81,6 +81,8 @@ ttf-parser = { version = "0.25", default-features = false, features = ["std"] }
 
 # images
 image = { version = "0.25", default-features = false, features = ["png", "hdr"] }
+# spreadsheets attached to the agent chat: Excel and OpenDocument, read as tables of text (MIT)
+calamine = { version = "0.37", default-features = false }
 png = "0.18.1"
 # LZW for GIF animations (MIT OR Apache-2.0, pure Rust; already in the tree through image's tiff).
 weezl = "0.1.12"

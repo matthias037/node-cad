@@ -207,22 +207,26 @@ pub fn new_id(p: &crate::prefs::Prefs, prefix: &str) -> String {
     (1..).map(|n| format!("{prefix}-{n}")).find(|id| !p.agents.iter().any(|a| &a.id == id)).unwrap_or_else(|| prefix.to_string())
 }
 
-/// An endpoint people commonly add, with the base URL to start from.
+/// An endpoint people commonly add, with the base URL to start from and, when it has an obvious
+/// one, the model a new agent starts with (empty: the person picks it).
 pub struct ApiPreset {
     pub name: &'static str,
     pub base_url: &'static str,
+    pub model: &'static str,
 }
 
-/// OpenAI-compatible endpoints people use.
+/// OpenAI-compatible endpoints people use. Mistral first: NØDE's provider, whose OCR also reads
+/// the PDFs and office documents a person attaches (`mistral`).
 pub const OPENAI_PRESETS: &[ApiPreset] = &[
-    ApiPreset { name: "Ollama", base_url: "http://localhost:11434/v1" },
-    ApiPreset { name: "LM Studio", base_url: "http://localhost:1234/v1" },
-    ApiPreset { name: "OpenAI", base_url: "https://api.openai.com/v1" },
+    ApiPreset { name: "Mistral", base_url: super::mistral::BASE_URL, model: super::mistral::DEFAULT_MODEL },
+    ApiPreset { name: "Ollama", base_url: "http://localhost:11434/v1", model: "" },
+    ApiPreset { name: "LM Studio", base_url: "http://localhost:1234/v1", model: "" },
+    ApiPreset { name: "OpenAI", base_url: "https://api.openai.com/v1", model: "" },
 ];
 
 /// Anthropic-compatible endpoints people use. The base URL is the one their documentation calls
 /// `ANTHROPIC_BASE_URL`: the `/v1` is added where needed.
-pub const ANTHROPIC_PRESETS: &[ApiPreset] = &[ApiPreset { name: "Anthropic", base_url: "https://api.anthropic.com/v1" }];
+pub const ANTHROPIC_PRESETS: &[ApiPreset] = &[ApiPreset { name: "Anthropic", base_url: "https://api.anthropic.com/v1", model: "" }];
 
 /// The presets offered for an endpoint protocol.
 pub fn presets(protocol: Protocol) -> &'static [ApiPreset] {

@@ -21,6 +21,7 @@ web-time = { workspace = true }
 # gif, webp, bmp, tiff: pictures attached to an agent chat message (GIF and WebP go as they are,
 # BMP and TIFF as PNG).
 image = { workspace = true, features = ["jpeg", "ico", "gif", "webp", "bmp", "tiff"] }
+calamine = { workspace = true }
 ttf-parser = { workspace = true }
 semver = { workspace = true }
 # Updates: the downloaded package's SHA-256 (against the release's SHA256SUMS.txt), its optional

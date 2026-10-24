@@ -60,6 +60,7 @@ pub fn open_add(app: &mut SolveApp) {
     app.agent_chat.settings.add = Some(AddState {
         base_url: preset.map(|p| p.base_url.to_string()).unwrap_or_default(),
         name: preset.map(|p| p.name.to_string()).unwrap_or_default(),
+        model: preset.map(|p| p.model.to_string()).unwrap_or_default(),
         ..Default::default()
     });
 }
@@ -71,6 +72,9 @@ pub(super) fn choose_preset(s: &mut AddState, protocol: Protocol, index: usize) 
     if let Some(preset) = agents::presets(protocol).get(index) {
         s.base_url = preset.base_url.to_string();
         s.name = preset.name.to_string();
+        if !preset.model.is_empty() {
+            s.model = preset.model.to_string();
+        }
     } else {
         s.base_url.clear();
     }

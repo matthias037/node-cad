@@ -1,8 +1,10 @@
 //! Files a person adds to a message (the + button, a drop on the chat, a paste): pictures go to the
-//! agent with it, text files go in as text, PDFs go as documents to agents that take them, CAD
-//! files are imported into the design, and any other file is named by reference (its type, size
-//! and place on this machine) for the agent to read with its own tools. The agent is told what
-//! arrived. Each file is checked and bounded before it is kept; a refused one says why.
+//! agent with it, text files go in as text, PDFs and Word or PowerPoint files go as documents to
+//! agents that take them (Mistral reads them with its OCR), spreadsheets go in as tables of text,
+//! CNC programs as text with the control they are probably written for, CAD files are imported
+//! into the design, and any other file is named by reference (its type, size and place on this
+//! machine) for the agent to read with its own tools. The agent is told what arrived. Each file is
+//! checked and bounded before it is kept; a refused one says why.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -46,13 +48,24 @@ const THUMB: u32 = 64;
 const PICTURE_EXTS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff"];
 /// Text sent in full; SVG goes as its source, which the agents read well.
 const TEXT_EXTS: &[&str] = &["svg", "txt", "md", "markdown", "json", "csv", "tsv", "yaml", "yml", "toml", "xml", "log", "ini", "cfg"];
+/// Documents sent whole to the agents that read them, like a PDF: Mistral's OCR takes these.
+const DOCUMENT_EXTS: &[&str] = &["pdf", "docx", "pptx"];
+/// Spreadsheets, sent as tables of text.
+const SHEET_EXTS: &[&str] = &["xlsx", "xlsm", "xls", "ods"];
+/// CNC programs, sent as text with the control they are probably written for.
+const PROGRAM_EXTS: &[&str] = &["nc", "ngc", "gcode", "gc", "tap", "cnc", "h", "mpf", "spf", "eia", "iso", "min", "din", "ptp"];
+/// Largest spreadsheet read.
+const MAX_SHEET_BYTES: u64 = 20 * 1024 * 1024;
+/// Rows and columns of a sheet sent; the rest is counted, not sent.
+const MAX_SHEET_ROWS: usize = 500;
+const MAX_SHEET_COLS: usize = 40;
 /// CAD files and meshes, imported into the design (the file picker's list; [`kind`] asks the
 /// importers themselves).
 const CAD_EXTS: &[&str] = &["step", "stp", "igs", "iges", "FCStd", "3dm", "stl", "3mf", "obj", "glb", "gltf"];
 
 /// Every extension the file picker lists first, pictures first (any other file can be chosen too).
 pub fn extensions() -> Vec<&'static str> {
-    PICTURE_EXTS.iter().chain(TEXT_EXTS).chain(CAD_EXTS).chain(&["pdf"]).copied().collect()
+    PICTURE_EXTS.iter().chain(TEXT_EXTS).chain(CAD_EXTS).chain(DOCUMENT_EXTS).chain(SHEET_EXTS).chain(PROGRAM_EXTS).copied().collect()
 }
 
 /// What a file is, by its extension.
@@ -61,7 +74,12 @@ pub enum Kind {
     Picture,
     Text,
     Cad,
+    /// A PDF, or a Word or PowerPoint document read like one.
     Pdf,
+    /// An Excel or OpenDocument spreadsheet.
+    Sheet,
+    /// A CNC program (G-code, Heidenhain, Sinumerik…).
+    Program,
     /// Anything else, attached by reference.
     Other,
 }
@@ -71,7 +89,9 @@ pub fn kind(path: &Path) -> Kind {
     match ext.as_str() {
         e if PICTURE_EXTS.contains(&e) => Kind::Picture,
         e if TEXT_EXTS.contains(&e) => Kind::Text,
-        "pdf" => Kind::Pdf,
+        e if DOCUMENT_EXTS.contains(&e) => Kind::Pdf,
+        e if SHEET_EXTS.contains(&e) => Kind::Sheet,
+        e if PROGRAM_EXTS.contains(&e) => Kind::Program,
         _ => {
             let p = path.to_string_lossy();
             if solidcraft_engine::io::is_step_path(&p) || solidcraft_engine::io::is_mesh_path(&p) { Kind::Cad } else { Kind::Other }
@@ -145,7 +165,9 @@ fn mime_of(path: &Path) -> &'static str {
         "3mf" => "model/3mf",
         "gltf" => "model/gltf+json",
         "glb" => "model/gltf-binary",
-        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "xlsx" | "xlsm" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "xls" => "application/vnd.ms-excel",
+        "ods" => "application/vnd.oasis.opendocument.spreadsheet",
         "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "mp4" | "mov" | "webm" => "video/mp4",
@@ -215,6 +237,24 @@ pub fn read(path: &Path) -> Result<Attachment, String> {
             Ok(Attachment { id: 0, name, content: Content::Text(Arc::new(text)), thumb: None })
         }
         Kind::Cad => Err(refused("ui.agent_chat_file_cad_not_read", &name, &[])),
+        Kind::Sheet => {
+            if meta.len() > MAX_SHEET_BYTES {
+                return Err(refused("ui.agent_chat_file_text_too_big", &name, &[("max", &(MAX_SHEET_BYTES / 1024).to_string())]));
+            }
+            let bytes = std::fs::read(path).map_err(|e| failed(&name, e))?;
+            let text = sheet_text(&bytes).map_err(|e| failed(&name, e))?;
+            Ok(Attachment { id: 0, name, content: Content::Text(Arc::new(text)), thumb: None })
+        }
+        Kind::Program => {
+            if meta.len() > MAX_TEXT_BYTES {
+                return Err(refused("ui.agent_chat_file_text_too_big", &name, &[("max", &(MAX_TEXT_BYTES / 1024).to_string())]));
+            }
+            let bytes = std::fs::read(path).map_err(|e| failed(&name, e))?;
+            // Controls write their programs in ASCII; a stray Latin-1 comment must not refuse it.
+            let text = String::from_utf8_lossy(&bytes);
+            let text = format!("Programme CN — commande probable : {}\n\n{text}", cnc_control(&text));
+            Ok(Attachment { id: 0, name, content: Content::Text(Arc::new(text)), thumb: None })
+        }
         Kind::Pdf => {
             let path = absolute(path);
             // Too big to send: the agent is pointed to it instead.
@@ -230,6 +270,54 @@ pub fn read(path: &Path) -> Result<Attachment, String> {
         Kind::Other => {
             Ok(Attachment { id: 0, name, content: Content::Reference { path: absolute(path), size: meta.len(), mime: mime_of(path) }, thumb: None })
         }
+    }
+}
+
+/// A spreadsheet as text: each sheet named with its size, then its rows, cells separated by `|`
+/// (empty rows left out), cut past [`MAX_SHEET_ROWS`] rows and [`MAX_SHEET_COLS`] columns.
+pub fn sheet_text(bytes: &[u8]) -> Result<String, String> {
+    use calamine::Reader;
+    let mut book = calamine::open_workbook_auto_from_rs(std::io::Cursor::new(bytes.to_vec())).map_err(|e| e.to_string())?;
+    let mut out = String::new();
+    for sheet in book.sheet_names() {
+        let Ok(range) = book.worksheet_range(&sheet) else { continue };
+        let (rows, cols) = range.get_size();
+        out += &format!("Feuille « {sheet} » ({rows} lignes × {cols} colonnes)\n");
+        for row in range.rows().take(MAX_SHEET_ROWS) {
+            let cells: Vec<String> = row.iter().take(MAX_SHEET_COLS).map(|c| c.to_string().trim().to_string()).collect();
+            if cells.iter().any(|c| !c.is_empty()) {
+                out += &cells.join(" | ");
+                out.push('\n');
+            }
+        }
+        if rows > MAX_SHEET_ROWS {
+            out += &format!("(… {} lignes de plus non transmises)\n", rows - MAX_SHEET_ROWS);
+        }
+        if cols > MAX_SHEET_COLS {
+            out += &format!("(… {} colonnes de plus non transmises)\n", cols - MAX_SHEET_COLS);
+        }
+        out.push('\n');
+    }
+    Ok(out)
+}
+
+/// The numerical control a CNC program is probably written for, from what its dialect alone
+/// writes. A hint for the agent, said as probable: an ISO program fits many controls.
+pub fn cnc_control(program: &str) -> &'static str {
+    let up = program.to_ascii_uppercase();
+    let lines = || up.lines().map(str::trim_start);
+    if up.contains("BEGIN PGM") || up.contains("TOOL CALL") {
+        "Heidenhain TNC (dialogue conversationnel Klartext)"
+    } else if up.contains("MSG(") || up.contains("CYCLE8") || up.contains("CYCLE7") || up.contains("TRANS ") || up.contains("G642") {
+        "Siemens Sinumerik"
+    } else if up.contains("O<") || up.contains("#<") {
+        "LinuxCNC (RS274NGC)"
+    } else if lines().any(|l| l.starts_with("$H") || l.starts_with("$X") || l.starts_with("$J=")) {
+        "GRBL"
+    } else if lines().any(|l| l.starts_with('O') && l.get(1..).is_some_and(|r| r.starts_with(|c: char| c.is_ascii_digit()))) || up.contains("G43") {
+        "ISO type Fanuc (Fanuc, Haas, Mazak, Doosan…)"
+    } else {
+        "ISO / RS-274 (G-code générique)"
     }
 }
 
@@ -369,7 +457,7 @@ pub fn note(files: &[Attachment], pictures_sent: bool, documents_sent: bool, bud
             }
             Content::Pdf { path, bytes } if documents_sent => {
                 out += &format!(
-                    "\n\nAttached PDF `{}` ({}, at {}): sent with this message as a document.",
+                    "\n\nAttached document `{}` ({}, at {}): sent with this message as a document.",
                     f.name,
                     size_text(bytes.len() as u64),
                     path.display()
@@ -408,7 +496,7 @@ pub fn parts(files: &[Attachment], pictures: bool, documents: bool) -> Vec<Promp
             Content::Pdf { bytes, path } if documents => Some(PromptPart::Document {
                 name: f.name.clone(),
                 uri: file_uri(path),
-                mime: "application/pdf".to_string(),
+                mime: mime_of(path).to_string(),
                 base64: backend::base64(bytes),
             }),
             _ => None,
@@ -675,5 +763,92 @@ mod tests {
         assert_eq!(file_uri(Path::new("C:\\Users\\a\\x.pdf")), "file:///C:/Users/a/x.pdf");
         assert_eq!(size_text(1536), "2 KB");
         assert_eq!(size_text(5 * 1024 * 1024 + 512 * 1024), "5.5 MB");
+    }
+
+    /// A real .xlsx, written the way Excel lays one out: two sheets, numbers and text.
+    fn xlsx() -> Vec<u8> {
+        use std::io::Write;
+        let mut bytes = Vec::new();
+        {
+            let mut z = zip::ZipWriter::new(std::io::Cursor::new(&mut bytes));
+            let o = zip::write::SimpleFileOptions::default();
+            let sheet = |rows: &str| {
+                format!(
+                    r#"<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>{rows}</sheetData></worksheet>"#
+                )
+            };
+            let files = [
+                (
+                    "[Content_Types].xml",
+                    r#"<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>"#.to_string(),
+                ),
+                (
+                    "_rels/.rels",
+                    r#"<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#.to_string(),
+                ),
+                (
+                    "xl/workbook.xml",
+                    r#"<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Nomenclature" sheetId="1" r:id="rId1"/><sheet name="Outils" sheetId="2" r:id="rId2"/></sheets></workbook>"#.to_string(),
+                ),
+                (
+                    "xl/_rels/workbook.xml.rels",
+                    r#"<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/></Relationships>"#.to_string(),
+                ),
+                (
+                    "xl/worksheets/sheet1.xml",
+                    sheet(r#"<row r="1"><c r="A1" t="inlineStr"><is><t>Repère</t></is></c><c r="B1" t="inlineStr"><is><t>Matière</t></is></c><c r="C1" t="inlineStr"><is><t>Qté</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>Platine</t></is></c><c r="B2" t="inlineStr"><is><t>S235</t></is></c><c r="C2"><v>4</v></c></row>"#),
+                ),
+                ("xl/worksheets/sheet2.xml", sheet(r#"<row r="1"><c r="A1" t="inlineStr"><is><t>Fraise D6</t></is></c><c r="B1"><v>12000</v></c></row>"#)),
+            ];
+            for (name, xml) in files {
+                z.start_file(name, o).unwrap();
+                z.write_all(xml.as_bytes()).unwrap();
+            }
+            z.finish().unwrap();
+        }
+        bytes
+    }
+
+    #[test]
+    fn a_spreadsheet_goes_in_as_named_tables_of_text() {
+        let text = sheet_text(&xlsx()).unwrap();
+        assert!(text.contains("Feuille « Nomenclature » (2 lignes × 3 colonnes)"), "{text}");
+        assert!(text.contains("Repère | Matière | Qté") && text.contains("Platine | S235 | 4"), "{text}");
+        assert!(text.contains("Feuille « Outils »") && text.contains("Fraise D6 | 12000"), "{text}");
+        let d = dir("sheet");
+        let path = d.join("nomenclature.xlsx");
+        std::fs::write(&path, xlsx()).unwrap();
+        assert_eq!(kind(&path), Kind::Sheet);
+        let a = read(&path).unwrap();
+        assert!(matches!(&a.content, Content::Text(t) if t.contains("Platine")));
+        assert!(sheet_text(b"not a spreadsheet").is_err());
+    }
+
+    #[test]
+    fn a_cnc_program_says_which_control_it_is_probably_for() {
+        assert!(cnc_control("0 BEGIN PGM PLATINE MM\n1 TOOL CALL 5 Z S4000").starts_with("Heidenhain"));
+        assert!(cnc_control("N10 G90 G54\nMSG(\"EBAUCHE\")\nCYCLE81(10,0,2,-5)").starts_with("Siemens"));
+        assert!(cnc_control("%\nO1234 (PLATINE)\nG90 G54 G00 X0 Y0\nG43 H01 Z50.").starts_with("ISO type Fanuc"));
+        assert!(cnc_control("o<poche> sub\n#<prof> = 2").starts_with("LinuxCNC"));
+        assert!(cnc_control("$H\nG21 G90\nM3 S12000").starts_with("GRBL"));
+        assert!(cnc_control("G21\nG0 X0 Y0").starts_with("ISO / RS-274"));
+        let d = dir("program");
+        let path = d.join("PLATINE.H");
+        std::fs::write(&path, "0 BEGIN PGM PLATINE MM\n1 TOOL CALL 5 Z S4000\n2 L Z+50 R0 FMAX\n").unwrap();
+        assert_eq!(kind(&path), Kind::Program);
+        let a = read(&path).unwrap();
+        assert!(matches!(&a.content, Content::Text(t) if t.starts_with("Programme CN — commande probable : Heidenhain") && t.contains("TOOL CALL")));
+    }
+
+    #[test]
+    fn word_and_powerpoint_files_go_as_documents_with_their_own_type() {
+        assert_eq!(kind(Path::new("notice.docx")), Kind::Pdf);
+        assert_eq!(kind(Path::new("process.PPTX")), Kind::Pdf);
+        let d = dir("docx");
+        let path = d.join("notice.docx");
+        std::fs::write(&path, b"PK fake docx").unwrap();
+        let a = read(&path).unwrap();
+        let parts = parts(std::slice::from_ref(&a), true, true);
+        assert!(matches!(&parts[0], PromptPart::Document { mime, .. } if mime.contains("wordprocessingml")));
     }
 }
