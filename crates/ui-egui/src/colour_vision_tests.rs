@@ -592,11 +592,12 @@ fn pairs(t: &Tokens) -> Vec<(String, Rgb8, Rgb8)> {
 /// Pairs under the floor that the tables leave as they are (decided for #778). Each is close to
 /// the floor for normal vision too, and construction and centerline lines also differ by their
 /// dash patterns.
-fn left_as_they_are(mode: ColorVision, dark: bool) -> BTreeSet<String> {
+fn left_as_they_are(mode: ColorVision, _dark: bool) -> BTreeSet<String> {
     let mut v = vec!["sketch lines: sketch_construction vs sketch_centerline"];
     if mode == ColorVision::Tritan {
         v.push("sketch lines: sketch_lost vs sketch_centerline");
-        v.push(if dark { "timeline: hover vs accent_soft" } else { "timeline: timeline_item vs accent_soft" });
+        // The NØDE carmine's soft tint stands apart from the timeline rows for this eye too
+        // (the former blue one did not, in either theme).
         v.push("selection: sel_face vs preview_add");
     }
     v.into_iter().map(String::from).collect()
@@ -740,11 +741,14 @@ fn each_mode_changes_only_its_table() {
     let mut red_green_light =
         red_green_both.into_iter().filter(|name| !["surface_accent", "mesh_accent", "form_accent"].contains(name)).collect::<Vec<_>>();
     red_green_light.extend(["sketch_projected", "sketch_locked", "timeline_item_error", "construction_geom", "glyph_text", "form_success"]);
+    // Dark: the selected-row tint too (the NØDE carmine's reads as grey for a red-green eye).
+    let mut red_green_dark = red_green_both.to_vec();
+    red_green_dark.push("accent_soft");
     for (dark, mode, want) in [
         (false, ColorVision::Protan, set(&red_green_light)),
-        (true, ColorVision::Protan, set(&red_green_both)),
+        (true, ColorVision::Protan, set(&red_green_dark)),
         (false, ColorVision::Deutan, set(&red_green_light)),
-        (true, ColorVision::Deutan, set(&red_green_both)),
+        (true, ColorVision::Deutan, set(&red_green_dark)),
         (
             false,
             ColorVision::Tritan,

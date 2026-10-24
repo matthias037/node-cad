@@ -2257,7 +2257,7 @@ mod tests {
         assert!(app.stand_up.is_none(), "NØDE CAD's own exports already have Z up");
         // Another originating system keeps the offer.
         let text = std::fs::read_to_string(&path).unwrap();
-        std::fs::write(&path, text.replace("'NØDE CAD','NØDE CAD'", "'NØDE CAD','Example CAD'")).unwrap();
+        std::fs::write(&path, text.replace("'NODE CAD','NODE CAD'", "'NODE CAD','Example CAD'")).unwrap();
         app.open_path(&path);
         let offered = app.stand_up.clone().unwrap_or_default();
         assert_eq!(offered.len(), 1, "the file's body is offered");

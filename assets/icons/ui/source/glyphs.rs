@@ -102,16 +102,13 @@ pub(crate) fn breadcrumb(p: &egui::Painter, c: egui::Pos2, col: Color32) {
 /// (`assets/icons/app/shared/source/app_icon.rs`) without its tile, 20 px tall.
 pub(crate) fn brand_mark(p: &egui::Painter, c: Pos2) {
     let t = crate::theme::Tokens::get();
-    brand_mark_styled(p, c, 20.0, t.app_bar_text, BRAND_BAR, Some(t.app_bar));
+    brand_mark_styled(p, c, 20.0, t.app_bar_text, t.logo[0], Some(t.app_bar));
 }
 
 /// The same mark as a single quiet silhouette.
 pub(crate) fn brand_mark_silhouette(p: &egui::Painter, c: Pos2, height: f32, ink: Color32) {
     brand_mark_styled(p, c, height, ink, ink, None);
 }
-
-/// The NØDE coral of the bar.
-const BRAND_BAR: Color32 = Color32::from_rgb(0xe5, 0x6e, 0x6e);
 
 /// The hexagon (a cube seen from a corner) with two edges of its top face, cut by the bar. The
 /// cut is painted in `gap`, the colour behind the mark; without one, the bar lies on the outline.

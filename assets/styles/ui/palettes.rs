@@ -232,7 +232,8 @@ impl Tokens {
             ],
             analysis: AnalysisColors::DEFAULT,
             icons: IconColors { highlight: Color32::WHITE, agent: Color32::from_rgb(168, 85, 247), marker_halo: Color32::from_black_alpha(150) },
-            logo: [Color32::from_rgb(96, 158, 236), Color32::from_rgb(58, 136, 238), Color32::from_rgb(55, 108, 197)],
+            // The NØDE coral of the brand mark's bar (`glyphs::brand_mark`), in every slot.
+            logo: [Color32::from_rgb(229, 110, 110), Color32::from_rgb(229, 110, 110), Color32::from_rgb(229, 110, 110)],
         }
     }
     pub const fn dark() -> Tokens {
@@ -397,6 +398,9 @@ impl Tokens {
             t.bend_up = Color32::from_rgb(110, 165, 255);
             t.bend_down = Color32::from_rgb(240, 180, 70);
             t.sketch_accent = icon_primary(crate::icon_svg::SKETCH_RED_GREEN[1]);
+            // The NØDE carmine's dark tint reads as the night greys of hover and timeline rows
+            // for a red-green eye: selected rows keep a blue tint there.
+            t.accent_soft = Color32::from_rgb(42, 70, 110);
         } else {
             t.sketch_projected = Color32::from_rgb(205, 120, 215);
             t.sketch_locked = Color32::from_rgb(60, 150, 120);

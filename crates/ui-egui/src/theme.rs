@@ -690,8 +690,8 @@ mod tests {
             let accent = super::TabAccent::for_tab(&super::Tokens::light(), tab);
             assert_eq!(accent.ink != accent.color, tab == "MESH", "only light Mesh separates ink from fill");
         }
-        // These existing Model values intentionally take precedence over the board's proposal.
-        for (t, values) in [(super::Tokens::light(), [0x2678da, 0x1a507f, 0xd6e6fa]), (super::Tokens::dark(), [0x3a88ee, 0x9cc7f5, 0x2a466e])] {
+        // The Model accent is NØDE's carmine (NØDE CAD palette), ahead of the board's proposal.
+        for (t, values) in [(super::Tokens::light(), [0xe11d48, 0xbe123c, 0xfff1f3]), (super::Tokens::dark(), [0xef4a68, 0xfda4b4, 0x4a1c2a])] {
             let [color, ink, soft] = values.map(rgb);
             assert_eq!(super::TabAccent::for_tab(&t, "MODEL"), super::TabAccent { color, ink, soft });
         }
