@@ -4249,6 +4249,10 @@ fn a_counterbore_for_a_screw_size_takes_its_standard_seat() {
     assert!((60.0 * 40.0 * 15.0 - cb - cs - v).abs() < 1.0, "{v}");
     let e = s.execute("solid.hole", &json!({"position": [30, 10, 15], "diameter": 5, "type": "counterbore"})).unwrap_err().to_string();
     assert!(e.contains("cb_diameter") && e.contains("clearance"), "{e}");
+    // `depth` taken for the counterbore's own (banc NØDE IA du 25/10/2026, « trous M6 lamés ») :
+    // the refusal names both depths and which parameter is which.
+    let e = s.execute("solid.hole", &json!({"position": [30, 32, 15], "clearance": "M6", "type": "counterbore", "depth": 6})).unwrap_err().to_string();
+    assert!(e.contains("6.4 mm deep") && e.contains("hole (6 mm)") && e.contains("`cb_depth`"), "{e}");
 }
 
 /// « Passe les trous en M8 » : a tapped hole's thread edited alone takes the new tap drill; a

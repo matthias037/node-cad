@@ -3803,8 +3803,19 @@ fn hole_tools_and_prisms(
         }
         HoleKind::Counterbore { cb_diameter, cb_depth } => {
             let (rc, dc) = (val(vals, cb_diameter, Kind::Length)? / 2.0, val(vals, cb_depth, Kind::Length)?);
-            if !(rc > r && dc > 0.0 && -dc > bottom) {
-                return Err(DocError::Invalid("the counterbore must be wider than the hole and shallower than it".into()));
+            // Said with the sizes: an agent that took `depth` for the counterbore's own depth
+            // (a blind hole shallower than its counterbore) sees which parameter is which.
+            let mm = |x: f64| (x * 1000.0).round() / 1000.0;
+            if !(rc > r) {
+                return Err(DocError::Invalid(format!("the counterbore (Ø{}) must be wider than the hole (Ø{})", mm(2.0 * rc), mm(2.0 * r))));
+            }
+            if !(dc > 0.0 && -dc > bottom) {
+                return Err(DocError::Invalid(format!(
+                    "the counterbore ({} mm deep) must be shallower than the hole ({} mm): `depth` is the whole hole's depth (leave it \
+                     out to drill through), `cb_depth` the counterbore's",
+                    mm(dc),
+                    mm(-bottom)
+                )));
             }
             // Wide and shallow first: the narrow hole then crosses the pocket floor.
             tools.push(cyl(rc, -dc, top, "cbore")?);
