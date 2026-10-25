@@ -215,6 +215,15 @@ impl Worker {
     }
 
     /// Whether this endpoint reads attached documents: Mistral does, through its OCR.
+    /// Whether a tool's pictures (screenshot) go to the model with its result: Anthropic takes
+    /// images in tool results, and among OpenAI-style endpoints Mistral and NØDE IA do.
+    fn sees_tool_images(&self) -> bool {
+        match self.cfg.protocol {
+            Protocol::Anthropic => true,
+            Protocol::OpenAi => super::mistral::is_mistral(&self.cfg.base_url) || super::node_ia::is_node_ia(&self.cfg.base_url),
+        }
+    }
+
     fn reads_documents(&self) -> bool {
         self.cfg.protocol == Protocol::OpenAi && (super::mistral::is_mistral(&self.cfg.base_url) || super::node_ia::is_node_ia(&self.cfg.base_url))
     }
@@ -362,6 +371,7 @@ impl Worker {
                     status: Some(ToolStatus::InProgress),
                     output: None,
                 });
+                let mut images: Vec<(String, String)> = Vec::new();
                 let (text, failed) = if self.cancel.load(Ordering::Relaxed) {
                     ("cancelled by the user".to_string(), true)
                 } else if let Err(e) = &c.arguments {
@@ -383,7 +393,12 @@ impl Worker {
                     }
                 } else {
                     match self.mcp_call("tools/call", json!({"name": c.name, "arguments": args})) {
-                        Ok(r) => tool_text(&r),
+                        Ok(r) => {
+                            if self.sees_tool_images() {
+                                images = tool_images(&r);
+                            }
+                            tool_text(&r)
+                        }
                         Err(e) => (e, true),
                     }
                 };
@@ -405,10 +420,22 @@ impl Worker {
                     status: Some(if failed { ToolStatus::Failed } else { ToolStatus::Completed }),
                     output: Some(shown),
                 });
+                // The pictures with the text, as each protocol takes them (Mistral: image chunks in
+                // the tool message).
+                let content = if images.is_empty() {
+                    json!(text)
+                } else {
+                    let mut blocks = vec![json!({"type": "text", "text": text})];
+                    blocks.extend(images.iter().map(|(mime, data)| match self.cfg.protocol {
+                        Protocol::OpenAi => json!({"type": "image_url", "image_url": {"url": format!("data:{mime};base64,{data}")}}),
+                        Protocol::Anthropic => json!({"type": "image", "source": {"type": "base64", "media_type": mime, "data": data}}),
+                    }));
+                    Value::Array(blocks)
+                };
                 match self.cfg.protocol {
-                    Protocol::OpenAi => self.history.push(json!({"role": "tool", "tool_call_id": c.id, "content": text})),
+                    Protocol::OpenAi => self.history.push(json!({"role": "tool", "tool_call_id": c.id, "content": content})),
                     Protocol::Anthropic => {
-                        results.push(json!({"type": "tool_result", "tool_use_id": c.id, "content": text, "is_error": failed}));
+                        results.push(json!({"type": "tool_result", "tool_use_id": c.id, "content": content, "is_error": failed}));
                     }
                 }
             }
@@ -858,6 +885,20 @@ fn as_execute(tools: &[String], name: &str, args: &Value) -> Option<(String, Val
     dotted.then(|| (execute, json!({"command": id, "params": if args.is_object() { args.clone() } else { json!({}) }})))
 }
 
+/// The pictures in an MCP tool result: (media type, base64), at most four.
+fn tool_images(r: &Value) -> Vec<(String, String)> {
+    r.get("content")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter(|c| c.get("type").and_then(Value::as_str) == Some("image"))
+                .filter_map(|c| Some((c.get("mimeType").and_then(Value::as_str).unwrap_or("image/png").to_string(), c.get("data")?.as_str()?.to_string())))
+                .take(4)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn tool_text(r: &Value) -> (String, bool) {
     let failed = r.get("isError").and_then(Value::as_bool).unwrap_or(false);
     let parts: Vec<String> = r
@@ -917,6 +958,12 @@ fn keep_last_tool_results(history: &[Value], keep: usize) -> usize {
 /// Anthropic `tool_result` blocks): called before a new message, they are past readings.
 fn shorten_tool_results(history: &mut [Value], max: usize) {
     fn cut(text: &mut Value, max: usize) {
+        // A result with pictures: its text alone; the pictures are past views.
+        if let Some(blocks) = text.as_array() {
+            let words: Vec<&str> = blocks.iter().filter_map(|b| b.get("text").and_then(Value::as_str)).collect();
+            let pictures = blocks.iter().any(|b| matches!(b.get("type").and_then(Value::as_str), Some("image" | "image_url")));
+            *text = Value::String(format!("{}{}", words.join("\n"), if pictures { "\n(the pictures of that step are no longer shown)" } else { "" }));
+        }
         if let Some(s) = text.as_str()
             && s.chars().count() > max
         {
@@ -1002,6 +1049,19 @@ pub fn test_endpoint(http: &HttpFn, base_url: &str, key: Option<&str>, model: &s
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_tools_pictures_reach_the_model_then_leave_with_the_step() {
+        let r = json!({"content": [{"type": "image", "data": "AA==", "mimeType": "image/png"}, {"type": "text", "text": "{\"view\":\"iso\"}"}]});
+        assert_eq!(tool_images(&r), vec![("image/png".to_string(), "AA==".to_string())]);
+        assert!(tool_images(&json!({"content": [{"type": "text", "text": "x"}]})).is_empty());
+        let mut history = vec![json!({"role": "tool", "tool_call_id": "a", "content": [
+            {"type": "text", "text": "[a picture of the view]"},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,AA=="}}]})];
+        shorten_tool_results(&mut history, OLD_TOOL_TEXT);
+        let text = history[0]["content"].as_str().unwrap();
+        assert!(text.contains("no longer shown") && !text.contains("base64"), "{text}");
+    }
 
     #[test]
     fn an_engine_command_called_as_a_tool_runs_through_execute() {

@@ -25,7 +25,9 @@ pub enum Verdict {
 
 /// Methods the bridged MCP server uses; nothing else (clicks, preferences, quitting, the chat
 /// itself) is the agent's.
-const METHODS: &[&str] = &["engine.commands", "document.inspect", "engine.execute", "engine.batch", "ui.view", "ui.render", "ui.screenshot"];
+/// `ui.camera` moves the view as `ui.view` does: a screenshot of several views reads the camera
+/// first and puts it back after.
+const METHODS: &[&str] = &["engine.commands", "document.inspect", "engine.execute", "engine.batch", "ui.view", "ui.camera", "ui.render", "ui.screenshot"];
 
 /// Parameter names that hold a file or folder and nothing else.
 const FILE_KEYS: &[&str] = &["file", "files", "dir", "folder", "out", "output", "filename", "target_path"];
@@ -228,6 +230,12 @@ mod tests {
 
     fn exec(id: &str, params: Value) -> Verdict {
         request("engine.execute", &json!({"command": id, "params": params}), 5)
+    }
+
+    #[test]
+    fn the_camera_may_be_read_and_put_back() {
+        assert_eq!(request("ui.camera", &json!({}), 0), Verdict::Run { change: false });
+        assert_eq!(request("ui.camera", &json!({"yaw": 0.5}), 0), Verdict::Run { change: false });
     }
 
     #[test]

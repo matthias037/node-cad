@@ -538,6 +538,46 @@ fn a_batch_takes_tool_names_and_flags_a_rebuilt_part() {
     assert_eq!(r["results"][1]["body_count"], 1, "{r}");
 }
 
+/// `screenshot {views}`, connected: one model render per standard view (no grid), and the
+/// person's camera put back after; a bad list is refused before anything runs.
+#[test]
+fn screenshot_views_renders_each_view_and_puts_the_camera_back() {
+    struct App {
+        calls: Vec<(String, Value)>,
+    }
+    impl crate::backend::Backend for App {
+        fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
+            self.calls.push((method.to_string(), params.clone()));
+            match method {
+                "ui.camera" => Ok(json!({"yaw": 0.5, "pitch": 0.2})),
+                "ui.view" => Ok(json!({})),
+                "ui.render" => {
+                    let path = params["path"].as_str().ok_or("path")?;
+                    std::fs::write(path, [0x89, b'P', b'N', b'G']).map_err(|e| e.to_string())?;
+                    Ok(json!({"path": path}))
+                }
+                other => Err(format!("unknown method `{other}`")),
+            }
+        }
+        fn has_ui(&self) -> bool {
+            true
+        }
+        fn describe(&self) -> String {
+            "app".into()
+        }
+    }
+    let mut b = App { calls: Vec::new() };
+    let r = crate::tools::call_tool(&mut b, "screenshot", &json!({"views": ["iso", "front"]}));
+    let images = r["content"].as_array().map(|c| c.iter().filter(|x| x["type"] == "image").count());
+    assert_eq!(images, Some(2), "{r}");
+    let renders: Vec<&Value> = b.calls.iter().filter(|(m, _)| m == "ui.render").map(|(_, p)| p).collect();
+    assert!(renders.len() == 2 && renders.iter().all(|p| p["grid"] == false && p["width"] == 768), "{renders:?}");
+    assert_eq!(b.calls.last().map(|(m, p)| (m.as_str(), p.clone())), Some(("ui.camera", json!({"yaw": 0.5, "pitch": 0.2}))));
+    let mut b = App { calls: Vec::new() };
+    let bad = crate::tools::call_tool(&mut b, "screenshot", &json!({"views": ["sideways"]}));
+    assert!(bad["isError"] == true && b.calls.is_empty(), "{bad}");
+}
+
 /// Regression (#3242): a failed batch containing `file.new` reported `rolled_back: true` and
 /// kept the replacement design. The checkpoint survives the new document, so the design the
 /// batch started in — the 1 mm cube — is back when the batch fails.

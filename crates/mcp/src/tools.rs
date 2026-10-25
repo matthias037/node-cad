@@ -213,6 +213,7 @@ pub fn tool_definitions() -> Vec<Value> {
                     "source": {"type": "string", "enum": ["window", "model"], "description": "window = app screenshot, model = model render"},
                     "grid": {"type": "boolean", "description": "false: leave the ground grid out of the render. It lies on Z 0 and cuts through a part that straddles it. Model renders only: default true, or as the app shows it when connected; with `grid` or `axes` a connected screenshot is a model render, and source \"window\" is an error"},
                     "axes": {"type": "boolean", "description": "false: leave the origin's three axes out of the render (see `grid`). Axes hidden with browser.visibility stay hidden"},
+                    "views": {"type": "array", "items": {"type": "string"}, "description": "Several standard views at once (1 to 4, e.g. [\"iso\", \"front\"]): one model render each, without the grid unless `grid` says so (768 × 480 unless `width`/`height`), the camera put back after"},
                 }),
                 &[],
             ),
@@ -866,12 +867,56 @@ static SHOT: AtomicU64 = AtomicU64::new(0);
 
 /// `screenshot`: render or capture to a file, return it as an MCP image content block.
 fn screenshot(b: &mut dyn Backend, a: &Map<String, Value>) -> Value {
+    if let Some(views) = a.get("views") {
+        return screenshot_views(b, a, views);
+    }
     match capture(b, a) {
         Ok((png, info)) => json!({"content": [
             {"type": "image", "data": base64(&png), "mimeType": "image/png"},
             {"type": "text", "text": info.to_string()},
         ]}),
         Err(e) => text_result(&Value::String(e), true),
+    }
+}
+
+/// `screenshot` with `views`: a model render per standard view, in one call (an agent looking
+/// at what it built), and the person's camera put back as it was.
+fn screenshot_views(b: &mut dyn Backend, a: &Map<String, Value>, views: &Value) -> Value {
+    let names: Vec<&str> = views.as_array().map(|v| v.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    if names.is_empty() || names.len() > 4 || names.len() != views.as_array().map_or(0, Vec::len) || names.iter().any(|v| !VIEWS.contains(v)) {
+        return text_result(&json!(format!("screenshot: `views` lists 1 to 4 of {}", VIEWS.join(", "))), true);
+    }
+    let saved = if b.has_ui() { b.call("ui.camera", json!({})).ok() } else { None };
+    let mut content = Vec::new();
+    let mut failure = None;
+    for v in &names {
+        let mut one = a.clone();
+        one.remove("views");
+        one.insert("view".into(), json!(v));
+        one.remove("camera");
+        if b.has_ui() {
+            one.insert("source".into(), json!("model"));
+        }
+        one.entry("grid").or_insert(json!(false));
+        one.entry("width").or_insert(json!(768));
+        one.entry("height").or_insert(json!(480));
+        match capture(b, &one) {
+            Ok((png, info)) => {
+                content.push(json!({"type": "image", "data": base64(&png), "mimeType": "image/png"}));
+                content.push(json!({"type": "text", "text": json!({"view": v, "render": info}).to_string()}));
+            }
+            Err(e) => {
+                failure = Some(e);
+                break;
+            }
+        }
+    }
+    if let Some(cam) = saved.filter(Value::is_object) {
+        let _ = b.call("ui.camera", cam);
+    }
+    match failure {
+        Some(e) => text_result(&Value::String(e), true),
+        None => json!({ "content": content }),
     }
 }
 
