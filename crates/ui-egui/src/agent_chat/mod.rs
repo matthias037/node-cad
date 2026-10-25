@@ -22,6 +22,7 @@ mod acp_client;
 pub mod agents;
 #[cfg(not(target_arch = "wasm32"))]
 mod api_client;
+mod api_core;
 pub mod attach;
 pub mod backend;
 #[cfg(not(target_arch = "wasm32"))]
@@ -37,6 +38,7 @@ pub mod paste;
 #[cfg(not(target_arch = "wasm32"))]
 mod process;
 pub mod settings;
+pub mod web_client;
 
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
@@ -386,6 +388,8 @@ pub struct AgentChat {
     pub tools_port: Option<u16>,
     tools_rx: Option<Receiver<ControlRequest>>,
     tools_tx: Option<Sender<ControlRequest>>,
+    /// The browser's NØDE IA: its conversation, which `web_client::pump` drives each frame.
+    pub(crate) web: Option<std::rc::Rc<std::cell::RefCell<web_client::Core>>>,
     /// Settings → AI: the Add agent dialog and connection tests.
     pub settings: settings::State,
     /// Desktop host hook: start the endpoint on demand.
@@ -487,6 +491,7 @@ impl AgentChat {
             b.cancel();
             b.shutdown(wait);
         }
+        self.web = None;
         for h in self.held.drain(..) {
             let _ = h.req.reply.send(json!({"ok": false, "error": "the agent chat stopped"}));
         }
@@ -645,9 +650,9 @@ enum Outcome {
     Permission { key: u64, title: String, options: Vec<PermissionOption> },
 }
 
-/// The AI features are on (the master switch in Settings → AI) and this is the desktop app.
+/// The AI features are on (the master switch in Settings → AI); in the browser too, for NØDE IA.
 pub fn shown(app: &SolveApp) -> bool {
-    app.preferences.ai_features && cfg!(not(target_arch = "wasm32"))
+    app.preferences.ai_features
 }
 
 /// The Assistant button in the application bar is shown (honours the existing preference).
@@ -817,6 +822,11 @@ pub fn connect(app: &mut SolveApp, ctx: &egui::Context) {
             None => Err(tr("ui.ai_no_http").to_string()),
         },
     };
+    install(chat, &entry, started);
+}
+
+/// The agent that started (or why it did not), as the chat runs it.
+fn install(chat: &mut AgentChat, entry: &agents::Entry, started: Result<Box<dyn ChatBackend>, String>) {
     match started {
         Ok(b) => {
             chat.backend = Some(b);
@@ -842,6 +852,37 @@ pub fn connect(app: &mut SolveApp, ctx: &egui::Context) {
             chat.state = Some(State::Exited);
         }
     }
+}
+
+/// Start NØDE IA in the browser: the only agent there, answered through the page's `fetch` and
+/// with its tools run in the page (`web_client`).
+#[cfg(target_arch = "wasm32")]
+pub fn connect(app: &mut SolveApp, ctx: &egui::Context) {
+    disconnect(app);
+    if !node_ia::signed_in(app) {
+        app.agent_chat.notice(tr("ui.node_ia_sign_in_first"), true);
+        app.agent_chat.state = Some(State::Exited);
+        return;
+    }
+    let token = app.services.secrets.as_ref().and_then(|s| s.get(node_ia::ID).ok().flatten());
+    let (Some(fetch), Some(token)) = (app.services.fetch.clone(), token) else {
+        app.agent_chat.notice(tr("ui.node_ia_sign_in_first"), true);
+        app.agent_chat.state = Some(State::Exited);
+        return;
+    };
+    let entry = node_ia::entry(app);
+    let wake = ctx.clone();
+    let (backend, core) = web_client::WebBackend::start(web_client::Config {
+        name: entry.name.clone(),
+        base_url: entry.base_url.clone(),
+        model: entry.model.clone(),
+        token,
+        fetch,
+        wake: std::rc::Rc::new(move || wake.request_repaint()),
+    });
+    let chat = &mut app.agent_chat;
+    install(chat, &entry, Ok(Box::new(backend)));
+    chat.web = Some(core);
 }
 
 /// Stop the agent (and everything it started); the conversation stays.
@@ -929,12 +970,9 @@ fn submit(app: &mut SolveApp, ctx: &egui::Context, text: String, image: bool, fi
         State::Ready => start_turn_with(app, text, image, at, files, interrupted.then_some(INTERRUPT_NOTE)),
         s => {
             app.agent_chat.queued = Some((text, image, at, files));
-            #[cfg(not(target_arch = "wasm32"))]
             if !s.running() {
                 connect(app, ctx);
             }
-            #[cfg(target_arch = "wasm32")]
-            let _ = (s, ctx);
         }
     }
 }
@@ -1346,6 +1384,60 @@ pub fn undo_changes(app: &mut SolveApp, index: usize) {
     }
 }
 
+/// What the gate says about one request of the agent's tools.
+pub(crate) enum Judged {
+    Run,
+    /// The person decides first: the approval's title, and the tool an "always allow" names.
+    Ask { title: String, tool: String },
+    Refuse(String),
+}
+
+/// One request of the agent's tools through the gate: the message's request and change
+/// limits (counted here), the permission mode, and "always allow" answers. A refusal the
+/// person should see is said in the chat.
+pub(crate) fn judge(app: &mut SolveApp, method: &str, params: &Value, limit: u32) -> Judged {
+    let undo_len = app.session.undo.len();
+    let Some(turn) = app.agent_chat.turn.as_mut() else {
+        return Judged::Refuse("the agent chat has no message in progress".into());
+    };
+    turn.requests += 1;
+    if turn.requests > gate::MAX_REQUESTS_PER_TURN {
+        return Judged::Refuse(format!("too many requests in one message (at most {})", gate::MAX_REQUESTS_PER_TURN));
+    }
+    let undo_left = undo_len.saturating_sub(turn.start_undo);
+    // The permission mode (the agent's own, else the global one) and "always allow" answers.
+    let mode = agents::mode_for(&app.preferences, &app.agent_chat.running_id);
+    let tool = gate::tool_key(method, params);
+    let always = agents::always_allowed(&app.preferences, &app.agent_chat.running_id, &tool);
+    let verdict = match gate::request(method, params, undo_left) {
+        gate::Verdict::Ask(_) if mode == agents::Mode::All || always => gate::Verdict::Run { change: true },
+        gate::Verdict::Run { change: true } if mode == agents::Mode::Ask && !always => gate::Verdict::Ask(gate::describe(method, params)),
+        v => v,
+    };
+    let Some(turn) = app.agent_chat.turn.as_mut() else { return Judged::Refuse("the agent chat has no message in progress".into()) };
+    match verdict {
+        gate::Verdict::Run { change: true } if turn.changes >= limit => {
+            let first = !turn.limit_told;
+            turn.limit_told = true;
+            if first {
+                app.agent_chat.notice(trf("ui.agent_chat_limit", &[("limit", &limit.to_string())]), false);
+            }
+            Judged::Refuse(format!("the limit of {limit} changes for one message is reached: tell the user what is left to do"))
+        }
+        gate::Verdict::Run { change } => {
+            if change {
+                turn.changes += 1;
+            }
+            Judged::Run
+        }
+        gate::Verdict::Ask(title) => Judged::Ask { title, tool },
+        gate::Verdict::Refuse(e) => {
+            app.agent_chat.notice(trf("ui.agent_chat_refused", &[("reason", &e)]), false);
+            Judged::Refuse(e)
+        }
+    }
+}
+
 /// The requests the agent's tools sent through the chat's endpoint: each one passes the gate.
 fn pump_tools(app: &mut SolveApp) {
     let Some(rx) = app.agent_chat.tools_rx.take() else { return };
@@ -1354,61 +1446,22 @@ fn pump_tools(app: &mut SolveApp) {
         let refuse = |req: ControlRequest, e: String| {
             let _ = req.reply.send(json!({"ok": false, "error": e}));
         };
-        let undo_len = app.session.undo.len();
-        let Some(turn) = app.agent_chat.turn.as_mut() else {
-            refuse(req, "the agent chat has no message in progress".into());
-            continue;
-        };
-        turn.requests += 1;
-        if turn.requests > gate::MAX_REQUESTS_PER_TURN {
-            refuse(req, format!("too many requests in one message (at most {})", gate::MAX_REQUESTS_PER_TURN));
-            continue;
-        }
         // Requests without folders of their own stay inside the chat's working folder.
         if let Some(o) = req.params.as_object_mut()
             && !o.contains_key("allow_paths")
         {
             o.insert("allow_paths".into(), json!([working_dir().to_string_lossy()]));
         }
-        let undo_left = undo_len.saturating_sub(turn.start_undo);
-        // The permission mode (the agent's own, else the global one) and "always allow" answers.
-        let mode = agents::mode_for(&app.preferences, &app.agent_chat.running_id);
-        let tool = gate::tool_key(&req.method, &req.params);
-        let always = agents::always_allowed(&app.preferences, &app.agent_chat.running_id, &tool);
-        let verdict = match gate::request(&req.method, &req.params, undo_left) {
-            gate::Verdict::Ask(_) if mode == agents::Mode::All || always => gate::Verdict::Run { change: true },
-            gate::Verdict::Run { change: true } if mode == agents::Mode::Ask && !always => {
-                gate::Verdict::Ask(gate::describe(&req.method, &req.params))
-            }
-            v => v,
-        };
-        match verdict {
-            gate::Verdict::Run { change } => {
-                if change {
-                    if turn.changes >= limit {
-                        let first = !turn.limit_told;
-                        turn.limit_told = true;
-                        refuse(req, format!("the limit of {limit} changes for one message is reached: tell the user what is left to do"));
-                        if first {
-                            app.agent_chat.notice(trf("ui.agent_chat_limit", &[("limit", &limit.to_string())]), false);
-                        }
-                        continue;
-                    }
-                    turn.changes += 1;
-                }
-                app.control_held.push_back(req);
-            }
-            gate::Verdict::Ask(title) => {
+        match judge(app, &req.method, &req.params, limit) {
+            Judged::Run => app.control_held.push_back(req),
+            Judged::Ask { title, tool } => {
                 let chat = &mut app.agent_chat;
                 chat.next_approval += 1;
                 let id = chat.next_approval;
                 chat.push(Item::Approval { id, title, tool, answer: None });
                 chat.held.push(Held { id, req, since: crate::now_ms() });
             }
-            gate::Verdict::Refuse(e) => {
-                app.agent_chat.notice(trf("ui.agent_chat_refused", &[("reason", &e)]), false);
-                refuse(req, e);
-            }
+            Judged::Refuse(e) => refuse(req, e),
         }
     }
     app.agent_chat.tools_rx = Some(rx);
@@ -1480,6 +1533,7 @@ pub fn poll(app: &mut SolveApp, ctx: &egui::Context) {
         return;
     }
     take_loaded(app, ctx);
+    web_client::pump(app, ctx);
     let events = app.agent_chat.backend.as_mut().map(|b| b.poll()).unwrap_or_default();
     for e in events {
         let ready = matches!(e, Event::Ready { .. });

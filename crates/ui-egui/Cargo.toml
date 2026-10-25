@@ -10,6 +10,8 @@ workspace = true
 
 [dependencies]
 solidcraft-engine = { workspace = true }
+# The agents' tools (`tools::call_tool`), which the browser's NØDE IA runs in the page.
+solidcraft-mcp = { workspace = true }
 egui = { workspace = true }
 egui-wgpu = { workspace = true }
 solidcraft-gpu = { workspace = true }

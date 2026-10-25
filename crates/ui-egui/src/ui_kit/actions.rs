@@ -329,7 +329,6 @@ pub(crate) fn button_at(ui: &mut Ui, id: &str, rect: egui::Rect, label: impl Int
 }
 
 /// Accent action outside the footer, using the same shared button component.
-#[cfg(any(not(target_arch = "wasm32"), test))]
 pub(crate) fn primary_button(ui: &mut Ui, label: &str) -> Response {
     let response = button(ui, crate::i18n::tr_label(label), Button::Primary);
     scenario::publish_target(&format!("dialog:button:{label}"), response.rect);

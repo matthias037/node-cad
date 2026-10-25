@@ -14,6 +14,7 @@ mod disk;
 mod files;
 #[cfg(target_arch = "wasm32")]
 mod install;
+mod node_ia;
 #[cfg(any(target_arch = "wasm32", test))]
 mod space_mouse;
 
@@ -630,12 +631,17 @@ mod web {
                             download_design: Some(Box::new(files::download)),
                             browser_files: Some(Box::new(move || shown.panel.set(true))),
                             install_app: Some(crate::install::service(&cc.egui_ctx)),
+                            // NØDE IA: the page's `fetch` to node-os.fr, its token in the page's storage.
+                            fetch: Some(crate::node_ia::fetch(&cc.egui_ctx)),
+                            secrets: Some(std::sync::Arc::new(crate::node_ia::LocalSecrets)),
                             ..Default::default()
                         };
                         // Thumbnails of saves and start-page cards.
                         solidcraft_ui_egui::gpu::install_cpu_picture_renderer();
                         let (sender, receiver) = std::sync::mpsc::channel();
                         let mut app = SolveApp::new(Session::default(), services).with_control(receiver);
+                        // The official web app's assistant is NØDE IA alone, as the official desktop app's.
+                        app.agent_chat.node_ia_only = true;
                         match cc.storage.and_then(|s| solidcraft_ui_egui::prefs::stored(|k| s.get_string(k))) {
                             Some(p) => app.load_prefs(&p),
                             None => app.preferences.language = solidcraft_ui_egui::prefs::FIRST_LANGUAGE.into(),

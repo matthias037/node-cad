@@ -56,7 +56,6 @@ pub(crate) fn assistant_header<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -
 }
 
 /// Inset controls band beneath the header, aligned with the conversation body.
-#[cfg(any(not(target_arch = "wasm32"), test))]
 pub(crate) fn assistant_controls<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
     let t = Tokens::get();
     egui::Frame::NONE.inner_margin(egui::Margin::symmetric(t.space_12 as i8, t.space_8 as i8)).show(ui, |ui| {
@@ -66,7 +65,6 @@ pub(crate) fn assistant_controls<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R)
 }
 
 /// Right-aligned user message with a compact lower-right corner and 86% maximum width.
-#[cfg(any(not(target_arch = "wasm32"), test))]
 pub(crate) fn assistant_bubble<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
     let t = Tokens::get();
     let width = ui.available_width().max(0.0);
@@ -95,7 +93,6 @@ pub(crate) fn assistant_bubble<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -
 }
 
 /// Assistant prose remains unboxed and uses the shared readable body typography.
-#[cfg(any(not(target_arch = "wasm32"), test))]
 pub(crate) fn assistant_prose<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     let t = Tokens::get();
     ui.scope(|ui| {
@@ -107,7 +104,6 @@ pub(crate) fn assistant_prose<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) ->
     .inner
 }
 
-#[cfg(any(not(target_arch = "wasm32"), test))]
 #[derive(Clone, Copy)]
 pub(crate) enum AssistantToolState {
     Pending,
@@ -117,7 +113,6 @@ pub(crate) enum AssistantToolState {
 }
 
 /// A 15 pt status mark with distinct shape and colour for every tool state.
-#[cfg(any(not(target_arch = "wasm32"), test))]
 pub(crate) fn assistant_tool_status(ui: &mut Ui, state: AssistantToolState) -> Response {
     let t = Tokens::get();
     let size = t.space_12 + t.space_3;
@@ -151,7 +146,6 @@ pub(crate) fn assistant_tool_status(ui: &mut Ui, state: AssistantToolState) -> R
 }
 
 /// Bordered tool group; the caller retains expansion, status and automation identities.
-#[cfg(any(not(target_arch = "wasm32"), test))]
 pub(crate) fn assistant_tool_frame<R>(ui: &mut Ui, failed: bool, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
     let t = Tokens::get();
     egui::Frame::NONE
@@ -166,14 +160,12 @@ pub(crate) fn assistant_tool_frame<R>(ui: &mut Ui, failed: bool, add: impl FnOnc
 }
 
 /// Individual tool-row surface, retaining a failed row's tint inside a shared group.
-#[cfg(any(not(target_arch = "wasm32"), test))]
 pub(crate) fn assistant_tool_row<R>(ui: &mut Ui, failed: bool, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
     let t = Tokens::get();
     egui::Frame::NONE.fill(if failed { t.form_error_fill } else { t.dialog_body }).corner_radius(t.control_radius).show(ui, add)
 }
 
 /// Indented detail box using the same field surface as inline command parameters.
-#[cfg(any(not(target_arch = "wasm32"), test))]
 pub(crate) fn assistant_tool_detail<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
     let t = Tokens::get();
     egui::Frame::NONE
@@ -185,7 +177,6 @@ pub(crate) fn assistant_tool_detail<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) ->
 }
 
 /// Approval frame with a tinted heading. Permission choices remain entirely caller-owned.
-#[cfg(any(not(target_arch = "wasm32"), test))]
 pub(crate) fn assistant_approval<R>(ui: &mut Ui, title: &str, body: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
     let t = Tokens::get();
     let output = egui::Frame::NONE.fill(t.dialog_body).stroke(egui::Stroke::new(1.0, t.form_primary)).corner_radius(t.radius_xl).show(ui, |ui| {
@@ -218,7 +209,6 @@ pub(crate) fn assistant_approval<R>(ui: &mut Ui, title: &str, body: impl FnOnce(
 
 /// Unframed growing editor inside the composer. The caller retains focus ID and Enter routing.
 /// Tokens: font_label, control_height, space_8 and shared text_input alignment.
-#[cfg(any(not(target_arch = "wasm32"), test))]
 pub(crate) fn assistant_input(ui: &mut Ui, id: egui::Id, value: &mut String, hint: &str) -> Response {
     let t = Tokens::get();
     ui.add(
@@ -235,7 +225,6 @@ pub(crate) fn assistant_input(ui: &mut Ui, id: egui::Id, value: &mut String, hin
 }
 
 /// Compact right-aligned approval actions; wrapping grows by control rows, not the remaining card height.
-#[cfg(any(not(target_arch = "wasm32"), test))]
 pub(crate) fn assistant_actions<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
     let t = Tokens::get();
     ui.allocate_ui_with_layout(
@@ -246,7 +235,6 @@ pub(crate) fn assistant_actions<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) 
 }
 
 /// Composer's rounded field surface with an accent border only while focused.
-#[cfg(any(not(target_arch = "wasm32"), test))]
 pub(crate) fn assistant_composer<R>(ui: &mut Ui, focused: bool, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
     let t = Tokens::get();
     egui::Frame::NONE
@@ -262,7 +250,6 @@ pub(crate) fn assistant_composer<R>(ui: &mut Ui, focused: bool, add: impl FnOnce
 }
 
 /// Circular primary send or stop action. The caller retains queue and cancellation dispatch.
-#[cfg(any(not(target_arch = "wasm32"), test))]
 pub(crate) fn assistant_send(ui: &mut Ui, enabled: bool, busy: bool, label: &str) -> Response {
     let t = Tokens::get();
     ui.add_enabled_ui(enabled, |ui| {
@@ -285,7 +272,6 @@ pub(crate) fn assistant_send(ui: &mut Ui, enabled: bool, busy: bool, label: &str
 }
 
 /// Pinned composer footer. The enclosing shell retains ownership of scrolling and sizing.
-#[cfg(any(not(target_arch = "wasm32"), test))]
 pub(crate) fn assistant_composer_footer<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
     let t = Tokens::get();
     let output = egui::Frame::NONE
@@ -298,7 +284,6 @@ pub(crate) fn assistant_composer_footer<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui
 }
 
 /// Centred setup copy and caller-supplied action, bounded to a readable 300 pt column.
-#[cfg(any(not(target_arch = "wasm32"), test))]
 pub(crate) fn assistant_empty<R>(ui: &mut Ui, title: &str, body: &str, add: impl FnOnce(&mut Ui) -> R) -> R {
     let t = Tokens::get();
     let width = ui.available_width().min(t.form_card_width + t.space_24 + t.space_12).max(0.0);
@@ -317,7 +302,6 @@ pub(crate) fn assistant_empty<R>(ui: &mut Ui, title: &str, body: &str, add: impl
 }
 
 /// Semantic warning/error/information band with caller-owned text and actions.
-#[cfg(any(not(target_arch = "wasm32"), test))]
 pub(crate) fn assistant_banner<R>(ui: &mut Ui, tone: AssistantTone, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
     let t = Tokens::get();
     let (_, fill) = tone.colors(&t);

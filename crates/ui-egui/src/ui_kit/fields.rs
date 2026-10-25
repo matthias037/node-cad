@@ -461,7 +461,6 @@ pub(crate) fn number_field<T: egui::emath::Numeric>(
 
 /// Growing plain-text message editor; its parent owns scrolling and Enter routing.
 /// Tokens: control_fill, form_inset, font_label. Use text_area for bounded data input.
-#[cfg(any(not(target_arch = "wasm32"), test))]
 pub(crate) fn message_field(ui: &mut Ui, id: egui::Id, value: &mut String, hint: &str) -> Response {
     let t = Tokens::get();
     ui.add(

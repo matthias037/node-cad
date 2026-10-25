@@ -357,6 +357,9 @@ pub struct Services {
     pub agent_http: Option<agent_chat::backend::HttpFn>,
     /// The system keychain, for API agents' keys; None: keys can't be stored.
     pub secrets: Option<std::sync::Arc<dyn agent_chat::backend::Secrets>>,
+    /// HTTP that answers later, for NØDE IA in the browser (its `fetch`); None: the desktop,
+    /// which sends `agent_http` from a thread.
+    pub fetch: Option<agent_chat::backend::Fetch>,
 }
 
 pub struct SolveApp {

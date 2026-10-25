@@ -16,12 +16,18 @@ pub const DEFAULT_MODEL: &str = "mistral-large-latest";
 const SITE: &str = "https://node-os.fr";
 
 /// The site that sells NØDE IA: node-os.fr, or `NODE_CAD_IA_SITE` to try a local copy of it.
+/// In the browser, the site that served the page (node-os.fr serves the web app at `/cad/app/`):
+/// its addresses are relative to the page.
 pub fn site() -> String {
+    #[cfg(target_arch = "wasm32")]
+    return String::new();
     #[cfg(not(target_arch = "wasm32"))]
-    if let Some(s) = std::env::var("NODE_CAD_IA_SITE").ok().filter(|s| s.starts_with("http")) {
-        return s.trim_end_matches('/').to_string();
+    {
+        if let Some(s) = std::env::var("NODE_CAD_IA_SITE").ok().filter(|s| s.starts_with("http")) {
+            return s.trim_end_matches('/').to_string();
+        }
+        SITE.to_string()
     }
-    SITE.to_string()
 }
 
 /// The relay, as an OpenAI-compatible base URL.
@@ -123,20 +129,18 @@ pub fn short_date(iso: &str) -> String {
 /// An answer of the site's JSON routes: the body, or the status and the site's message.
 pub type Answer = Result<Value, (u16, String)>;
 
-#[cfg(not(target_arch = "wasm32"))]
-fn call(http: &super::backend::HttpFn, method: &'static str, path: &str, body: Option<Value>, token: Option<&str>) -> Answer {
+/// A request to the site, with the account's token when the route needs one.
+fn request(method: &'static str, path: &str, body: Option<Value>, token: Option<&str>) -> super::backend::HttpRequest {
     let mut headers = vec![("Content-Type".to_string(), "application/json".to_string())];
     if let Some(t) = token {
         headers.push(("Authorization".to_string(), format!("Bearer {t}")));
     }
-    let request = super::backend::HttpRequest {
-        method,
-        url: format!("{}{path}", site()),
-        headers,
-        body: body.map(|b| b.to_string().into_bytes()),
-        timeout_s: 30,
-    };
-    let (status, bytes) = http(&request).map_err(|e| (0, super::trf("ui.node_ia_unreachable", &[("error", &e)])))?;
+    super::backend::HttpRequest { method, url: format!("{}{path}", site()), headers, body: body.map(|b| b.to_string().into_bytes()), timeout_s: 30 }
+}
+
+/// What the site answered, as the account section reads it.
+fn answer(sent: super::backend::HttpAnswer) -> Answer {
+    let (status, bytes) = sent.map_err(|e| (0, super::trf("ui.node_ia_unreachable", &[("error", &e)])))?;
     let v: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
     if (200..300).contains(&status) {
         return Ok(v);
@@ -165,7 +169,6 @@ pub struct State {
     pub email: String,
     pub code: String,
     pub code_sent: bool,
-    #[cfg(not(target_arch = "wasm32"))]
     job: Option<(Job, std::sync::mpsc::Receiver<Answer>)>,
     pub account: Option<Account>,
     /// A line to show: its text, and whether it is an error.
@@ -175,40 +178,57 @@ pub struct State {
 }
 
 impl State {
-    #[cfg(not(target_arch = "wasm32"))]
     pub fn busy(&self) -> bool {
         self.job.is_some()
     }
 }
 
-/// Start one request to the site off the window thread.
-#[cfg(not(target_arch = "wasm32"))]
+/// Start one request to the site without holding the window: from a thread on the desktop,
+/// through the page's `fetch` in the browser.
 fn start(app: &mut crate::SolveApp, ctx: &egui::Context, job: Job) {
-    let Some(http) = app.services.agent_http.clone() else {
-        app.agent_chat.node_ia.message = Some((crate::i18n::tr("ui.ai_no_http").to_string(), true));
-        return;
-    };
     let token = if matches!(job, Job::Account | Job::Trial) { app.services.secrets.as_ref().and_then(|s| s.get(ID).ok().flatten()) } else { None };
-    let s = &mut app.agent_chat.node_ia;
+    let s = &app.agent_chat.node_ia;
     let (email, code) = (s.email.trim().to_lowercase(), s.code.trim().to_string());
+    let req = match job {
+        Job::SendCode => request("POST", "/api/cad/code", Some(json!({"email": email, "application": true})), None),
+        Job::Verify => request("PUT", "/api/cad/code", Some(json!({"email": email, "code": code, "application": true})), None),
+        Job::Account => request("GET", "/api/cad/ia/compte", None, token.as_deref()),
+        Job::Trial => request("POST", "/api/cad/ia/essai", Some(json!({})), token.as_deref()),
+    };
     let (tx, rx) = std::sync::mpsc::channel();
     let wake = ctx.clone();
-    std::thread::spawn(move || {
-        let answer = match job {
-            Job::SendCode => call(&http, "POST", "/api/cad/code", Some(json!({"email": email, "application": true})), None),
-            Job::Verify => call(&http, "PUT", "/api/cad/code", Some(json!({"email": email, "code": code, "application": true})), None),
-            Job::Account => call(&http, "GET", "/api/cad/ia/compte", None, token.as_deref()),
-            Job::Trial => call(&http, "POST", "/api/cad/ia/essai", Some(json!({})), token.as_deref()),
+    if let Some(fetch) = app.services.fetch.clone() {
+        fetch(
+            req,
+            Box::new(move |sent| {
+                let _ = tx.send(answer(sent));
+                wake.request_repaint();
+            }),
+        );
+    } else {
+        #[cfg(not(target_arch = "wasm32"))]
+        let Some(http) = app.services.agent_http.clone() else {
+            app.agent_chat.node_ia.message = Some((crate::i18n::tr("ui.ai_no_http").to_string(), true));
+            return;
         };
-        let _ = tx.send(answer);
-        wake.request_repaint();
-    });
+        #[cfg(not(target_arch = "wasm32"))]
+        std::thread::spawn(move || {
+            let _ = tx.send(answer(http(&req)));
+            wake.request_repaint();
+        });
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = (req, tx, wake);
+            app.agent_chat.node_ia.message = Some((crate::i18n::tr("ui.ai_no_http").to_string(), true));
+            return;
+        }
+    }
+    let s = &mut app.agent_chat.node_ia;
     s.job = Some((job, rx));
     s.message = None;
 }
 
 /// Forget the account here: the token leaves the keychain, the address the preferences.
-#[cfg(not(target_arch = "wasm32"))]
 pub fn sign_out(app: &mut crate::SolveApp) {
     if let Some(s) = &app.services.secrets {
         let _ = s.delete(ID);
@@ -222,7 +242,6 @@ pub fn sign_out(app: &mut crate::SolveApp) {
 }
 
 /// Take the answer of the running request, if it came.
-#[cfg(not(target_arch = "wasm32"))]
 fn poll(app: &mut crate::SolveApp, ctx: &egui::Context) {
     let Some((job, rx)) = &app.agent_chat.node_ia.job else { return };
     let (job, answer) = match rx.try_recv() {
@@ -271,7 +290,6 @@ fn poll(app: &mut crate::SolveApp, ctx: &egui::Context) {
 
 /// Preferences > AI in the official app: the NØDE account, its subscription or trial, and the
 /// buttons that lead to them.
-#[cfg(not(target_arch = "wasm32"))]
 pub fn section(app: &mut crate::SolveApp, ui: &mut egui::Ui) {
     use super::trf;
     use crate::i18n::tr;

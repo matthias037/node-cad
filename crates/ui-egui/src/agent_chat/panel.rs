@@ -672,18 +672,23 @@ fn dock_drag(app: &mut SolveApp, ui: &egui::Ui, drag: &egui::Response, left: boo
 
 fn body(app: &mut SolveApp, ui: &mut egui::Ui, left: bool) {
     header(app, ui, left);
-    #[cfg(not(target_arch = "wasm32"))]
     ui_kit::assistant_controls(ui, |ui| switcher(app, ui));
-    #[cfg(target_arch = "wasm32")]
-    {
-        ui.label(tr("ui.agent_chat_desktop_only"));
-    }
-    #[cfg(not(target_arch = "wasm32"))]
     desktop_body(app, ui);
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+/// Installed agents are being looked for (the desktop's; the browser has NØDE IA alone).
+fn detecting(app: &SolveApp) -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    return app.agent_chat.detecting.is_some();
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = app;
+        false
+    }
+}
+
 fn desktop_body(app: &mut SolveApp, ui: &mut egui::Ui) {
+    #[cfg(not(target_arch = "wasm32"))]
     if app.agent_chat.detection.is_none() && app.agent_chat.detecting.is_none() {
         refresh(app, ui.ctx());
     }
@@ -885,14 +890,13 @@ fn desktop_body(app: &mut SolveApp, ui: &mut egui::Ui) {
 
 /// The header's second row: the agent this conversation uses (a compact switcher), the agent's
 /// own mode when it has modes, and the state of its login.
-#[cfg(not(target_arch = "wasm32"))]
 fn switcher(app: &mut SolveApp, ui: &mut egui::Ui) {
     let t = Tokens::get();
     let all = agents::entries(app);
     let current = agents::current(app);
     ui.horizontal_wrapped(|ui| {
         let label = current.as_ref().map_or_else(
-            || tr(if app.agent_chat.detecting.is_some() { "ui.agent_chat_detecting" } else { "ui.agent_chat_none_found_short" }).to_string(),
+            || tr(if detecting(app) { "ui.agent_chat_detecting" } else { "ui.agent_chat_none_found_short" }).to_string(),
             |e| e.name.clone(),
         );
         let models = models_shown(app);
@@ -1031,7 +1035,6 @@ pub(super) fn no_agents(ui: &mut egui::Ui) {
 }
 
 /// Before the first connection: what's installed, how to install the rest, and Add agent.
-#[cfg(not(target_arch = "wasm32"))]
 fn picker(app: &mut SolveApp, ui: &mut egui::Ui) {
     let open = app.agent_chat.picking.unwrap_or(!app.agent_chat.state().running() && app.agent_chat.items.is_empty());
     if !open {
@@ -1052,8 +1055,8 @@ fn picker(app: &mut SolveApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui_kit::text(ui, tr("ui.agent_chat_pick"), ui_kit::Text::Inline);
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            let refreshing = app.agent_chat.detecting.is_some();
-            if ui_kit::button(ui, tr("ui.agent_chat_refresh"), ui_kit::Button::Enabled(!refreshing)).clicked() {
+            #[cfg(not(target_arch = "wasm32"))]
+            if ui_kit::button(ui, tr("ui.agent_chat_refresh"), ui_kit::Button::Enabled(!detecting(app))).clicked() {
                 refresh(app, ui.ctx());
             }
             if ui_kit::button(ui, tr("ui.ai_add_agent"), ui_kit::Button::Small).clicked() {
@@ -1061,7 +1064,7 @@ fn picker(app: &mut SolveApp, ui: &mut egui::Ui) {
             }
         });
     });
-    if app.agent_chat.detecting.is_some() {
+    if detecting(app) {
         ui_kit::text(ui, tr("ui.agent_chat_detecting"), ui_kit::Text::Note("detecting"));
     }
     for e in &all {
@@ -1074,14 +1077,21 @@ fn picker(app: &mut SolveApp, ui: &mut egui::Ui) {
     }
     // In the Flatpak the hint already says nothing was found, so the install list below is
     // headed "Not installed" instead of repeating it.
-    let flatpak_hint = all.is_empty() && app.agent_chat.detecting.is_none() && std::env::var_os("FLATPAK_ID").is_some();
+    #[cfg(not(target_arch = "wasm32"))]
+    missing_agents(app, ui, all.is_empty());
+}
+
+/// The agents this computer could have, with how to install them.
+#[cfg(not(target_arch = "wasm32"))]
+fn missing_agents(app: &mut SolveApp, ui: &mut egui::Ui, none: bool) {
+    let flatpak_hint = none && app.agent_chat.detecting.is_none() && std::env::var_os("FLATPAK_ID").is_some();
     if flatpak_hint {
         no_agents(ui);
     }
     let missing: Vec<discover::Missing> = app.agent_chat.detection.as_ref().map(|d| d.missing.clone()).unwrap_or_default();
     if !missing.is_empty() {
-        let heading = if all.is_empty() && !flatpak_hint { tr("ui.agent_chat_none_found") } else { tr("ui.agent_chat_not_installed") };
-        ui_kit::section(ui, "sc_agent_missing", heading, all.is_empty(), |ui| {
+        let heading = if none && !flatpak_hint { tr("ui.agent_chat_none_found") } else { tr("ui.agent_chat_not_installed") };
+        ui_kit::section(ui, "sc_agent_missing", heading, none, |ui| {
             for m in missing {
                 ui.horizontal(|ui| {
                     ui_kit::text(ui, m.name, ui_kit::Text::Inline);
@@ -1095,7 +1105,6 @@ fn picker(app: &mut SolveApp, ui: &mut egui::Ui) {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn auth_box(app: &mut SolveApp, ui: &mut egui::Ui) {
     ui_kit::section(ui, "authentication", tr("ui.agent_chat_auth_title"), true, |ui| {
         ui.set_width(ui.available_width());
@@ -1143,13 +1152,13 @@ fn auth_box(app: &mut SolveApp, ui: &mut egui::Ui) {
     });
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn conversation(app: &mut SolveApp, ui: &mut egui::Ui) {
     let t = Tokens::get();
     let mut answer: Option<(usize, Option<String>)> = None;
     // Allow (true), Deny (false), Always allow (None).
     let mut approval: Option<(u64, Option<bool>)> = None;
     let mut undo: Option<usize> = None;
+    #[cfg_attr(target_arch = "wasm32", allow(unused_mut))]
     let mut open_gallery: Option<Gallery> = None;
     let current_doc = app.session.doc.clone();
     for (n, item) in app.agent_chat.items.iter().enumerate() {
@@ -1159,11 +1168,13 @@ fn conversation(app: &mut SolveApp, ui: &mut egui::Ui) {
                     if !text.is_empty() {
                         ui.add(egui::Label::new(RichText::new(text).color(t.text)).selectable(true).wrap());
                     }
-                    if !pictures.is_empty() {
-                        if let Some(at) = picture_strip(ui, n, pictures) {
-                            open_gallery = Some(Gallery { pictures: pictures.clone(), at });
-                        }
-                    } else if *image {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if !pictures.is_empty()
+                        && let Some(at) = picture_strip(ui, n, pictures)
+                    {
+                        open_gallery = Some(Gallery { pictures: pictures.clone(), at });
+                    }
+                    if pictures.is_empty() && *image {
                         // Taken when the agent starts on the message: nothing to show yet.
                         ui.label(RichText::new(tr("ui.agent_chat_view_attached")).color(t.text_dim).size(t.font_small));
                     }
@@ -1374,7 +1385,7 @@ fn conversation(app: &mut SolveApp, ui: &mut egui::Ui) {
         slot.1 = buf;
     }
     if app.agent_chat.items.is_empty() && app.agent_chat.pending.is_empty() {
-        if agents::entries(app).is_empty() && app.agent_chat.detecting.is_none() {
+        if agents::entries(app).is_empty() && !detecting(app) {
             ui_kit::assistant_empty(ui, tr("ui.agent_chat_setup_title"), tr("ui.agent_chat_setup_body"), |ui| {
                 if ui_kit::primary_button(ui, tr("ui.agent_chat_open_settings")).clicked() {
                     crate::prefs::open_at(app, crate::prefs::PAGE_AI);
@@ -1419,7 +1430,6 @@ fn conversation(app: &mut SolveApp, ui: &mut egui::Ui) {
 }
 
 /// The files that went (or will go) with a message, by name.
-#[cfg(not(target_arch = "wasm32"))]
 fn files_line<'a>(ui: &mut egui::Ui, names: impl Iterator<Item = &'a str>) {
     let list = names.collect::<Vec<_>>().join(", ");
     if !list.is_empty() {
@@ -1434,7 +1444,6 @@ const CHIP_W: f32 = 170.0;
 /// The files for the next message, as chips in rows that fit the chat: a picture's thumbnail (or
 /// a file mark), the name cut to fit, and a × that takes the file off. Laid out by hand: egui
 /// wraps plain widgets, not framed groups, and one row wider than the chat widens all below it.
-#[cfg(not(target_arch = "wasm32"))]
 fn attachment_chips(app: &mut SolveApp, ui: &mut egui::Ui) {
     let chat = &mut app.agent_chat;
     // Thumbnails of files no longer on the message are let go.
@@ -1480,14 +1489,12 @@ fn attachment_chips(app: &mut SolveApp, ui: &mut egui::Ui) {
 }
 
 /// What a chip's × says: an imported part stays in the design when it comes off the message.
-#[cfg(not(target_arch = "wasm32"))]
 pub(super) fn remove_tip(f: &attach::Attachment) -> &'static str {
     tr(if matches!(f.content, attach::Content::Imported) { "ui.agent_chat_remove_imported" } else { "ui.agent_chat_remove_file" })
 }
 
 /// The chip of a file still being read or imported: a spinner, the name, and a × that takes it
 /// off (an import goes on: its part lands in the design).
-#[cfg(not(target_arch = "wasm32"))]
 fn loading_chip(ui: &mut egui::Ui, name: &str, importing: bool, i: usize, w: f32) -> bool {
     let t = Tokens::get();
     let mut clicked = false;
@@ -1522,7 +1529,6 @@ fn loading_chip(ui: &mut egui::Ui, name: &str, importing: bool, i: usize, w: f32
 }
 
 /// One file chip, `w` wide in all; true when its × was clicked.
-#[cfg(not(target_arch = "wasm32"))]
 fn chip(ui: &mut egui::Ui, thumbs: &mut std::collections::HashMap<u64, egui::TextureHandle>, f: &attach::Attachment, i: usize, w: f32) -> bool {
     let t = Tokens::get();
     let mut clicked = false;
@@ -1579,7 +1585,6 @@ fn chip(ui: &mut egui::Ui, thumbs: &mut std::collections::HashMap<u64, egui::Tex
 
 /// The + button: choose a file with the app's picker (pictures, text and CAD files), or paste
 /// the clipboard's picture.
-#[cfg(not(target_arch = "wasm32"))]
 fn add_menu(app: &mut SolveApp, ui: &mut egui::Ui) {
     let (mut choose, mut paste) = (false, false);
     let r = ui_kit::action_menu(ui, "+", |ui| {
@@ -1607,13 +1612,15 @@ fn add_menu(app: &mut SolveApp, ui: &mut egui::Ui) {
             }
         });
     }
+    #[cfg(not(target_arch = "wasm32"))]
     if paste && let Err(e) = paste_picture(app) {
         app.agent_chat.notice(e, true);
     }
+    #[cfg(target_arch = "wasm32")]
+    let _ = paste;
 }
 
 /// A tool call as a card: its state, name and kind on one line; a click unfolds what it returned.
-#[cfg(not(target_arch = "wasm32"))]
 fn tool_card(ui: &mut egui::Ui, n: usize, title: &str, kind: &str, status: Option<ToolStatus>, output: Option<&str>) {
     let t = Tokens::get();
     let (color, mark, state) = match status {
@@ -1667,7 +1674,6 @@ fn tool_card(ui: &mut egui::Ui, n: usize, title: &str, kind: &str, status: Optio
 
 /// A small status mark drawn as a shape (no glyph a system font might lack): filled when the
 /// step is running or done, hollow while it waits.
-#[cfg(not(target_arch = "wasm32"))]
 fn status_dot(ui: &mut egui::Ui, color: Color32, filled: bool) {
     let (r, _) = ui.allocate_exact_size(vec2(10.0, 10.0), Sense::hover());
     if filled {

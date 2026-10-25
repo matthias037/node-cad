@@ -114,6 +114,13 @@ pub struct HttpRequest {
 /// Sends an [`HttpRequest`]: the status and the body, or why it failed.
 pub type HttpFn = std::sync::Arc<dyn Fn(&HttpRequest) -> Result<(u16, Vec<u8>), String> + Send + Sync>;
 
+/// What an HTTP request answered: the status and the body, or why it failed.
+pub type HttpAnswer = Result<(u16, Vec<u8>), String>;
+
+/// Sends an [`HttpRequest`] without blocking (the browser's `fetch`): the answer comes back
+/// through the callback, on the window's thread, which the host then wakes.
+pub type Fetch = std::rc::Rc<dyn Fn(HttpRequest, Box<dyn FnOnce(HttpAnswer)>)>;
+
 /// The system keychain (the desktop host's), for API keys: never in the preferences.
 pub trait Secrets: Send + Sync {
     fn get(&self, id: &str) -> Result<Option<String>, String>;

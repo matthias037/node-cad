@@ -135,21 +135,18 @@ pub fn page(app: &mut SolveApp, ui: &mut egui::Ui) {
         let response =
             ui_kit::checkbox(ui, tr("ui.ai_show_features"), &mut app.preferences.ai_features).on_hover_text(tr("ui.ai_show_features_note"));
         crate::scenario::publish_handle("prefs:ai_features", response.rect.center());
+        if app.preferences.ai_features {
+            let response = ui_kit::checkbox(ui, tr("ui.ai_toolbar_button"), &mut app.preferences.ai_toolbar_button)
+                .on_hover_text(tr("ui.ai_toolbar_button_note"));
+            crate::scenario::publish_handle("prefs:ai_toolbar_button", response.rect.center());
+        }
         if !cfg!(target_arch = "wasm32") {
-            if app.preferences.ai_features {
-                let response = ui_kit::checkbox(ui, tr("ui.ai_toolbar_button"), &mut app.preferences.ai_toolbar_button)
-                    .on_hover_text(tr("ui.ai_toolbar_button_note"));
-                crate::scenario::publish_handle("prefs:ai_toolbar_button", response.rect.center());
-            }
             let response = ui_kit::checkbox(ui, tr("ai.prefs.background_commands"), &mut app.preferences.agent_off_thread)
                 .on_hover_text(tr("ui.agent_off_thread_note"));
             crate::scenario::publish_handle("prefs:agent_off_thread", response.rect.center());
         }
-        if cfg!(target_arch = "wasm32") {
-            ui_kit::text(ui, tr("ui.agent_chat_desktop_only"), ui_kit::Text::Hint("desktop"));
-        }
     });
-    if !cfg!(target_arch = "wasm32") && app.preferences.ai_features {
+    if app.preferences.ai_features {
         #[cfg(not(target_arch = "wasm32"))]
         if app.agent_chat.node_ia_only {
             super::node_ia::section(app, ui);
@@ -159,6 +156,9 @@ pub fn page(app: &mut SolveApp, ui: &mut egui::Ui) {
             }
             agents_section(app, ui);
         }
+        // In the browser, NØDE IA is the only agent.
+        #[cfg(target_arch = "wasm32")]
+        super::node_ia::section(app, ui);
         permissions_section(app, ui);
         panel_section(app, ui);
     }
