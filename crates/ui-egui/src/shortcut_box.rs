@@ -692,7 +692,8 @@ mod tests {
         assert!(!rows.iter().any(|row| row.0 == "solid.extrude"));
         assert!(can_start(&app, "drawing.view.base"), "known options are inspectable");
         assert!(!can_start(&app, "drawing.view.section"), "uncertain tools cannot start");
-        assert!(!solidcraft_engine::find_command("drawing.view.base").unwrap().info(&app.session).enabled);
+        assert!(solidcraft_engine::find_command("drawing.view.base").unwrap().info(&app.session).enabled, "Base View is a real command");
+        assert!(!solidcraft_engine::find_command("drawing.view.section").unwrap().info(&app.session).enabled, "planned tools stay disabled");
     }
 
     #[test]

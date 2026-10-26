@@ -25,7 +25,16 @@ pub static COMMANDS: &[CommandSpec] = &[
          (the title block; tolerance default \"ISO 2768-m\"). Projects the visible bodies, keeps the drawing in the session \
          (drawing.export writes it) and returns the sheet: format, scale, views with their line counts, dimensions and warnings",
     ),
-    CommandSpec::new("drawing.export", "Export Drawing", export).icon("export").noundo().params(
+    CommandSpec::new("drawing.view.base", "Base View", create).icon("camera").noundo().at("DRAWING LAYOUT", "VIEWS").params(
+        "As drawing.create: the sheet with the design's standard views (front, top, side, isometric by default), its \
+         dimensions and title block",
+    ),
+    CommandSpec::new("drawing.update", "Update Drawing", update)
+        .icon("update")
+        .noundo()
+        .at("DRAWING REVIEW", "CHANGES")
+        .params("No parameters. Makes the drawing again from the design as it is now, with the same sheet, views and title block"),
+    CommandSpec::new("drawing.export", "Export Drawing", export).icon("export").noundo().at("DRAWING REVIEW", "OUTPUT").params(
         "format: svg|dxf|pdf; path?: write it there (else the text is returned: svg and dxf as text, pdf as base64). Exports the \
          drawing drawing.create made",
     ),
@@ -48,6 +57,9 @@ pub struct Sheet {
     pub dims: Vec<Dim>,
     pub title: Title,
     pub warnings: Vec<String>,
+    /// What the sheet was asked for (drawing.create's parameters), for `drawing.update`.
+    #[serde(default)]
+    pub request: Value,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -266,6 +278,13 @@ fn french_material(name: &str) -> String {
         other => other,
     }
     .to_string()
+}
+
+/// The drawing again, from the design as it is now, as it was asked for.
+fn update(s: &mut Session, _: &Value) -> Result<Value> {
+    let request = s.drawing.as_ref().map(|d| d.get("request").cloned().unwrap_or_else(|| json!({})));
+    let Some(request) = request else { return Err(bad("drawing.update", "there is no drawing yet: make one with Base View")) };
+    create(s, &request)
 }
 
 fn create(s: &mut Session, p: &Value) -> Result<Value> {
@@ -522,6 +541,7 @@ fn create(s: &mut Session, p: &Value) -> Result<Value> {
             tolerance: field("tolerance", "ISO 2768-m"),
         },
         warnings,
+        request: p.clone(),
     };
     let summary = json!({
         "format": sheet.format, "size": [sheet.width, sheet.height], "scale": sheet.scale_text, "projection": sheet.projection,

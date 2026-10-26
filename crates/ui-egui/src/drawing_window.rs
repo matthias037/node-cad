@@ -1,5 +1,6 @@
-//! The Mise en plan window: the sheet `drawing.create` made (by a click, a script or NØDE IA),
-//! drawn as it prints, with its exports. It opens by itself when a new drawing is made.
+//! The drawing sheet `drawing.create` made (by a click, a script or NØDE IA), drawn as it prints,
+//! and its exports. A new drawing opens the Drawing workspace, where the sheet fills the canvas;
+//! this window shows it only when the workspace cannot open (a sketch or an operation under way).
 
 use egui::{Color32, Pos2, Sense, Stroke, Vec2};
 use serde_json::json;
@@ -20,24 +21,51 @@ pub struct State {
 const PAPER: Color32 = Color32::WHITE;
 const INK: Color32 = Color32::BLACK;
 
-/// Open the window on a new drawing.
-fn follow(app: &mut SolveApp) {
+/// Take a new drawing: into the Drawing workspace, or this window when it cannot open.
+pub(crate) fn follow(app: &mut SolveApp) {
     let seq = app.session.drawing_seq;
     if seq != app.drawing_window.seen {
         app.drawing_window.seen = seq;
         app.drawing_window.sheet = app.session.drawing.clone().and_then(|v| serde_json::from_value(v).ok());
-        app.drawing_window.open = app.drawing_window.sheet.is_some();
         app.drawing_window.message = None;
+        let shown = app.drawing_window.sheet.is_some();
+        app.drawing_window.open = shown && !crate::drawing_workspace::active(app) && crate::workspace::enter(app, "drawing").is_err();
     }
+    if app.session.drawing.is_none() {
+        app.drawing_window.sheet = None;
+    }
+}
+
+/// The drawing on show, if there is one.
+pub(crate) fn sheet(app: &SolveApp) -> Option<&DrawingSheet> {
+    app.drawing_window.sheet.as_ref()
+}
+
+/// The last export's message (saved, or why not), for the panel that started it.
+pub(crate) fn message(app: &SolveApp) -> Option<&(String, bool)> {
+    app.drawing_window.message.as_ref()
 }
 
 fn paint(ui: &mut egui::Ui, sh: &DrawingSheet) {
     // The whole sheet in view: as wide as the window, as tall as the screen leaves room for.
     let room = (ui.ctx().content_rect().bottom() - ui.cursor().top() - 96.0).max(200.0);
     let width = ui.available_width().min(room * (sh.width / sh.height) as f32).clamp(320.0, 1400.0);
-    let k = width / sh.width as f32;
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(width, sh.height as f32 * k), Sense::hover());
-    let painter = ui.painter_at(rect);
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(width, sh.height as f32 * width / sh.width as f32), Sense::hover());
+    paint_in(&ui.painter_at(rect), rect, sh);
+}
+
+/// The sheet drawn as large as `bounds` allows, centred.
+/// Returns where the paper is.
+pub(crate) fn paint_fit(painter: &egui::Painter, bounds: egui::Rect, sh: &DrawingSheet) -> egui::Rect {
+    let k = (bounds.width() / sh.width as f32).min(bounds.height() / sh.height as f32).max(0.01);
+    let rect = egui::Rect::from_center_size(bounds.center(), Vec2::new(sh.width as f32 * k, sh.height as f32 * k));
+    paint_in(painter, rect, sh);
+    rect
+}
+
+/// The sheet drawn into `rect` (the paper's own proportions).
+fn paint_in(painter: &egui::Painter, rect: egui::Rect, sh: &DrawingSheet) {
+    let k = rect.width() / sh.width as f32;
     painter.rect_filled(rect, 0.0, PAPER);
     let at = |x: f64, y: f64| Pos2::new(rect.left() + x as f32 * k, rect.bottom() - y as f32 * k);
     let px = |mm: f64| (mm as f32 * k).max(0.6);
@@ -83,7 +111,7 @@ fn paint(ui: &mut egui::Ui, sh: &DrawingSheet) {
 }
 
 /// Save the drawing in a format: a download in the browser, a file the user picks elsewhere.
-fn save(app: &mut SolveApp, ext: &'static str) {
+pub(crate) fn save(app: &mut SolveApp, ext: &'static str) {
     let Some(sh) = app.drawing_window.sheet.clone() else { return };
     let bytes = match ext {
         "pdf" => drawing_pdf(&sh),
@@ -109,20 +137,24 @@ fn save(app: &mut SolveApp, ext: &'static str) {
     });
 }
 
-/// The File menu's Mise en plan: the drawing already made, or a new one of the design.
+/// The File menu's Mise en plan: the Drawing workspace, with a drawing of the design if there is
+/// none yet.
 pub fn make(app: &mut SolveApp) {
-    if app.drawing_window.sheet.is_some() && app.session.drawing.is_some() {
-        app.drawing_window.open = true;
+    if let Err(e) = crate::workspace::enter(app, "drawing") {
+        app.set_status(e, true);
         return;
     }
-    if let Err(e) = app.run("drawing.create", json!({})) {
-        app.drawing_window.message = Some((e, true));
+    if app.session.drawing.is_none() {
+        let _ = app.run("drawing.view.base", json!({}));
     }
 }
 
 /// Draw the window when it is open. Called once per frame.
 pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
     follow(app);
+    if crate::drawing_workspace::active(app) {
+        app.drawing_window.open = false;
+    }
     if !app.drawing_window.open {
         return;
     }
@@ -164,8 +196,7 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
     }
     if redo {
         // The same sheet again, from the design as it is now.
-        let p = json!({"format": sh.format, "projection": sh.projection, "title": sh.title});
-        if let Err(e) = app.run("drawing.create", p) {
+        if let Err(e) = app.run("drawing.update", json!({})) {
             app.drawing_window.message = Some((e, true));
         }
     }

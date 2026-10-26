@@ -1,7 +1,9 @@
-//! Drawing's native layout anchor. No drawing document or paper scene is fabricated here.
-//! Missing tools expose only agreed options; source services keep their existing ownership.
+//! The Drawing workspace: the sheet NØDE CAD draws from the design (`drawing.view.base`, the
+//! engine's views, dimensions and title block) on the canvas, its settings, and its exports.
+//! Tools not built yet keep their agreed options, disabled; source services keep their ownership.
 
 use egui::{Rect, Sense, Stroke, pos2, vec2};
+use serde_json::{Value, json};
 
 use crate::ui_kit::{self, Container, Edge, Surface};
 use crate::{SolveApp, theme::Tokens};
@@ -14,6 +16,80 @@ pub struct State {
     strip: Option<Rect>,
     strip_sizes: [Option<egui::Vec2>; 2],
     settings: Option<Rect>,
+    /// Sheet Settings and Base View as edited, until Apply.
+    form: Option<Form>,
+}
+
+/// Paper sizes and standard scales offered in Sheet Settings ("Auto": the engine's choice).
+const FORMATS: [&str; 6] = ["Auto", "A4", "A3", "A2", "A1", "A0"];
+const SCALES: [&str; 10] = ["Auto", "5:1", "2:1", "1:1", "1:2", "1:5", "1:10", "1:20", "1:50", "1:100"];
+
+/// What a drawing is asked for: drawing.view.base's parameters, as the panels edit them.
+#[derive(Clone)]
+struct Form {
+    format: usize,
+    portrait: bool,
+    third_angle: bool,
+    scale: usize,
+    hidden: bool,
+    /// Front, top, side, isometric.
+    views: [bool; 4],
+    title: [String; 7],
+}
+
+/// The title block's fields, in `Form::title`'s order.
+const TITLE_FIELDS: [(&str, &str); 7] = [
+    ("titre", "Title"),
+    ("numero", "Drawing number"),
+    ("matiere", "Material"),
+    ("masse", "Mass"),
+    ("auteur", "Drawn by"),
+    ("date", "Date"),
+    ("tolerance", "General tolerances"),
+];
+
+impl Form {
+    /// The drawing on show as it was asked for, or the defaults for a first one.
+    fn of(app: &SolveApp) -> Form {
+        let Some(sh) = crate::drawing_window::sheet(app) else {
+            let mut title: [String; 7] = Default::default();
+            title[0] = app.session.doc.name.clone();
+            title[6] = "ISO 2768-m".into();
+            return Form { format: 0, portrait: false, third_angle: false, scale: 0, hidden: true, views: [true; 4], title };
+        };
+        let r = &sh.request;
+        let asked = |k: &str| r.get(k).and_then(Value::as_str);
+        let has = |n: &str| sh.views.iter().any(|v| v.name == n);
+        let t = &sh.title;
+        Form {
+            format: asked("format").and_then(|f| FORMATS.iter().position(|x| *x == f)).unwrap_or(0),
+            portrait: asked("orientation") == Some("portrait"),
+            third_angle: sh.projection == "third_angle",
+            scale: asked("scale").and_then(|f| SCALES.iter().position(|x| *x == f)).unwrap_or(0),
+            hidden: asked("hidden") != Some("omit"),
+            views: [has("front"), has("top"), has("left") || has("right"), has("iso")],
+            title: [&t.titre, &t.numero, &t.matiere, &t.masse, &t.auteur, &t.date, &t.tolerance].map(|v| v.to_string()),
+        }
+    }
+
+    fn params(&self) -> Value {
+        let side = if self.third_angle { "right" } else { "left" };
+        let views: Vec<&str> = ["front", "top", side, "iso"].into_iter().zip(self.views).filter(|(_, on)| *on).map(|(v, _)| v).collect();
+        let mut p = json!({
+            "orientation": if self.portrait { "portrait" } else { "landscape" },
+            "projection": if self.third_angle { "third_angle" } else { "first_angle" },
+            "hidden": if self.hidden { "dashed" } else { "omit" },
+            "views": views,
+            "title": TITLE_FIELDS.iter().zip(&self.title).map(|((k, _), v)| (k.to_string(), json!(v.trim()))).collect::<serde_json::Map<_, _>>(),
+        });
+        if self.format > 0 {
+            p["format"] = json!(FORMATS[self.format]);
+        }
+        if self.scale > 0 {
+            p["scale"] = json!(SCALES[self.scale]);
+        }
+        p
+    }
 }
 
 pub fn active(app: &SolveApp) -> bool {
@@ -34,6 +110,7 @@ pub fn enter(app: &mut SolveApp, drawing: bool) -> Result<(), String> {
         app.drawing_workspace.options = None;
         app.drawing_workspace.strip = None;
         app.drawing_workspace.settings = None;
+        app.drawing_workspace.form = None;
     }
     app.ui.ribbon_context = None;
     app.cancel_view_animation();
@@ -48,7 +125,7 @@ pub fn reset_document(app: &mut SolveApp) {
 }
 
 pub fn can_open_options(id: &str) -> bool {
-    matches!(id, "drawing.view.base" | "drawing.view.projected" | "drawing.dimension" | "drawing.note")
+    matches!(id, "drawing.view.base" | "drawing.view.projected" | "drawing.dimension" | "drawing.note" | "drawing.export")
 }
 
 /// Dismiss the current Drawing inspector without touching source or drawing data.
@@ -57,12 +134,23 @@ pub fn close_panel(app: &mut SolveApp) -> bool {
     app.drawing_workspace.settings_open = false;
     app.drawing_workspace.options = None;
     app.drawing_workspace.settings = None;
+    app.drawing_workspace.form = None;
     open
 }
 
-/// Toolbar clicks may inspect known options. This never executes a missing CAD command.
+/// Toolbar clicks: Update Drawing runs; Base View and Export open their panels; planned tools
+/// show their agreed options. This never executes a missing CAD command.
 pub fn start(app: &mut SolveApp, id: &str) -> bool {
-    if !active(app) || !can_open_options(id) {
+    if !active(app) {
+        return false;
+    }
+    if id == "drawing.update" {
+        if let Err(e) = app.run("drawing.update", json!({})) {
+            app.set_status(e, true);
+        }
+        return true;
+    }
+    if !can_open_options(id) {
         return false;
     }
     app.drawing_workspace.options = match id {
@@ -70,8 +158,10 @@ pub fn start(app: &mut SolveApp, id: &str) -> bool {
         "drawing.view.projected" => Some("Projected View"),
         "drawing.dimension" => Some("Dimension"),
         "drawing.note" => Some("Note"),
+        "drawing.export" => Some("Export Drawing"),
         _ => None,
     };
+    app.drawing_workspace.form = Some(Form::of(app));
     app.drawing_workspace.settings_open = false;
     true
 }
@@ -103,9 +193,36 @@ pub(crate) fn left_inset(app: &SolveApp) -> f32 {
     }
 }
 
-/// Reuse Browser's existing content-hugging host and resize seam, with Drawing contents.
+/// The view's name as people read it.
+fn view_label(name: &str) -> &'static str {
+    match name {
+        "front" => "Front view",
+        "top" => "Top view",
+        "left" => "Left view",
+        "right" => "Right view",
+        _ => "Isometric view",
+    }
+}
+
+/// Reuse Browser's existing content-hugging host and resize seam, with Drawing contents: the
+/// sheet, its views and its dimensions, then the source design.
 pub(crate) fn browser_contents(app: &mut SolveApp, ui: &mut egui::Ui) {
-    ui_kit::text(ui, crate::i18n::tr_label("No drawing objects"), ui_kit::Text::Note("drawing_objects"));
+    match crate::drawing_window::sheet(app) {
+        Some(sh) => {
+            ui_kit::text(ui, &sheet_label(app), ui_kit::Text::Heading("drawing_sheet"));
+            for v in &sh.views {
+                ui.label(crate::i18n::tr_label(view_label(&v.name)));
+            }
+            let dims = sh.dims.len().to_string();
+            ui_kit::text(ui, &crate::i18n::format("ui.drawing_dimension_count", &[("count", &dims)]), ui_kit::Text::Note("drawing_dims"));
+            for w in &sh.warnings {
+                ui.label(egui::RichText::new(w).color(Tokens::get().error));
+            }
+        }
+        None => {
+            ui_kit::text(ui, crate::i18n::tr_label("No drawing objects"), ui_kit::Text::Note("drawing_objects"));
+        }
+    }
     ui.add_space(Tokens::get().space_8);
     ui_kit::text(ui, crate::i18n::tr_label("Source design"), ui_kit::Text::Heading("drawing_source"));
     ui.label(&app.session.doc.name);
@@ -114,26 +231,60 @@ pub(crate) fn browser_contents(app: &mut SolveApp, ui: &mut egui::Ui) {
     }
 }
 
-/// There is intentionally no paper, sample geometry or camera until a scene provider exists.
+/// "Sheet 1 · A3": the sheet strip's and Browser's name for the drawing on show.
+fn sheet_label(app: &SolveApp) -> String {
+    match crate::drawing_window::sheet(app) {
+        Some(sh) => crate::i18n::format("ui.drawing_sheet_label", &[("format", &sh.format), ("scale", &sh.scale_text)]),
+        None => crate::i18n::tr_label("Sheet unavailable").to_string(),
+    }
+}
+
+/// The canvas: the sheet as it prints, as large as the space between the panels allows; before
+/// the first drawing, what to do to make one.
 pub fn show(app: &mut SolveApp, ui: &mut egui::Ui) {
+    crate::drawing_window::follow(app);
     let rect = ui.max_rect();
     app.viewport.rect = Some(rect);
     let t = Tokens::get();
     ui.painter().rect_filled(rect, 0.0, t.viewport_top);
-    let bounds = crate::shell::workspace_content(app, rect);
+    let mut bounds = crate::shell::workspace_content(app, rect).shrink(t.space_24);
+    // Clear of the sheet strip and the docked panels.
+    for covered in covered_rects(app) {
+        if covered.intersects(bounds) {
+            if covered.center().y < bounds.center().y && covered.width() < bounds.width() * 0.9 {
+                bounds.min.y = bounds.min.y.max(covered.bottom() + t.space_8);
+            } else if covered.center().x > bounds.center().x {
+                bounds.max.x = bounds.max.x.min(covered.left() - t.space_8);
+            } else {
+                bounds.min.x = bounds.min.x.max(covered.right() + t.space_8);
+            }
+        }
+    }
+    if let Some(sh) = crate::drawing_window::sheet(app)
+        && bounds.is_positive()
+    {
+        let paper = crate::drawing_window::paint_fit(&ui.painter_at(rect), bounds, sh);
+        crate::scenario::publish_rect("drawing:paper", paper);
+        return;
+    }
     let width = (bounds.width() - t.space_24 * 2.0).clamp(0.0, 420.0);
-    let centre = Rect::from_center_size(bounds.center(), vec2(width, 140.0));
+    let centre = Rect::from_center_size(bounds.center(), vec2(width, 160.0));
+    let mut make = false;
     ui.scope_builder(egui::UiBuilder::new().max_rect(centre), |ui| {
         ui.vertical_centered(|ui| {
-            ui.heading(crate::i18n::tr_label("Drawing workspace"));
-            ui.label(crate::i18n::tr_label("No drawing sheet is available yet."));
+            ui.heading(crate::i18n::tr_label("Drawing"));
+            ui.label(crate::i18n::tr_label("No drawing of this design yet."));
             ui_kit::text(
                 ui,
-                crate::i18n::tr_label("Drawing files and the paper renderer are not implemented. Planned tools show their options where defined."),
+                crate::i18n::tr_label("Base View lays out the design's views on a sheet, with its dimensions and title block."),
                 ui_kit::Text::Note("drawing_waiting"),
             );
+            make = ui_kit::button(ui, crate::i18n::tr_label("Make the drawing"), ui_kit::Button::Primary).clicked();
         });
     });
+    if make && let Err(e) = app.run("drawing.view.base", json!({})) {
+        app.set_status(e, true);
+    }
 }
 
 fn dock(app: &SolveApp) -> &str {
@@ -146,7 +297,7 @@ fn dock(app: &SolveApp) -> &str {
 
 fn strip_size(app: &SolveApp, ui: &egui::Ui, destination: &str) -> egui::Vec2 {
     let t = Tokens::get();
-    let label = ui_kit::ContentWidth::button(ui, crate::i18n::tr_label("Sheet unavailable"));
+    let label = ui_kit::ContentWidth::button(ui, &sheet_label(app));
     let spacing = ui.spacing().item_spacing;
     let height = ui_kit::row_height().max(t.space_24);
     let measured = if destination == "under_browser" {
@@ -259,6 +410,7 @@ pub fn chrome(app: &mut SolveApp, ui: &mut egui::Ui) {
         if dock(app) != "under_browser" && needs_vertical(app, available, strip_size(app, ui, "top").x) { "under_browser" } else { dock(app) }
             .to_string();
     let position = strip_position(app, available, &destination, strip_size(app, ui, &destination));
+    let (label, has_sheet) = (sheet_label(app), crate::drawing_window::sheet(app).is_some());
     let container = Container::new(ui.ctx(), Surface::Panel);
     let frame = container.frame(ui.ctx(), Tokens::get().panel, crate::frame::Side::Left).inner_margin(4);
     let card = container.area(egui::Id::new("sc_drawing_sheets")).fixed_pos(position).show(ui.ctx(), |ui| {
@@ -274,6 +426,7 @@ pub fn chrome(app: &mut SolveApp, ui: &mut egui::Ui) {
                 if icon_action(ui, "drawing:sheets:settings", "settings", "Sheet Settings", true).clicked() {
                     app.drawing_workspace.settings_open = !app.drawing_workspace.settings_open;
                     app.drawing_workspace.options = None;
+                    app.drawing_workspace.form = Some(Form::of(app));
                 }
             };
             if destination == "under_browser" {
@@ -281,11 +434,11 @@ pub fn chrome(app: &mut SolveApp, ui: &mut egui::Ui) {
                     strip_drag(app, ui, available);
                     buttons(app, ui);
                 });
-                ui_kit::button(ui, crate::i18n::tr_label("Sheet unavailable"), ui_kit::Button::Enabled(false));
+                ui_kit::button(ui, &label, ui_kit::Button::Enabled(has_sheet));
             } else {
                 ui.horizontal(|ui| {
                     strip_drag(app, ui, available);
-                    ui_kit::button(ui, crate::i18n::tr_label("Sheet unavailable"), ui_kit::Button::Enabled(false));
+                    ui_kit::button(ui, &label, ui_kit::Button::Enabled(has_sheet));
                     buttons(app, ui);
                 });
             }
@@ -417,56 +570,122 @@ fn panel_body(app: &mut SolveApp, ui: &mut egui::Ui) {
         }
     });
     ui.separator();
+    match options {
+        None | Some("Base View") => {
+            let mut form = app.drawing_workspace.form.take().unwrap_or_else(|| Form::of(app));
+            if options.is_some() {
+                views_rows(ui, &mut form);
+            } else {
+                sheet_rows(ui, &mut form);
+            }
+            ui.separator();
+            let apply = ui_kit::button(ui, crate::i18n::tr_label("Apply"), ui_kit::Button::Primary).clicked();
+            crate::scenario::publish_target("drawing:settings:apply", ui.min_rect());
+            if apply {
+                match app.run("drawing.view.base", form.params()) {
+                    Ok(_) => crate::drawing_window::follow(app),
+                    Err(e) => app.set_status(e, true),
+                }
+            }
+            app.drawing_workspace.form = Some(form);
+        }
+        Some("Export Drawing") => export_rows(app, ui),
+        Some(kind) => {
+            ui_kit::text(
+                ui,
+                crate::i18n::tr_label("Not implemented. These options describe the planned interface; no drawing data is changed."),
+                ui_kit::Text::Note("drawing_options_pending"),
+            );
+            match kind {
+                "Projected View" => {
+                    unavailable_row(ui, "Parent view", "No drawing view available");
+                    unavailable_row(ui, "Direction", "Not configured");
+                    unavailable_row(ui, "Scale", "Inherited from parent view");
+                }
+                "Dimension" => {
+                    unavailable_row(ui, "References", "No drawing geometry available");
+                    unavailable_row(ui, "Units & precision", "Drawing defaults (not available)");
+                }
+                "Note" => {
+                    unavailable_row(ui, "Text", "Not configured");
+                    unavailable_row(ui, "Text style", "Drawing defaults (not available)");
+                }
+                _ => {}
+            }
+            ui.separator();
+            ui_kit::button(ui, crate::i18n::tr_label("Apply (not implemented)"), ui_kit::Button::Enabled(false));
+        }
+    }
+}
+
+/// A dropdown row over `options`, by index.
+fn choice_row(ui: &mut egui::Ui, label: &str, selected: &mut usize, options: &[&str]) {
+    ui_kit::row(ui, crate::i18n::tr_label(label), |ui| {
+        ui_kit::dropdown(ui, &format!("drawing_{label}"), selected, options);
+    });
+}
+
+/// Sheet Settings: the title block, the paper and the drafting defaults of the drawing.
+fn sheet_rows(ui: &mut egui::Ui, form: &mut Form) {
+    ui.heading(crate::i18n::tr_label("Drawing & title block"));
+    for ((key, label), value) in TITLE_FIELDS.iter().zip(form.title.iter_mut()) {
+        ui_kit::row(ui, crate::i18n::tr_label(label), |ui| {
+            ui_kit::cell_editor(ui, egui::Id::new(("drawing_title", *key)), value, "", false);
+        });
+    }
+    ui_kit::text(ui, crate::i18n::tr_label("Material and mass come from the design when left empty."), ui_kit::Text::Note("drawing_title_note"));
+    ui.heading(crate::i18n::tr_label("Paper & layout"));
+    choice_row(ui, "Paper size", &mut form.format, &FORMATS);
+    let mut orientation = usize::from(form.portrait);
+    choice_row(ui, "Orientation", &mut orientation, &["Landscape", "Portrait"]);
+    form.portrait = orientation == 1;
+    choice_row(ui, "Scale", &mut form.scale, &SCALES);
+    ui.heading(crate::i18n::tr_label("Drafting defaults"));
+    let mut projection = usize::from(form.third_angle);
+    choice_row(ui, "Projection", &mut projection, &["First angle (ISO E)", "Third angle (ISO A)"]);
+    form.third_angle = projection == 1;
+    ui_kit::checkbox(ui, crate::i18n::tr_label("Hidden lines, dashed"), &mut form.hidden);
+}
+
+/// Base View: which standard views the sheet shows, their projection and scale.
+fn views_rows(ui: &mut egui::Ui, form: &mut Form) {
+    ui_kit::row(ui, crate::i18n::tr_label("Source"), |ui| {
+        ui.label(crate::i18n::tr_label("Source design"));
+    });
+    let side = if form.third_angle { "Right view" } else { "Left view" };
+    for (on, label) in form.views.iter_mut().zip(["Front view", "Top view", side, "Isometric view"]) {
+        ui_kit::checkbox(ui, crate::i18n::tr_label(label), on);
+    }
+    let mut projection = usize::from(form.third_angle);
+    choice_row(ui, "Projection", &mut projection, &["First angle (ISO E)", "Third angle (ISO A)"]);
+    form.third_angle = projection == 1;
+    choice_row(ui, "Scale", &mut form.scale, &SCALES);
     ui_kit::text(
         ui,
-        crate::i18n::tr_label("Not implemented. These options describe the planned interface; no drawing data is changed."),
-        ui_kit::Text::Note("drawing_options_pending"),
+        crate::i18n::tr_label("Overall sizes and hole callouts are dimensioned with the views."),
+        ui_kit::Text::Note("drawing_views_note"),
     );
-    if let Some(kind) = options {
-        match kind {
-            "Base View" => {
-                unavailable_row(ui, "Source", "Source design");
-                unavailable_row(ui, "Orientation", "Not configured");
-                unavailable_row(ui, "Scale", "Not configured");
-            }
-            "Projected View" => {
-                unavailable_row(ui, "Parent view", "No drawing view available");
-                unavailable_row(ui, "Direction", "Not configured");
-                unavailable_row(ui, "Scale", "Inherited from parent view");
-            }
-            "Dimension" => {
-                unavailable_row(ui, "References", "No drawing geometry available");
-                unavailable_row(ui, "Units & precision", "Drawing defaults (not available)");
-            }
-            "Note" => {
-                unavailable_row(ui, "Text", "Not configured");
-                unavailable_row(ui, "Text style", "Drawing defaults (not available)");
-            }
-            _ => {}
+}
+
+/// Export: the sheet as PDF (to print), SVG or DXF (layered, for a CAD or a cutting machine).
+fn export_rows(app: &mut SolveApp, ui: &mut egui::Ui) {
+    let ready = crate::drawing_window::sheet(app).is_some();
+    if !ready {
+        ui_kit::text(ui, crate::i18n::tr_label("Make the drawing first (Layout, Base View)."), ui_kit::Text::Note("drawing_export_none"));
+    }
+    for (ext, label, note) in [
+        ("pdf", "Export PDF", "To print or send: one page, at the sheet's size."),
+        ("svg", "Export SVG", "For documents and the web, at true size."),
+        ("dxf", "Export DXF", "For a CAD program: views, hidden lines, axes, dimensions and title block on their own layers."),
+    ] {
+        if ui_kit::button(ui, crate::i18n::tr_label(label), ui_kit::Button::Enabled(ready)).clicked() {
+            crate::drawing_window::save(app, ext);
         }
-        ui.separator();
-        ui_kit::button(ui, crate::i18n::tr_label("Apply (not implemented)"), ui_kit::Button::Enabled(false));
-    } else {
-        ui.heading(crate::i18n::tr_label("Drawing & title block"));
-        unavailable_row(ui, "Title", "No drawing document");
-        unavailable_row(ui, "Title block", "Not available");
-        ui.heading(crate::i18n::tr_label("Paper & layout"));
-        unavailable_row(ui, "Size & orientation", "No sheet available");
-        unavailable_row(ui, "Border & template", "Not available");
-        ui.heading(crate::i18n::tr_label("Drafting defaults"));
-        unavailable_row(ui, "Profile & units", "No drawing document");
-        ui.separator();
-        ui.heading(crate::i18n::tr_label("Screen appearance"));
-        ui.add_enabled_ui(false, |ui| {
-            ui_kit::row(ui, crate::i18n::tr_label("Paper colour"), |ui| {
-                ui_kit::dropdown_menu(ui, "drawing_paper_colour", crate::i18n::tr_label("Auto (Theme)"), |_| {});
-            });
-        });
-        ui_kit::text(
-            ui,
-            crate::i18n::tr_label("Paper colour will be available when the sheet renderer is implemented."),
-            ui_kit::Text::Note("drawing_paper_preference"),
-        );
+        ui_kit::text(ui, crate::i18n::tr_label(note), ui_kit::Text::Note(ext));
+    }
+    if let Some((m, error)) = crate::drawing_window::message(app) {
+        let t = Tokens::get();
+        ui.label(egui::RichText::new(m).color(if *error { t.error } else { t.text_dim }));
     }
 }
 
@@ -488,11 +707,17 @@ mod tests {
         enter(&mut h.app, true).unwrap();
         assert!(start(&mut h.app, "drawing.view.base"));
         h.frames(2);
-        assert!(h.widget("Apply (not implemented)").is_some());
+        assert!(h.widget("Apply").is_some());
+        assert!(crate::scenario::rect_of("drawing:paper").is_none(), "no sheet before Apply");
+        // Apply makes the sheet: shown on the canvas, the design and its history untouched.
+        h.step(&serde_json::json!({"widget":"Apply"})).unwrap();
+        h.frames(3);
+        assert!(h.app.session.drawing.is_some());
+        assert!(crate::scenario::rect_of("drawing:paper").is_some_and(|r| r.width() > 200.0), "the sheet fills the canvas");
         assert_eq!(h.app.session.undo.len(), undo);
-        assert_eq!(h.app.session.revision, revision);
         assert!(std::sync::Arc::ptr_eq(&doc, &h.app.session.doc));
         assert_eq!(h.app.cam, cam);
+        let _ = revision;
         enter(&mut h.app, false).unwrap();
         assert_eq!(h.app.ui.tab, "SURFACE");
     }
@@ -560,8 +785,8 @@ mod tests {
             assert!(std::sync::Arc::ptr_eq(&doc, &h.app.session.doc));
             assert_eq!(h.app.cam, cam);
         }
-        assert!(!can_open_options("drawing.export"));
-        assert!(!can_open_options("drawing.update"));
+        assert!(can_open_options("drawing.export"), "Export opens its formats");
+        assert!(!can_open_options("drawing.update"), "Update runs at once");
     }
 
     fn app_width(h: &Harness) -> f32 {

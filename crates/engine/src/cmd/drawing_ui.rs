@@ -1,7 +1,8 @@
 //! Provisional Drawing ribbon metadata, not a drawing-file or persistence API.
 //!
 //! These entries reserve discoverable homes while the owning Drawing contracts land.
-//! JSON execution always refuses; the UI may show reviewed option layouts separately.
+//! JSON execution always refuses; the UI may show reviewed option layouts separately. Base View,
+//! Update Drawing and Export Drawing are real commands (`view_dxf_drawing.rs`), in their places.
 
 use super::CommandSpec;
 
@@ -36,7 +37,6 @@ pub fn pending_icon(id: &str) -> Option<&'static str> {
 }
 
 pub static COMMANDS: &[CommandSpec] = &[
-    planned!("drawing.view.base", "Base View", "4816").at("DRAWING LAYOUT", "VIEWS").icon("placeholder"),
     planned!("drawing.view.projected", "Projected View", "4816").at("DRAWING LAYOUT", "VIEWS").icon("placeholder"),
     planned!("drawing.view.section", "Section View", "4816").at("DRAWING LAYOUT", "VIEWS").icon("placeholder"),
     planned!("drawing.view.detail", "Detail View", "4816").at("DRAWING LAYOUT", "VIEWS").icon("placeholder"),
@@ -56,10 +56,8 @@ pub static COMMANDS: &[CommandSpec] = &[
     planned!("drawing.balloon", "Balloon", "3874").at("DRAWING PARTS", "ASSEMBLY").icon("placeholder"),
     planned!("drawing.table.edit", "Edit Drawing Table", "4894").at("DRAWING PARTS", "TABLES").icon("placeholder"),
     planned!("drawing.revision_table", "Revision Table", "4894").at("DRAWING PARTS", "TABLES").icon("placeholder"),
-    planned!("drawing.update", "Update Drawing", "4892").at("DRAWING REVIEW", "CHANGES").icon("placeholder"),
     planned!("drawing.check", "Check Drawing", "4894").at("DRAWING REVIEW", "CHANGES").icon("placeholder"),
     planned!("drawing.revision", "Add Drawing Revision", "4894").at("DRAWING REVIEW", "REVISION").icon("placeholder"),
-    planned!("drawing.export", "Export Drawing", "4890").at("DRAWING REVIEW", "OUTPUT").icon("export"),
     planned!("drawing.print", "Print Drawing", "4890").at("DRAWING REVIEW", "OUTPUT").icon("placeholder"),
 ];
 

@@ -556,8 +556,9 @@ pub fn enter(app: &mut crate::SolveApp, workspace: &str) -> Result<(), String> {
             app.ui.tab = "MANUFACTURE".into();
             Ok(())
         }
+        // Back from Drawing: the tab it was entered from (Surface, Sheet metal…).
+        "design" if crate::drawing_workspace::active(app) => crate::drawing_workspace::enter(app, false),
         "design" => {
-            crate::drawing_workspace::enter(app, false)?;
             leave_manufacture(app);
             crate::render_workspace::enter(app, false)
         }
@@ -687,8 +688,8 @@ mod tests {
         h.step(&json!({"click":{"handle":"button:drawing.view.base"}})).unwrap();
         h.frames(3);
         assert!(crate::scenario::rect_of("drawing:settings").is_some(), "known options open from the shared ribbon");
-        assert!(h.widget("Apply (not implemented)").is_some());
-        assert!(h.app.run("drawing.view.base", json!({})).is_err(), "the preview never enables engine execution");
+        assert!(h.widget("Apply").is_some());
+        assert!(h.app.session.drawing.is_none(), "opening Base View changes nothing");
         h.step(&json!({"click":{"handle":"drawing:settings:close"}})).unwrap();
         h.step(&json!({"click":{"handle":"tab:DRAWING PARTS"}})).unwrap();
         h.step(&json!({"click":{"handle":"button:assembly.bom"}})).unwrap();

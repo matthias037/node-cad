@@ -122,3 +122,19 @@ fn rounded_pocket_corners_are_not_holes() {
     let dims: Vec<&str> = r["dimensions"].as_array().unwrap().iter().map(|d| d.as_str().unwrap()).collect();
     assert!(dims.contains(&"4× Ø6,6") && !dims.iter().any(|d| d.contains("Ø10")), "{dims:?}");
 }
+
+/// Base View makes the sheet as drawing.create does; Update Drawing makes it again from the
+/// design as it is now, with the same sheet and title block.
+#[test]
+fn base_view_and_update_follow_the_design() {
+    let mut s = plate();
+    assert!(s.execute("drawing.update", &json!({})).is_err(), "nothing to update yet");
+    let r = run(&mut s, "drawing.view.base", json!({"format": "A2", "title": {"titre": "Platine", "numero": "PL-003"}}));
+    assert_eq!(r["format"], "A2");
+    assert!(r["dimensions"].as_array().unwrap().iter().any(|d| d == "120"), "{r}");
+    run(&mut s, "timeline.edit", json!({"feature": "Box1", "set": {"length": "150"}}));
+    let r = run(&mut s, "drawing.update", json!({}));
+    assert_eq!(r["format"], "A2", "{r}");
+    assert!(r["dimensions"].as_array().unwrap().iter().any(|d| d == "150"), "{r}");
+    assert_eq!(s.drawing.clone().unwrap()["title"]["numero"], "PL-003");
+}

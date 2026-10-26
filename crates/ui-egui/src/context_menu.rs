@@ -388,7 +388,7 @@ pub fn items(app: &SolveApp, target: &Target) -> Vec<Item> {
             v.push(
                 act("ui.workspace.drawing", "Drawing", "ws_drawing")
                     .with(json!({"workspace":"drawing"}))
-                    .key(if drawing { "current" } else { "UI preview" })
+                    .key(if drawing { "current" } else { "" })
                     .on(app.session.active_sketch.is_none() && app.tool.is_none() && app.dialog.is_none() && !app.file_load.busy()),
             );
             v
