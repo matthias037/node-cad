@@ -283,6 +283,8 @@ fn services(cc: &eframe::CreationContext<'_>) -> Services {
         browser_files: None,
         agent_http: Some(std::sync::Arc::new(agent_http)),
         secrets: Some(std::sync::Arc::new(Keychain)),
+        // The browser's `fetch` is the web host's; the desktop sends `agent_http` from a thread.
+        fetch: None,
         show_in_folder: Some(Box::new(|path| {
             let folder = std::path::Path::new(path).parent().unwrap_or_else(|| std::path::Path::new("."));
             let mut command = std::process::Command::new(if cfg!(target_os = "windows") {

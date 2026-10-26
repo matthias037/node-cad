@@ -14,6 +14,7 @@ mod disk;
 mod files;
 #[cfg(target_arch = "wasm32")]
 mod install;
+#[cfg(target_arch = "wasm32")]
 mod node_ia;
 #[cfg(any(target_arch = "wasm32", test))]
 mod space_mouse;
