@@ -584,6 +584,10 @@ fn file_menu(app: &mut SolveApp, ctx: &egui::Context) {
                     app.start("file.export_view_dxf");
                     close = true;
                 }
+                if item_if(ui, app.tr_label("Make Drawing…"), "", "export", shown) {
+                    crate::drawing_window::make(app);
+                    close = true;
+                }
                 if item_if(ui, "Export OBJ…", "", "export", shown) {
                     export(app, "obj");
                     close = true;

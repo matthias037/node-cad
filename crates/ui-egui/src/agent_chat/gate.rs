@@ -71,6 +71,9 @@ fn reads_only(id: &str) -> bool {
         // CAM that plans, simulates or writes G-code as text: the design does not change (a
         // program written to a file still asks, by its path).
         || matches!(id, "manufacture.job" | "manufacture.toolpath" | "manufacture.simulate" | "manufacture.post")
+        // A drawing is made from the design and shown: the design does not change (a drawing
+        // written to a file asks, by its path).
+        || id.starts_with("drawing.")
 }
 
 /// Commands that read or write a file by their nature: any string they are given in a path
@@ -355,5 +358,13 @@ mod tests {
         }
         assert!(matches!(command("manufacture.post", &json!({"dialect": "fanuc"}), 0), Verdict::Run { change: false }));
         assert!(matches!(command("manufacture.post", &json!({"dialect": "fanuc", "path": "~/piece.nc"}), 0), Verdict::Ask(_)));
+    }
+
+    /// NØDE IA makes drawings without a question; one written to a file asks first.
+    #[test]
+    fn drawings_are_reads_and_asks_before_writing_one() {
+        assert_eq!(command("drawing.create", &json!({"format": "A3"}), 0), Verdict::Run { change: false });
+        assert_eq!(command("drawing.export", &json!({"format": "svg"}), 0), Verdict::Run { change: false });
+        assert!(matches!(command("drawing.export", &json!({"format": "pdf", "path": "~/plan.pdf"}), 0), Verdict::Ask(_)));
     }
 }

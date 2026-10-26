@@ -9,6 +9,7 @@ use syn::{Expr, Item, Lit};
 const ALLOWED_LITERALS: &[(&str, usize, &str)] = &[
     ("dialogs.rs", 2, "preview spinners: graphic diameter, not typography"),
     ("viewport.rs", 1, "viewport status spinner: graphic diameter, not typography"),
+    ("drawing_window.rs", 1, "drawing text at the sheet's own scale (3,5 mm on paper), not interface typography"),
 ];
 
 fn test_only(attrs: &[syn::Attribute]) -> bool {

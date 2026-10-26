@@ -41,6 +41,7 @@ pub(crate) use features::{EdgeRefForm, edge_ref_form, sketch_key};
 pub use features::{auto_operation, extrude_reach};
 pub use sketch_modify::trim_piece;
 pub use view_dxf::sketch::exportable as view_dxf_exportable;
+pub use view_dxf::drawing::{Mark as DrawingMark, Sheet as DrawingSheet, dxf as drawing_dxf, marks as drawing_marks, pdf as drawing_pdf, svg as drawing_svg};
 mod component_link;
 mod config;
 mod file;
@@ -308,6 +309,7 @@ pub fn command_specs() -> Vec<&'static CommandSpec> {
     v.extend(section::COMMANDS.iter());
     v.extend(view_navigation::COMMANDS.iter());
     v.extend(view_dxf::COMMANDS.iter());
+    v.extend(view_dxf::drawing::COMMANDS.iter());
     v.extend(diagnostics::COMMANDS.iter());
     v.extend(manufacture::COMMANDS.iter());
     v.extend(manufacture_library::COMMANDS.iter());

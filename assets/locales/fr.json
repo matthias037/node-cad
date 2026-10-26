@@ -2495,5 +2495,14 @@
   "ui.sim_level_draft": "Brouillon",
   "ui.sim_level_normal": "Normal",
   "ui.sim_level_fine": "Fin",
-  "ui.sim_level_smooth": "Lisse"
+  "ui.sim_level_smooth": "Lisse",
+  "Export PDF": "Exporter en PDF",
+  "Export SVG": "Exporter en SVG",
+  "Update drawing": "Mettre à jour la mise en plan",
+  "ui.drawing_saved": "Enregistré : {name}",
+  "ui.drawing_summary": "{format} · échelle {scale} · {views} vues",
+  "cmd.drawing_create": "Créer la mise en plan",
+  "cmd.drawing_export": "Exporter la mise en plan",
+  "cmd.drawing_get": "Afficher la mise en plan",
+  "Make Drawing…": "Mise en plan…"
 }

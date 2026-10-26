@@ -2495,5 +2495,14 @@
   "ui.sim_level_draft": "Fastest",
   "ui.sim_level_normal": "Standard",
   "ui.sim_level_fine": "Finer",
-  "ui.sim_level_smooth": "Smoothest"
+  "ui.sim_level_smooth": "Smoothest",
+  "Export PDF": "Export PDF",
+  "Export SVG": "Export SVG",
+  "Update drawing": "Update drawing",
+  "ui.drawing_saved": "Saved: {name}",
+  "ui.drawing_summary": "{format} · scale {scale} · {views} views",
+  "cmd.drawing_create": "Create Drawing",
+  "cmd.drawing_export": "Export Drawing",
+  "cmd.drawing_get": "Show Drawing",
+  "Make Drawing…": "Make Drawing…"
 }

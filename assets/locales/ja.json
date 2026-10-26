@@ -2495,5 +2495,14 @@
   "ui.sim_level_draft": "ドラフト",
   "ui.sim_level_normal": "標準",
   "ui.sim_level_fine": "精細",
-  "ui.sim_level_smooth": "滑らか"
+  "ui.sim_level_smooth": "滑らか",
+  "Export PDF": "PDF に書き出し",
+  "Export SVG": "SVG に書き出し",
+  "Update drawing": "図面を更新",
+  "ui.drawing_saved": "保存しました: {name}",
+  "ui.drawing_summary": "{format} · 尺度 {scale} · {views} 投影図",
+  "cmd.drawing_create": "図面を作成",
+  "cmd.drawing_export": "図面を書き出し",
+  "cmd.drawing_get": "図面を表示",
+  "Make Drawing…": "図面を作成…"
 }

@@ -9,6 +9,9 @@ mod progress;
 mod projection;
 #[path = "view_dxf_sketch.rs"]
 pub(super) mod sketch;
+/// Mise en plan: sheets with standard views, dimensions and a title block.
+#[path = "view_dxf_drawing.rs"]
+pub(super) mod drawing;
 
 use serde_json::{Value, json};
 use solidcraft_geom::Vec2;
@@ -56,7 +59,7 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(path) = path {
         solidcraft_io::vfs::check(path).map_err(|e| crate::EngineError::Other(e.to_string()))?;
     }
-    let started = std::time::Instant::now();
+    let started = web_time::Instant::now();
     progress::Stage::new("dxf_meshes", 1).check().map_err(|e| bad(CMD, e))?;
     let meshes = meshes::prepare(s, tolerance)?;
     let prepare_ms = started.elapsed().as_secs_f64() * 1000.;

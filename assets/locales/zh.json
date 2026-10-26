@@ -2495,5 +2495,14 @@
   "ui.sim_level_draft": "草图",
   "ui.sim_level_normal": "标准",
   "ui.sim_level_fine": "精细",
-  "ui.sim_level_smooth": "平滑"
+  "ui.sim_level_smooth": "平滑",
+  "Export PDF": "导出 PDF",
+  "Export SVG": "导出 SVG",
+  "Update drawing": "更新工程图",
+  "ui.drawing_saved": "已保存：{name}",
+  "ui.drawing_summary": "{format} · 比例 {scale} · {views} 个视图",
+  "cmd.drawing_create": "创建工程图",
+  "cmd.drawing_export": "导出工程图",
+  "cmd.drawing_get": "显示工程图",
+  "Make Drawing…": "创建工程图…"
 }

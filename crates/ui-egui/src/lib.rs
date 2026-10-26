@@ -88,6 +88,8 @@ mod look_at_tests;
 mod manage_dialogs_tests;
 pub mod manufacture_job;
 pub mod manufacture_panel;
+/// The Mise en plan window.
+pub mod drawing_window;
 pub mod manufacture_side;
 pub mod manufacture_tool_view;
 mod material_card_review;
@@ -394,6 +396,8 @@ pub struct SolveApp {
     pub bom: Option<bom_panel::BomPanel>,
     /// The Machining Simulation window, when open.
     pub manufacture: Option<manufacture_panel::MfgPanel>,
+    /// The Mise en plan window (`drawing.create`).
+    pub drawing_window: drawing_window::State,
     pub manufacture_job: Option<manufacture_job::JobWindow>,
     material_card_review: Option<material_card_review::ReviewWindow>,
     /// Context menus, rename box and Properties window.
@@ -558,6 +562,7 @@ impl SolveApp {
             design_properties: None,
             bom: None,
             manufacture: None,
+            drawing_window: Default::default(),
             manufacture_job: None,
             material_card_review: None,
             menu: context_menu::MenuState::default(),
@@ -1774,6 +1779,7 @@ impl SolveApp {
         bom_panel::show(self, ui.ctx());
         manufacture_panel::show(self, ui.ctx());
         manufacture_job::show(self, ui.ctx());
+        drawing_window::show(self, ui.ctx());
         material_card_review::show(self, ui.ctx());
         recovery_ui::show(self, ui.ctx());
         stand_up::show(self, ui.ctx());
