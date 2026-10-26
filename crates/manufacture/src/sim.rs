@@ -141,10 +141,8 @@ impl Part {
                 i += 1;
             }
             let run = hits.get(start..i).unwrap_or(&[]);
-            for pair in run.chunks_exact(2) {
-                if let [p, q] = pair {
-                    spans.push([p.1, q.1]);
-                }
+            for [p, q] in run.as_chunks::<2>().0 {
+                spans.push([p.1, q.1]);
             }
             if run.len() % 2 == 1 {
                 open += 1;

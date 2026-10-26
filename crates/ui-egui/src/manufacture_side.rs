@@ -99,7 +99,7 @@ fn history_contents(app: &mut SolveApp, ui: &mut egui::Ui) {
                 for setup in job["setups"].as_array().into_iter().flatten() {
                     let id = num(setup, "id");
                     let name = text(setup, "name");
-                    let resp = crate::ui_kit::button(ui, format!("Setup {id}"), crate::ui_kit::Button::Small);
+                    let resp = crate::ui_kit::button(ui, crate::i18n::format("ui.mfg_setup_n", &[("id", &id.to_string())]), crate::ui_kit::Button::Small);
                     crate::scenario::publish_handle(&format!("mfg_history:setup:{id}"), resp.rect.center());
                     if resp.on_hover_text(name).clicked() {
                         pick = Some((Item::Setup, id));
@@ -171,7 +171,7 @@ pub fn panel(app: &mut SolveApp, ui: &mut egui::Ui) {
                     for (i, op) in job["operations"].as_array().into_iter().flatten().enumerate() {
                         let id = num(op, "id");
                         let label = format!("{}  {}  {}", i + 1, text(op, "name"), crate::i18n::tr_label(op_kind(op)));
-                        let hint = format!("T{}, setup {}", num(op, "tool"), num(op, "setup"));
+                        let hint = crate::i18n::format("ui.mfg_tool_in_setup", &[("tool", &num(op, "tool").to_string()), ("setup", &num(op, "setup").to_string())]);
                         row(ui, &label, &hint, focus == Some(id), (Item::Operation, id), pick, remove);
                     }
                     if job["operations"].as_array().is_none_or(Vec::is_empty) {
@@ -243,7 +243,7 @@ fn row(
         if clicked {
             *pick = Some(what);
         }
-        if crate::ui_kit::button(ui, "\u{00D7}", crate::ui_kit::Button::Small).on_hover_text("Delete").clicked() {
+        if crate::ui_kit::button(ui, "\u{00D7}", crate::ui_kit::Button::Small).on_hover_text(crate::i18n::tr_label("Delete")).clicked() {
             *remove = Some(what);
         }
     });

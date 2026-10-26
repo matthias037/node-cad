@@ -17,7 +17,8 @@ use solidcraft_engine::{WatchRun, watch_run};
 use crate::SolveApp;
 use crate::theme::Tokens;
 
-const DETAIL_NAMES: [&str; 4] = ["Draft", "Normal", "Fine", "Smooth"];
+/// The drawing detail levels, by their catalog keys.
+const DETAIL_NAMES: [&str; 4] = ["ui.sim_level_draft", "ui.sim_level_normal", "ui.sim_level_fine", "ui.sim_level_smooth"];
 const DIALECTS: [&str; 3] = ["grbl", "fanuc", "haas"];
 const DIALECT_NAMES: [&str; 3] = ["Grbl", "Fanuc", "Haas"];
 /// Most path segments drawn in a frame.
@@ -308,12 +309,12 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
                 let r = &run.runner;
                 let where_ = r.operations().iter().enumerate().find(|(_, o)| r.step() <= o.first_step + o.steps).map(|(_, o)| o);
                 ui.horizontal_wrapped(|ui| {
-                    ui.label(RichText::new(format!("{} of {}", clock(d.time), clock(duration))).strong());
+                    ui.label(RichText::new(crate::i18n::format("ui.sim_clock", &[("time", &clock(d.time)), ("total", &clock(duration))])).strong());
                     ui.separator();
-                    ui.label(format!("Removed {}", mm3(r.removed())));
+                    ui.label(crate::i18n::format("ui.sim_removed", &[("volume", &mm3(r.removed()))]));
                     if let Some(o) = where_ {
                         ui.separator();
-                        ui.label(format!("Operation {}  T{}", o.operation, o.tool.id));
+                        ui.label(crate::i18n::format("ui.sim_operation", &[("operation", &o.operation.to_string()), ("tool", &o.tool.id.to_string())]));
                     }
                 });
                 let mut time = d.time;
@@ -322,40 +323,42 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
                     d.time = time;
                 }
                 ui.horizontal(|ui| {
-                    play = crate::ui_kit::button(ui, if d.playing { "Pause" } else { "Play" }, crate::ui_kit::Button::Normal).clicked();
-                    rewind = crate::ui_kit::button(ui, "Rewind", crate::ui_kit::Button::Normal).clicked();
+                    play = crate::ui_kit::button(ui, crate::i18n::tr_label(if d.playing { "Pause" } else { "Play" }), crate::ui_kit::Button::Normal).clicked();
+                    rewind = crate::ui_kit::button(ui, crate::i18n::tr_label("Rewind"), crate::ui_kit::Button::Normal).clicked();
                 });
                 ui.horizontal_wrapped(|ui| {
-                    crate::ui_kit::checkbox(ui, "Show stock", &mut d.show_stock);
-                    crate::ui_kit::checkbox(ui, "Show toolpath", &mut d.show_path);
-                    crate::ui_kit::checkbox(ui, "Show tool", &mut d.show_tool);
-                    crate::ui_kit::checkbox(ui, "Show G-code", &mut d.show_gcode);
-                    crate::ui_kit::checkbox(ui, "Check collisions", &mut d.collisions);
+                    crate::ui_kit::checkbox(ui, crate::i18n::tr_label("Show stock"), &mut d.show_stock);
+                    crate::ui_kit::checkbox(ui, crate::i18n::tr_label("Show toolpath"), &mut d.show_path);
+                    crate::ui_kit::checkbox(ui, crate::i18n::tr_label("Show tool"), &mut d.show_tool);
+                    crate::ui_kit::checkbox(ui, crate::i18n::tr_label("Show G-code"), &mut d.show_gcode);
+                    crate::ui_kit::checkbox(ui, crate::i18n::tr_label("Check collisions"), &mut d.collisions);
                 });
                 ui.horizontal(|ui| {
-                    ui.label("Speed");
+                    ui.label(crate::i18n::tr_label("Speed"));
                     crate::ui_kit::slider(
                         ui,
                         &mut d.speed_log,
                         -1.0..=4.0,
-                        crate::ui_kit::Slider { format: |v| format!("×{:.1} real time", 10f64.powf(v)), ..Default::default() },
+                        crate::ui_kit::Slider { format: |v| crate::i18n::format("ui.sim_times_real", &[("factor", &format!("{:.1}", 10f64.powf(v)))]), ..Default::default() },
                     );
                 });
             }
             ui.separator();
             ui.horizontal(|ui| {
-                ui.label("Drawing detail");
-                crate::ui_kit::segmented(ui, &mut d.detail, &DETAIL_NAMES, crate::ui_kit::Segments::default());
+                ui.label(crate::i18n::tr_label("Drawing detail"));
+                // Their own keys: « Draft » is also the draft angle in a catalog.
+                let names = DETAIL_NAMES.map(crate::i18n::tr);
+                crate::ui_kit::segmented(ui, &mut d.detail, &names, crate::ui_kit::Segments::default());
             })
             .response
-            .on_hover_text("How finely the stock is drawn: more cells look smoother and cost more as the program runs. The cells for each level are in Preferences, Simulation.");
+            .on_hover_text(crate::i18n::tr_label("How finely the stock is drawn: more cells look smoother and cost more as the program runs. The cells for each level are in Preferences, Simulation."));
             if d.collisions {
                 ui.horizontal(|ui| {
-                    ui.label("Check resolution (mm)");
+                    ui.label(crate::i18n::tr_label("Check resolution (mm)"));
                     crate::ui_kit::number_field(ui, &mut d.resolution, 0.05..=10.0, 0.05, "");
                 })
                 .response
-                .on_hover_text("The cell size of the collision check only; it does not change how the stock is drawn. Smaller is more exact and slower.");
+                .on_hover_text(crate::i18n::tr_label("The cell size of the collision check only; it does not change how the stock is drawn. Smaller is more exact and slower."));
                 if let Some(check) = &d.check {
                     let counts = &check["counts"];
                     let n = |k: &str| counts[k].as_u64().unwrap_or(0);

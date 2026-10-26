@@ -376,13 +376,13 @@ fn tools_tab(app: &mut SolveApp, w: &mut JobWindow, ui: &mut egui::Ui, job: &Val
     for tool in job["tools"].as_array().into_iter().flatten() {
         ui.horizontal(|ui| {
             ui.label(tool_line(tool));
-            if crate::ui_kit::button(ui, "Edit", crate::ui_kit::Button::Small).clicked() {
+            if crate::ui_kit::button(ui, crate::i18n::tr_label("Edit"), crate::ui_kit::Button::Small).clicked() {
                 act = Some((0, u(tool, "id")));
             }
-            if crate::ui_kit::button(ui, "Save to library", crate::ui_kit::Button::Small).clicked() {
+            if crate::ui_kit::button(ui, crate::i18n::tr_label("Save to library"), crate::ui_kit::Button::Small).clicked() {
                 act = Some((2, u(tool, "id")));
             }
-            if crate::ui_kit::button(ui, "Delete", crate::ui_kit::Button::Small).clicked() {
+            if crate::ui_kit::button(ui, crate::i18n::tr_label("Delete"), crate::ui_kit::Button::Small).clicked() {
                 act = Some((1, u(tool, "id")));
             }
         });
@@ -411,27 +411,27 @@ fn tools_tab(app: &mut SolveApp, w: &mut JobWindow, ui: &mut egui::Ui, job: &Val
     ui.separator();
     let d = &mut w.tool;
     ui.label(RichText::new(if d.id == 0 { "New tool" } else { "Edit tool" }).strong());
-    field_row(ui, "Name", |ui| crate::ui_kit::field(ui, &mut d.name));
+    field_row(ui, crate::i18n::tr_label("Name"), |ui| crate::ui_kit::field(ui, &mut d.name));
     let before = d.kind;
-    field_row(ui, "Type", |ui| crate::ui_kit::dropdown(ui, "mfg_tool_kind", &mut d.kind, &KINDS));
+    field_row(ui, crate::i18n::tr_label("Type"), |ui| crate::ui_kit::dropdown(ui, "mfg_tool_kind", &mut d.kind, &KINDS));
     if d.kind != before {
         let chosen = d.kind;
         d.use_kind(chosen);
     }
-    num(ui, "Diameter", &mut d.diameter, 0.05..=500.0, " mm");
-    field_row(ui, "Flutes", |ui| crate::ui_kit::number_field(ui, &mut d.flutes, 1..=16, 0.1, ""));
+    num(ui, crate::i18n::tr_label("Diameter"), &mut d.diameter, 0.05..=500.0, " mm");
+    field_row(ui, crate::i18n::tr_label("Flutes"), |ui| crate::ui_kit::number_field(ui, &mut d.flutes, 1..=16, 0.1, ""));
     if d.kind == BULL_NOSE {
-        num(ui, "Corner radius", &mut d.corner_radius, 0.0..=250.0, " mm");
+        num(ui, crate::i18n::tr_label("Corner radius"), &mut d.corner_radius, 0.0..=250.0, " mm");
     }
     if d.has_point() {
-        num(ui, "Point angle", &mut d.tip_angle, 1.0..=179.0, " deg");
+        num(ui, crate::i18n::tr_label("Point angle"), &mut d.tip_angle, 1.0..=179.0, " deg");
     }
-    num(ui, "Flute length (0: not checked)", &mut d.flute_length, 0.0..=2000.0, " mm");
-    num(ui, "Shank diameter (0: same as the tool)", &mut d.shank_diameter, 0.0..=500.0, " mm");
+    num(ui, crate::i18n::tr_label("Flute length (0: not checked)"), &mut d.flute_length, 0.0..=2000.0, " mm");
+    num(ui, crate::i18n::tr_label("Shank diameter (0: same as the tool)"), &mut d.shank_diameter, 0.0..=500.0, " mm");
     let mut save = false;
     ui.horizontal(|ui| {
         save = crate::ui_kit::button(ui, if d.id == 0 { "Add tool" } else { "Save tool" }, crate::ui_kit::Button::Normal).clicked();
-        if d.id != 0 && crate::ui_kit::button(ui, "New tool", crate::ui_kit::Button::Normal).clicked() {
+        if d.id != 0 && crate::ui_kit::button(ui, crate::i18n::tr_label("New tool"), crate::ui_kit::Button::Normal).clicked() {
             *d = ToolDraft::new();
         }
     });
@@ -458,7 +458,7 @@ fn tools_tab(app: &mut SolveApp, w: &mut JobWindow, ui: &mut egui::Ui, job: &Val
     }
     ui.separator();
     ui.label(RichText::new("Saved tools").strong());
-    note(ui, "Kept on this computer for every design. Add one to the design to use it.");
+    note(ui, crate::i18n::tr_label("Kept on this computer for every design. Add one to the design to use it."));
     let mut library_act: Option<(bool, String)> = None;
     match &w.library {
         Some(Ok(tools)) if tools.is_empty() => {
@@ -468,10 +468,10 @@ fn tools_tab(app: &mut SolveApp, w: &mut JobWindow, ui: &mut egui::Ui, job: &Val
             for tool in tools {
                 ui.horizontal(|ui| {
                     ui.label(tool_line(tool).split_once("  ").map_or(String::new(), |(_, rest)| rest.to_string()));
-                    if crate::ui_kit::button(ui, "Add to design", crate::ui_kit::Button::Small).clicked() {
+                    if crate::ui_kit::button(ui, crate::i18n::tr_label("Add to design"), crate::ui_kit::Button::Small).clicked() {
                         library_act = Some((true, s(tool, "name")));
                     }
-                    if crate::ui_kit::button(ui, "Remove", crate::ui_kit::Button::Small).clicked() {
+                    if crate::ui_kit::button(ui, crate::i18n::tr_label("Remove"), crate::ui_kit::Button::Small).clicked() {
                         library_act = Some((false, s(tool, "name")));
                     }
                 });
@@ -542,10 +542,10 @@ fn setups_tab(app: &mut SolveApp, w: &mut JobWindow, ui: &mut egui::Ui, job: &Va
     for setup in job["setups"].as_array().into_iter().flatten() {
         ui.horizontal(|ui| {
             ui.label(format!("{}  {}  G{}", u(setup, "id"), s(setup, "name"), u(setup, "work_offset")));
-            if crate::ui_kit::button(ui, "Edit", crate::ui_kit::Button::Small).clicked() {
+            if crate::ui_kit::button(ui, crate::i18n::tr_label("Edit"), crate::ui_kit::Button::Small).clicked() {
                 act = Some((true, u(setup, "id")));
             }
-            if crate::ui_kit::button(ui, "Delete", crate::ui_kit::Button::Small).clicked() {
+            if crate::ui_kit::button(ui, crate::i18n::tr_label("Delete"), crate::ui_kit::Button::Small).clicked() {
                 act = Some((false, u(setup, "id")));
             }
         });
@@ -565,29 +565,29 @@ fn setups_tab(app: &mut SolveApp, w: &mut JobWindow, ui: &mut egui::Ui, job: &Va
     ui.separator();
     let d = &mut w.setup;
     ui.label(RichText::new(if d.id == 0 { "New setup" } else { "Edit setup" }).strong());
-    field_row(ui, "Name", |ui| crate::ui_kit::field(ui, &mut d.name));
+    field_row(ui, crate::i18n::tr_label("Name"), |ui| crate::ui_kit::field(ui, &mut d.name));
     let before = d.plane;
     if d.custom.is_some() {
-        note(ui, "This setup has a work frame that is none of XY, XZ or YZ; it is kept as it is.");
+        note(ui, crate::i18n::tr_label("This setup has a work frame that is none of XY, XZ or YZ; it is kept as it is."));
     } else {
-        field_row(ui, "Work plane", |ui| crate::ui_kit::dropdown(ui, "mfg_setup_plane", &mut d.plane, &PLANES));
+        field_row(ui, crate::i18n::tr_label("Work plane"), |ui| crate::ui_kit::dropdown(ui, "mfg_setup_plane", &mut d.plane, &PLANES));
     }
     if d.plane != before {
         d.custom = None;
     }
-    vec3_row(ui, "Zero point (model)", &mut d.origin);
-    crate::ui_kit::checkbox(ui, "Stock", &mut d.has_stock);
+    vec3_row(ui, crate::i18n::tr_label("Zero point (model)"), &mut d.origin);
+    crate::ui_kit::checkbox(ui, crate::i18n::tr_label("Stock"), &mut d.has_stock);
     if d.has_stock {
-        vec3_row(ui, "Stock min", &mut d.stock_min);
-        vec3_row(ui, "Stock max", &mut d.stock_max);
-        note(ui, "The stock is drawn in the model view as you type: a box from min to max, measured from the zero point.");
+        vec3_row(ui, crate::i18n::tr_label("Stock min"), &mut d.stock_min);
+        vec3_row(ui, crate::i18n::tr_label("Stock max"), &mut d.stock_max);
+        note(ui, crate::i18n::tr_label("The stock is drawn in the model view as you type: a box from min to max, measured from the zero point."));
     }
-    field_row(ui, "Work offset (G54 to G59)", |ui| crate::ui_kit::number_field(ui, &mut d.work_offset, 54..=59, 0.1, ""));
-    num(ui, "Clearance height", &mut d.clearance, 0.0..=1.0e4, " mm");
+    field_row(ui, crate::i18n::tr_label("Work offset (G54 to G59)"), |ui| crate::ui_kit::number_field(ui, &mut d.work_offset, 54..=59, 0.1, ""));
+    num(ui, crate::i18n::tr_label("Clearance height"), &mut d.clearance, 0.0..=1.0e4, " mm");
     let mut save = false;
     ui.horizontal(|ui| {
         save = crate::ui_kit::button(ui, if d.id == 0 { "Add setup" } else { "Save setup" }, crate::ui_kit::Button::Normal).clicked();
-        if d.id != 0 && crate::ui_kit::button(ui, "New setup", crate::ui_kit::Button::Normal).clicked() {
+        if d.id != 0 && crate::ui_kit::button(ui, crate::i18n::tr_label("New setup"), crate::ui_kit::Button::Normal).clicked() {
             let keep = (d.stock_min, d.stock_max, d.origin);
             *d = JobWindow::new().setup;
             (d.stock_min, d.stock_max, d.origin) = keep;
@@ -662,7 +662,7 @@ fn load_operation(base: &OpDraft, x: &Value) -> OpDraft {
 
 fn operations_tab(app: &mut SolveApp, w: &mut JobWindow, ui: &mut egui::Ui, job: &Value) {
     let t = Tokens::get();
-    crate::ui_kit::checkbox(ui, "Show toolpaths on the part", &mut w.show_paths);
+    crate::ui_kit::checkbox(ui, crate::i18n::tr_label("Show toolpaths on the part"), &mut w.show_paths);
     if w.show_paths {
         note(
             ui,
@@ -681,18 +681,18 @@ fn operations_tab(app: &mut SolveApp, w: &mut JobWindow, ui: &mut egui::Ui, job:
             };
             let marker = if w.focus_op == Some(id) { "\u{25B6} " } else { "" };
             ui.label(format!("{marker}{}  {}  {}  T{}  setup {}", id, s(op, "name"), crate::i18n::tr_label(kind), u(op, "tool"), u(op, "setup")));
-            if crate::ui_kit::button(ui, "Edit", crate::ui_kit::Button::Small).clicked() {
+            if crate::ui_kit::button(ui, crate::i18n::tr_label("Edit"), crate::ui_kit::Button::Small).clicked() {
                 act = Some((0, id));
             }
-            if crate::ui_kit::button(ui, "Check path", crate::ui_kit::Button::Small).clicked() {
+            if crate::ui_kit::button(ui, crate::i18n::tr_label("Check path"), crate::ui_kit::Button::Small).clicked() {
                 act = Some((1, id));
             }
-            if crate::ui_kit::button(ui, "Delete", crate::ui_kit::Button::Small).clicked() {
+            if crate::ui_kit::button(ui, crate::i18n::tr_label("Delete"), crate::ui_kit::Button::Small).clicked() {
                 act = Some((2, id));
             }
         });
         if let Some(why) = w.paths.ops.iter().find(|p| p.id == id).and_then(|p| p.note.as_deref()) {
-            ui.label(RichText::new(format!("No toolpath: {why}")).small().color(t.error));
+            ui.label(RichText::new(crate::i18n::format("ui.mfg_no_toolpath", &[("why", why)])).small().color(t.error));
         }
     }
     if job["operations"].as_array().is_none_or(Vec::is_empty) {
@@ -710,12 +710,15 @@ fn operations_tab(app: &mut SolveApp, w: &mut JobWindow, ui: &mut egui::Ui, job:
                 w.focus_op = Some(id);
                 if let Some(v) = run(app, w, OPERATIONS, "manufacture.toolpath", json!({"operation": id}), "") {
                     let st = &v["stats"];
-                    let mut text = format!(
-                        "Operation {id}: {} moves, {:.1} min, cutting {:.0} mm, rapid {:.0} mm",
-                        v["moves"],
-                        f(st, "minutes"),
-                        f(st, "feed_length"),
-                        f(st, "rapid_length")
+                    let mut text = crate::i18n::format(
+                        "ui.mfg_toolpath_stats",
+                        &[
+                            ("id", &id.to_string()),
+                            ("moves", &v["moves"].to_string()),
+                            ("minutes", &format!("{:.1}", f(st, "minutes"))),
+                            ("cutting", &format!("{:.0}", f(st, "feed_length"))),
+                            ("rapid", &format!("{:.0}", f(st, "rapid_length"))),
+                        ],
                     );
                     for warning in v["warnings"].as_array().into_iter().flatten().filter_map(Value::as_str) {
                         text.push_str(&format!("\n{warning}"));
@@ -735,10 +738,10 @@ fn operations_tab(app: &mut SolveApp, w: &mut JobWindow, ui: &mut egui::Ui, job:
     let sketches = sketch_names(app);
     let d = &mut w.op;
     ui.label(RichText::new(if d.id == 0 { "New operation" } else { "Edit operation" }).strong());
-    field_row(ui, "Name", |ui| crate::ui_kit::field(ui, &mut d.name));
-    field_row(ui, "Operation", |ui| crate::ui_kit::dropdown(ui, "mfg_op_kind", &mut d.kind, &OPS));
-    field_row(ui, "Setup number", |ui| crate::ui_kit::number_field(ui, &mut d.setup, 1..=999, 0.1, ""));
-    field_row(ui, "Tool number", |ui| crate::ui_kit::number_field(ui, &mut d.tool, 1..=999, 0.1, ""));
+    field_row(ui, crate::i18n::tr_label("Name"), |ui| crate::ui_kit::field(ui, &mut d.name));
+    field_row(ui, crate::i18n::tr_label("Operation"), |ui| crate::ui_kit::dropdown(ui, "mfg_op_kind", &mut d.kind, &OPS));
+    field_row(ui, crate::i18n::tr_label("Setup number"), |ui| crate::ui_kit::number_field(ui, &mut d.setup, 1..=999, 0.1, ""));
+    field_row(ui, crate::i18n::tr_label("Tool number"), |ui| crate::ui_kit::number_field(ui, &mut d.tool, 1..=999, 0.1, ""));
     if matches!(d.kind, 1..=3) {
         let mut at = sketches.iter().position(|n| *n == d.sketch).unwrap_or(0);
         if sketches.is_empty() {
@@ -746,7 +749,7 @@ fn operations_tab(app: &mut SolveApp, w: &mut JobWindow, ui: &mut egui::Ui, job:
         } else {
             let names: Vec<&str> = sketches.iter().map(String::as_str).collect();
             let before = at;
-            field_row(ui, "Sketch", |ui| crate::ui_kit::dropdown(ui, "mfg_op_sketch", &mut at, &names));
+            field_row(ui, crate::i18n::tr_label("Sketch"), |ui| crate::ui_kit::dropdown(ui, "mfg_op_sketch", &mut at, &names));
             if at != before || d.sketch.is_empty() {
                 d.sketch = sketches.get(at).cloned().unwrap_or_default();
             }
@@ -754,48 +757,48 @@ fn operations_tab(app: &mut SolveApp, w: &mut JobWindow, ui: &mut egui::Ui, job:
     }
     match d.kind {
         0 => {
-            num(ui, "Overhang", &mut d.margin, 0.0..=1.0e3, " mm");
-            num(ui, "Stepover (fraction of diameter)", &mut d.stepover, 0.05..=1.0, "");
+            num(ui, crate::i18n::tr_label("Overhang"), &mut d.margin, 0.0..=1.0e3, " mm");
+            num(ui, crate::i18n::tr_label("Stepover (fraction of diameter)"), &mut d.stepover, 0.05..=1.0, "");
         }
         1 => {
-            field_row(ui, "Side", |ui| crate::ui_kit::dropdown(ui, "mfg_op_side", &mut d.side, &SIDES));
-            field_row(ui, "Direction", |ui| crate::ui_kit::dropdown(ui, "mfg_op_dir", &mut d.direction, &DIRECTIONS));
-            num(ui, "Stock to leave on walls", &mut d.allowance, 0.0..=50.0, " mm");
+            field_row(ui, crate::i18n::tr_label("Side"), |ui| crate::ui_kit::dropdown(ui, "mfg_op_side", &mut d.side, &SIDES));
+            field_row(ui, crate::i18n::tr_label("Direction"), |ui| crate::ui_kit::dropdown(ui, "mfg_op_dir", &mut d.direction, &DIRECTIONS));
+            num(ui, crate::i18n::tr_label("Stock to leave on walls"), &mut d.allowance, 0.0..=50.0, " mm");
         }
         2 => {
-            field_row(ui, "Direction", |ui| crate::ui_kit::dropdown(ui, "mfg_op_dir", &mut d.direction, &DIRECTIONS));
-            num(ui, "Stepover (fraction of diameter)", &mut d.stepover, 0.05..=1.0, "");
-            num(ui, "Stock to leave on walls", &mut d.allowance, 0.0..=50.0, " mm");
-            crate::ui_kit::checkbox(ui, "Finish pass", &mut d.finish);
+            field_row(ui, crate::i18n::tr_label("Direction"), |ui| crate::ui_kit::dropdown(ui, "mfg_op_dir", &mut d.direction, &DIRECTIONS));
+            num(ui, crate::i18n::tr_label("Stepover (fraction of diameter)"), &mut d.stepover, 0.05..=1.0, "");
+            num(ui, crate::i18n::tr_label("Stock to leave on walls"), &mut d.allowance, 0.0..=50.0, " mm");
+            crate::ui_kit::checkbox(ui, crate::i18n::tr_label("Finish pass"), &mut d.finish);
         }
         _ => {}
     }
     if matches!(d.kind, 1 | 2) {
-        field_row(ui, "Entry into each depth", |ui| crate::ui_kit::dropdown(ui, "mfg_op_entry", &mut d.entry, &ENTRIES));
+        field_row(ui, crate::i18n::tr_label("Entry into each depth"), |ui| crate::ui_kit::dropdown(ui, "mfg_op_entry", &mut d.entry, &ENTRIES));
         match d.entry {
-            1 => num(ui, "Ramp angle", &mut d.ramp_angle, 0.1..=45.0, " deg"),
+            1 => num(ui, crate::i18n::tr_label("Ramp angle"), &mut d.ramp_angle, 0.1..=45.0, " deg"),
             2 => {
-                num(ui, "Helix angle", &mut d.helix_angle, 0.1..=45.0, " deg");
-                num(ui, "Helix diameter (0: 90% of the tool)", &mut d.helix_diameter, 0.0..=1.0e3, " mm");
-                note(ui, "A helix that does not fit the outline ramps instead; the plan says so.");
+                num(ui, crate::i18n::tr_label("Helix angle"), &mut d.helix_angle, 0.1..=45.0, " deg");
+                num(ui, crate::i18n::tr_label("Helix diameter (0: 90% of the tool)"), &mut d.helix_diameter, 0.0..=1.0e3, " mm");
+                note(ui, crate::i18n::tr_label("A helix that does not fit the outline ramps instead; the plan says so."));
             }
             _ => {}
         }
     }
-    num(ui, "Top of cut (work Z)", &mut d.top, -1.0e4..=1.0e4, " mm");
-    num(ui, "Bottom of cut (work Z)", &mut d.bottom, -1.0e4..=1.0e4, " mm");
-    num(ui, "Retract above top", &mut d.retract, 0.0..=1.0e3, " mm");
+    num(ui, crate::i18n::tr_label("Top of cut (work Z)"), &mut d.top, -1.0e4..=1.0e4, " mm");
+    num(ui, crate::i18n::tr_label("Bottom of cut (work Z)"), &mut d.bottom, -1.0e4..=1.0e4, " mm");
+    num(ui, crate::i18n::tr_label("Retract above top"), &mut d.retract, 0.0..=1.0e3, " mm");
     if d.kind != 3 {
-        num(ui, "Step down (0: half the tool)", &mut d.stepdown, 0.0..=1.0e3, " mm");
+        num(ui, crate::i18n::tr_label("Step down (0: half the tool)"), &mut d.stepdown, 0.0..=1.0e3, " mm");
     }
-    num(ui, "Spindle speed", &mut d.spindle_rpm, 1.0..=1.0e5, " rpm");
-    num(ui, "Feed", &mut d.feed, 1.0..=1.0e5, " mm/min");
-    num(ui, "Plunge / entry feed (0: automatic)", &mut d.plunge_feed, 0.0..=1.0e5, " mm/min");
-    crate::ui_kit::checkbox(ui, "Coolant", &mut d.coolant);
+    num(ui, crate::i18n::tr_label("Spindle speed"), &mut d.spindle_rpm, 1.0..=1.0e5, " rpm");
+    num(ui, crate::i18n::tr_label("Feed"), &mut d.feed, 1.0..=1.0e5, " mm/min");
+    num(ui, crate::i18n::tr_label("Plunge / entry feed (0: automatic)"), &mut d.plunge_feed, 0.0..=1.0e5, " mm/min");
+    crate::ui_kit::checkbox(ui, crate::i18n::tr_label("Coolant"), &mut d.coolant);
     let mut save = false;
     ui.horizontal(|ui| {
         save = crate::ui_kit::button(ui, if d.id == 0 { "Add operation" } else { "Save operation" }, crate::ui_kit::Button::Normal).clicked();
-        if d.id != 0 && crate::ui_kit::button(ui, "New operation", crate::ui_kit::Button::Normal).clicked() {
+        if d.id != 0 && crate::ui_kit::button(ui, crate::i18n::tr_label("New operation"), crate::ui_kit::Button::Normal).clicked() {
             d.id = 0;
         }
     });
@@ -888,13 +891,13 @@ fn refresh_paths(app: &mut SolveApp, w: &mut JobWindow, job: &Value) {
 
 fn program_tab(app: &mut SolveApp, w: &mut JobWindow, ui: &mut egui::Ui) {
     let t = Tokens::get();
-    field_row(ui, "Controller", |ui| crate::ui_kit::dropdown(ui, "mfg_dialect", &mut w.dialect, &DIALECTS));
-    field_row(ui, "Program name", |ui| crate::ui_kit::field(ui, &mut w.program_name));
-    crate::ui_kit::checkbox(ui, "Line numbers", &mut w.line_numbers);
+    field_row(ui, crate::i18n::tr_label("Controller"), |ui| crate::ui_kit::dropdown(ui, "mfg_dialect", &mut w.dialect, &DIALECTS));
+    field_row(ui, crate::i18n::tr_label("Program name"), |ui| crate::ui_kit::field(ui, &mut w.program_name));
+    crate::ui_kit::checkbox(ui, crate::i18n::tr_label("Line numbers"), &mut w.line_numbers);
     let mut make = false;
     ui.horizontal(|ui| {
-        make = crate::ui_kit::button(ui, "Generate G-code", crate::ui_kit::Button::Normal).clicked();
-        if crate::ui_kit::button(ui, "Simulate Machining", crate::ui_kit::Button::Normal).clicked() {
+        make = crate::ui_kit::button(ui, crate::i18n::tr_label("Generate G-code"), crate::ui_kit::Button::Normal).clicked();
+        if crate::ui_kit::button(ui, crate::i18n::tr_label("Simulate Machining"), crate::ui_kit::Button::Normal).clicked() {
             crate::manufacture_panel::open(app);
         }
     });
@@ -922,9 +925,9 @@ fn program_tab(app: &mut SolveApp, w: &mut JobWindow, ui: &mut egui::Ui) {
         let mut copy = false;
         let mut save = false;
         ui.horizontal(|ui| {
-            copy = crate::ui_kit::button(ui, "Copy", crate::ui_kit::Button::Normal).clicked();
+            copy = crate::ui_kit::button(ui, crate::i18n::tr_label("Copy"), crate::ui_kit::Button::Normal).clicked();
             crate::ui_kit::field(ui, &mut w.path);
-            save = crate::ui_kit::button(ui, "Save file", crate::ui_kit::Button::Enabled(!w.path.trim().is_empty())).clicked();
+            save = crate::ui_kit::button(ui, crate::i18n::tr_label("Save file"), crate::ui_kit::Button::Enabled(!w.path.trim().is_empty())).clicked();
         });
         if copy {
             ui.ctx().copy_text(text.clone());
@@ -1112,7 +1115,7 @@ fn paint_stock_box(d: &SetupDraft, painter: &egui::Painter, proj: &crate::viewpo
         painter.text(
             *p + egui::vec2(8.0, -6.0),
             Align2::LEFT_BOTTOM,
-            format!("Stock {:.1} \u{D7} {:.1} \u{D7} {:.1} mm", size(0), size(1), size(2)),
+            crate::i18n::format("ui.mfg_stock_size", &[("x", &format!("{:.1}", size(0))), ("y", &format!("{:.1}", size(1))), ("z", &format!("{:.1}", size(2)))]),
             egui::FontId::proportional(t.font_small),
             t.text,
         );

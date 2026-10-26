@@ -68,6 +68,9 @@ fn reads_only(id: &str) -> bool {
         || id.ends_with(".inspect")
         || id.ends_with(".list")
         || matches!(id, "edit.checkpoint" | "render.status" | "render.backends" | "render.settings.get" | "file.slicers" | "engine.describe")
+        // CAM that plans, simulates or writes G-code as text: the design does not change (a
+        // program written to a file still asks, by its path).
+        || matches!(id, "manufacture.job" | "manufacture.toolpath" | "manufacture.simulate" | "manufacture.post")
 }
 
 /// Commands that read or write a file by their nature: any string they are given in a path
@@ -340,5 +343,17 @@ mod tests {
         let elsewhere = json!({"path": "/home/u/Desktop/shot.png", "allow_paths": ["/tmp/solidcraft-mcp-41-a3", "/home/u/Desktop"]});
         assert!(matches!(request("ui.screenshot", &elsewhere, 0), Verdict::Ask(_)));
         assert_eq!(request("ui.render", &json!({"width": 400}), 0), Verdict::Run { change: false });
+    }
+
+    /// NØDE IA drives the CAM: setups, tools and operations change the design; planning,
+    /// simulating and G-code as text only read it; a program written to a file asks first.
+    #[test]
+    fn cam_plans_and_simulates_as_reads_and_asks_before_writing_a_program() {
+        assert!(matches!(command("manufacture.operation.set", &json!({"setup": 1, "tool": 1}), 0), Verdict::Run { change: true }));
+        for id in ["manufacture.job", "manufacture.toolpath", "manufacture.simulate"] {
+            assert!(matches!(command(id, &json!({}), 0), Verdict::Run { change: false }), "{id}");
+        }
+        assert!(matches!(command("manufacture.post", &json!({"dialect": "fanuc"}), 0), Verdict::Run { change: false }));
+        assert!(matches!(command("manufacture.post", &json!({"dialect": "fanuc", "path": "~/piece.nc"}), 0), Verdict::Ask(_)));
     }
 }
