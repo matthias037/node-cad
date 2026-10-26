@@ -1823,3 +1823,24 @@ fn describe_command_and_strict_parameter_checking() {
     let m = tool(&mut s, "measure", json!({}));
     assert_eq!(m["body_count"], json!(0), "{m}");
 }
+
+/// A pocket cut away from the part removes nothing: the batch is kept, and its check says so
+/// before the agent reports a pocket that is not there.
+#[test]
+fn a_batch_reports_a_cut_that_removed_nothing() {
+    let mut s = server();
+    let c = |cmd: &str, p: Value| json!({"command": cmd, "params": p});
+    let r = tool(
+        &mut s,
+        "batch",
+        json!({"commands": [
+            c("solid.box", json!({"length": 100, "width": 60, "height": 20, "body_name": "Plaque"})),
+            c("sketch.create", json!({"plane": "XY", "offset": 20})),
+            c("sketch.rectangle.two_point", json!({"p0": [20, 15], "p1": [80, 45]})),
+            c("sketch.finish", json!({})),
+            c("solid.extrude", json!({"distance": 8, "operation": "cut"})),
+        ]}),
+    );
+    assert_eq!(r["check"]["empty_cuts"], json!(["Extrude1"]), "{r}");
+    assert!(r["check"]["fix_before_reporting"][0].as_str().is_some_and(|f| f.starts_with("empty_cuts")), "{r}");
+}

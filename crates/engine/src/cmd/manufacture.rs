@@ -187,6 +187,21 @@ fn setup_set(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let setup: mf::Setup = patched(existing.as_ref(), id, &m, cmd)?;
     setup.validate().map_err(|e| bad(cmd, e.to_string()))?;
+    // A stock reaching the clearance height has every rapid cut through it: most often a stock
+    // given in model coordinates (NØDE IA's contour bench, 26/10/2026).
+    if let Some(stock) = &setup.stock
+        && stock.max[2] >= setup.clearance
+    {
+        return Err(bad(
+            cmd,
+            format!(
+                "the stock's top (work Z {}) reaches the clearance height ({}): every rapid would cut it. The stock is in work \
+                 coordinates, Z 0 at the origin (usually the top of the part): for a part H thick under an origin on its top, \
+                 stock Z runs from -(H + 1) to 1",
+                stock.max[2], setup.clearance
+            ),
+        ));
+    }
     upsert(&mut job.setups, setup.clone(), |x| x.id == id);
     store(s, job, cmd)?;
     Ok(json!({"setup": setup, "created": existing.is_none()}))

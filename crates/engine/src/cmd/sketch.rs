@@ -464,7 +464,11 @@ pub(super) fn parg(sk: &mut Sketch, doc: &solidcraft_doc::Document, v: &Value, c
     if let Some(at) = v.get("at").and_then(vec2) {
         return Ok(PArg::At(at));
     }
-    Err(bad(cmd, "a point must be [x, y], a point id like \"l1.end\", or {at, ref}"))
+    Err(bad(
+        cmd,
+        "a point must be [x, y] (numbers, or parameter expressions as text: [\"L - 20\", \"D / 2\"], never {expression}), \
+         a point id like \"l1.end\", or {at, ref}",
+    ))
 }
 
 pub(super) fn req_parg(sk: &mut Sketch, doc: &solidcraft_doc::Document, p: &Value, k: &str, cmd: &str) -> Result<PArg> {

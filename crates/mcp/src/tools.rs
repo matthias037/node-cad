@@ -732,6 +732,16 @@ fn design_check(b: &mut dyn Backend, assembly: bool, results: &[Value]) -> Optio
         check.insert("split_bodies".into(), Value::Array(split));
         faults.push("split_bodies: a shape joined to these bodies does not touch them, so each is in separate solids (move it until it overlaps)");
     }
+    // A cut that removed nothing: the pocket or hole the agent will report is not there.
+    let empty: Vec<Value> = results
+        .iter()
+        .filter(|r| r["warning"].as_str().is_some_and(|w| w.starts_with("the cut removes nothing")))
+        .map(|r| r["name"].clone())
+        .collect();
+    if !empty.is_empty() {
+        check.insert("empty_cuts".into(), Value::Array(empty));
+        faults.push("empty_cuts: these cuts removed nothing (extruded away from the part): undo them and cut the other way (a negative distance)");
+    }
     if assembly {
         // Occurrence names by id, for the degrees of freedom `joint.list` gives by id.
         let mut names = std::collections::BTreeMap::new();

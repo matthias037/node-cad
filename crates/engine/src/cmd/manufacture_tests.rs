@@ -179,3 +179,23 @@ fn simulate_refuses_bad_requests() {
     run(&mut s, "manufacture.setup.set", json!({"id": 2, "plane": "XY"}));
     assert!(s.execute("manufacture.simulate", &json!({"setup": 2})).is_err());
 }
+
+/// A stock given in model coordinates (top at the part's height, above the clearance) is refused
+/// with the work-coordinate rule; the same stock under the origin is kept.
+#[test]
+fn a_stock_reaching_the_clearance_height_is_refused_with_the_rule() {
+    let mut s = Session::default();
+    let e = s
+        .execute(
+            "manufacture.setup.set",
+            &json!({"plane": "XY", "origin": [0, 0, 15], "stock": {"min": [-1, -1, -1], "max": [121, 81, 16]}, "clearance": 10}),
+        )
+        .unwrap_err()
+        .to_string();
+    assert!(e.contains("work coordinates") && e.contains("-(H + 1) to 1"), "{e}");
+    run(
+        &mut s,
+        "manufacture.setup.set",
+        json!({"plane": "XY", "origin": [0, 0, 15], "stock": {"min": [-1, -1, -16], "max": [121, 81, 1]}, "clearance": 10}),
+    );
+}

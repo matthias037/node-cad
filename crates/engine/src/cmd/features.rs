@@ -487,6 +487,10 @@ pub(super) fn check_expr(s: &Session, e: &str, kind: Kind, cmd: &str, what: &str
 }
 
 /// Add a feature, evaluate, and report its result (an evaluation error fails the command).
+/// The warning of a cut that removed nothing (`add_feature`), which an agent's batch check reports.
+pub const CUT_REMOVES_NOTHING: &str = "the cut removes nothing: it does not meet any body. An extrusion goes along its sketch plane's \
+     normal: to cut into a part from a sketch on its top face, give a negative distance (-8, not 8)";
+
 pub(super) fn add_feature(s: &mut Session, p: &Value, kind: FeatureKind) -> Result<Value> {
     add_feature_in(s, p, kind, true)
 }
@@ -496,6 +500,9 @@ fn add_feature_in(s: &mut Session, p: &Value, kind: FeatureKind, world: bool) ->
     let name = str_(p, "name");
     // The bodies before the feature, to say which ones it changed or removed.
     let before = s.model.state();
+    // A cut asked for as such, to refuse it when it removes nothing.
+    let asked_cut = matches!(str_(p, "operation").and_then(Operation::parse), Some(Operation::Cut))
+        || matches!(&kind, FeatureKind::Extrude { operation: Operation::Cut, .. } | FeatureKind::Revolve { operation: Operation::Cut, .. });
     // Commands speak world coordinates; the feature is authored in the active component.
     let mut kind = kind;
     if world {
@@ -633,10 +640,25 @@ fn add_feature_in(s: &mut Session, p: &Value, kind: FeatureKind, world: bool) ->
     let changed: Vec<&str> =
         st.bodies.iter().filter(|b| b.feature != id && old.get(b.name.as_str()).is_some_and(|o| !o.same(&b.body))).map(|b| b.name.as_str()).collect();
     let removed: Vec<&str> = before.bodies.iter().map(|b| b.name.as_str()).filter(|n| !now.contains(n)).collect();
+    // A cut that left every body as it was: most often extruded away from the part, off the
+    // sketch plane's far side. Allowed (a cut may meet nothing yet), but said: an agent took
+    // such a pocket for made and machined it (NØDE IA's pocket bench, 26/10/2026).
+    let mut empty_cut = None;
+    if asked_cut && removed.is_empty() {
+        let volume = |b: &solidcraft_doc::kernel::Body| solidcraft_kernel::measure(b).map(|m| m.volume).unwrap_or(f64::NAN);
+        let took_some = st
+            .bodies
+            .iter()
+            .filter_map(|b| old.get(b.name.as_str()).map(|o| (volume(o), volume(&b.body))))
+            .any(|(v0, v1)| v0 - v1 > 1e-9 * v0.abs().max(1.0));
+        if !took_some {
+            empty_cut = Some(CUT_REMOVES_NOTHING.to_string());
+        }
+    }
     let fname = s.doc.feature(id).map(|f| f.name.clone()).unwrap_or_default();
     // A warning (a Boolean that needed a retry, a reference found again elsewhere) is part of
     // the reply: a script or an agent sees it without asking the timeline (#616).
-    let warning = r.as_ref().and_then(|r| r.warning.clone());
+    let warning = r.as_ref().and_then(|r| r.warning.clone()).or(empty_cut);
     let owned = |names: Vec<&str>| names.into_iter().map(str::to_string).collect();
     let reply = FeatureResult {
         feature: id,
@@ -2594,6 +2616,9 @@ mod corner_tests {
         assert!(s.execute("solid.fillet", &json!({"edges": [[10, 0, 0]], "radius": 4, "corner": "g2", "fit": "reduce"})).is_err());
     }
 }
+#[cfg(test)]
+#[path = "cut_removes_nothing_tests.rs"]
+mod cut_removes_nothing_tests;
 #[cfg(test)]
 #[path = "fillet_connected_rounds_tests.rs"]
 mod fillet_connected_rounds_tests;
