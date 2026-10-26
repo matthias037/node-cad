@@ -159,6 +159,23 @@ struct Hole {
     axis: Vec3,
     center: Vec3,
     diameter: f64,
+    /// Where its faces' points sit round the axis (radians), to tell a hole from a rounded
+    /// corner: a pocket's R5 corners are internal cylinders too, a quarter turn each.
+    angles: Vec<f64>,
+}
+
+impl Hole {
+    /// Whether the faces go all the way round: no gap wider than 45° between their points.
+    fn round(&self) -> bool {
+        let mut a = self.angles.clone();
+        if a.len() < 3 {
+            return false;
+        }
+        a.sort_by(f64::total_cmp);
+        let wrap = a[0] + std::f64::consts::TAU - a[a.len() - 1];
+        let gap = a.windows(2).map(|w| w[1] - w[0]).fold(wrap, f64::max);
+        gap < std::f64::consts::FRAC_PI_4
+    }
 }
 
 fn holes(s: &Session) -> Vec<Hole> {
@@ -171,16 +188,34 @@ fn holes(s: &Session) -> Vec<Hole> {
             let axis = *c.axis;
             let center = c.axis_point;
             let diameter = 2.0 * c.radius;
+            // Two directions across the axis, to read each point's angle round it.
+            let across = if axis.x.abs() < 0.9 { Vec3::X } else { Vec3::Y };
+            let (Some(u), Some(v)) = (axis.cross(across).normalized(), axis.cross(axis.cross(across)).normalized()) else { continue };
+            let face = u32::try_from(i).unwrap_or(u32::MAX);
+            let angles: Vec<f64> = mesh
+                .triangles
+                .iter()
+                .zip(&mesh.tri_face)
+                .filter(|(_, f)| **f == face)
+                .flat_map(|(t, _)| t.iter())
+                .filter_map(|k| mesh.positions.get(*k as usize))
+                .map(|q| {
+                    let d = *q - center;
+                    d.dot(v).atan2(d.dot(u))
+                })
+                .collect();
             // A hole's two half faces, and a counterbore's seat, are one hole each.
-            let same = out.iter().any(|h| {
+            let same = out.iter_mut().find(|h| {
                 let d = center - h.center;
                 h.axis.dot(axis).abs() > 0.999 && (d - h.axis * d.dot(h.axis)).len() < 1e-3 && (h.diameter - diameter).abs() < 1e-3
             });
-            if !same {
-                out.push(Hole { axis, center, diameter });
+            match same {
+                Some(h) => h.angles.extend(angles),
+                None => out.push(Hole { axis, center, diameter, angles }),
             }
         }
     }
+    out.retain(Hole::round);
     out
 }
 

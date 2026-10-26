@@ -108,3 +108,17 @@ fn numbers_are_written_the_french_way() {
     assert_eq!(scale_text(0.5), "1:2");
     assert_eq!(scale_text(2.0), "2:1");
 }
+
+/// A pocket's rounded corners are internal cylinders a quarter turn each: not holes, so no
+/// « 4× Ø10 » callout for a pocket with R5 corners.
+#[test]
+fn rounded_pocket_corners_are_not_holes() {
+    let mut s = plate();
+    run(&mut s, "sketch.create", json!({"plane": "XY", "offset": 10}));
+    run(&mut s, "sketch.rectangle.rounded", json!({"p0": [30, 20], "p1": [90, 60], "radius": 5}));
+    run(&mut s, "sketch.finish", json!({}));
+    run(&mut s, "solid.extrude", json!({"distance": -5, "operation": "cut"}));
+    let r = run(&mut s, "drawing.create", json!({}));
+    let dims: Vec<&str> = r["dimensions"].as_array().unwrap().iter().map(|d| d.as_str().unwrap()).collect();
+    assert!(dims.contains(&"4× Ø6,6") && !dims.iter().any(|d| d.contains("Ø10")), "{dims:?}");
+}

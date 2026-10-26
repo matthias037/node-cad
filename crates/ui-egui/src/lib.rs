@@ -135,6 +135,11 @@ mod status_tests {
         let mut app = super::SolveApp::new(solidcraft_engine::Session::default(), Default::default());
         app.run("solid.box", serde_json::json!({"length": 5, "width": 5, "height": 5})).unwrap();
         assert_eq!(app.session.log.last().map(String::as_str), Some("Box done"));
+        // A command run outside a frame (a script, NØDE IA) names itself in the app's language.
+        let mut fr = super::SolveApp::new(solidcraft_engine::Session::default(), Default::default());
+        fr.preferences.language = "fr".into();
+        let _ = fr.run("manufacture.setup.set", serde_json::json!({"stock": {"min": [0, 0, 0], "max": [10, 10, 20]}}));
+        assert!(fr.session.log.last().is_some_and(|l| l.starts_with("Définir un montage: ")), "{:?}", fr.session.log.last());
         let _ = app.run("edit.redo", serde_json::json!({}));
         assert!(app.session.log.last().is_some_and(|l| l.starts_with("Redo: ") && !l.contains("edit.redo")), "{:?}", app.session.log.last());
     }
@@ -888,7 +893,12 @@ impl SolveApp {
                 }
             }
             Err(e) => {
-                let msg = friendly_error(id, e);
+                // In the interface's language even outside a frame (a script's or NØDE IA's
+                // command), where no language scope is set.
+                let msg = {
+                    let _language = i18n::scope(&self.preferences.language);
+                    friendly_error(id, e)
+                };
                 self.session.echo(msg.clone());
                 self.set_status(msg, true);
             }
