@@ -1,0 +1,17 @@
+[package]
+name = "solidcraft-manufacture"
+description = "SolidCraft manufacturing: tool library, 2.5D toolpaths (face, contour, pocket, drill) and G-code posts"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+solidcraft-geom = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

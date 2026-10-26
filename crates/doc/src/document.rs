@@ -2400,6 +2400,10 @@ pub struct Document {
     /// Named, renderer-independent setups. Device/job state is never saved here.
     #[serde(default, skip_serializing_if = "crate::render_settings::RenderSettings::is_empty")]
     pub render: std::sync::Arc<crate::render_settings::RenderSettings>,
+    /// The manufacturing job: tool library, setups and operations (`solidcraft_manufacture`).
+    /// Not saved while empty, so designs without CAM are unchanged.
+    #[serde(default, skip_serializing_if = "solidcraft_manufacture::Job::is_empty")]
+    pub manufacture: std::sync::Arc<solidcraft_manufacture::Job>,
     #[serde(default = "default_format")]
     pub format: String,
     /// The changes of `format` this design has while they are pending (no release has fixed
@@ -2662,6 +2666,7 @@ impl Document {
     pub fn new(name: &str) -> Self {
         Document {
             render: Default::default(),
+            manufacture: Default::default(),
             format: default_format(),
             format_pending: crate::format::pending_names(),
             name: name.into(),

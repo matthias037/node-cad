@@ -3150,6 +3150,8 @@ pub fn show(app: &mut SolveApp, ui: &mut egui::Ui) {
         app.viewport.boxsel = None;
     }
     crate::preview::paint_sketches(app, &painter, &proj);
+    crate::manufacture_panel::paint(app, &painter, &proj);
+    crate::manufacture_job::paint(app, &painter, &proj);
     crate::ref_images::show(app, ui, &painter, &proj);
     crate::dialogs_assembly::origins(app, &painter, &proj);
     crate::dialogs_assembly::joint_glyphs(app, &painter, &proj);

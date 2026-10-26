@@ -86,6 +86,10 @@ mod loft_rails_dialog_tests;
 mod look_at_tests;
 #[cfg(test)]
 mod manage_dialogs_tests;
+pub mod manufacture_job;
+pub mod manufacture_panel;
+pub mod manufacture_side;
+pub mod manufacture_tool_view;
 mod material_card_review;
 
 #[cfg(test)]
@@ -388,6 +392,9 @@ pub struct SolveApp {
     pub design_properties: Option<design_properties::DesignProperties>,
     /// The Bill of Materials window, when open.
     pub bom: Option<bom_panel::BomPanel>,
+    /// The Machining Simulation window, when open.
+    pub manufacture: Option<manufacture_panel::MfgPanel>,
+    pub manufacture_job: Option<manufacture_job::JobWindow>,
     material_card_review: Option<material_card_review::ReviewWindow>,
     /// Context menus, rename box and Properties window.
     pub menu: context_menu::MenuState,
@@ -550,6 +557,8 @@ impl SolveApp {
             params: None,
             design_properties: None,
             bom: None,
+            manufacture: None,
+            manufacture_job: None,
             material_card_review: None,
             menu: context_menu::MenuState::default(),
             gesture: mouse_gesture::State::default(),
@@ -1018,6 +1027,20 @@ impl SolveApp {
         }
         if id == "assembly.bom" {
             bom_panel::open(self);
+            return;
+        }
+        if id == "manufacture.simulate" {
+            manufacture_panel::open(self);
+            return;
+        }
+        if let Some(tab) = match id {
+            "manufacture.tool.set" => Some(0),
+            "manufacture.setup.set" => Some(1),
+            "manufacture.operation.set" | "manufacture.toolpath" => Some(2),
+            "manufacture.post" => Some(3),
+            _ => None,
+        } {
+            manufacture_job::open(self, tab);
             return;
         }
         if id == "sketch.finish" {
@@ -1655,7 +1678,11 @@ impl SolveApp {
             agent_chat::show(self, ui);
         }
         if !floating && show_timeline && !left_timeline {
-            timeline::timeline(self, ui);
+            if manufacture_side::active(self) {
+                manufacture_side::history(self, ui);
+            } else {
+                timeline::timeline(self, ui);
+            }
         }
         // Browser hugs its contents in either layout; it never becomes a full-height blank column.
         if !self.ui.show_browser {
@@ -1697,13 +1724,20 @@ impl SolveApp {
             theme::TabAccent::publish(self, ui.ctx());
         }
         if floating && show_timeline && !left_timeline {
-            timeline::timeline(self, ui);
+            if manufacture_side::active(self) {
+                manufacture_side::history(self, ui);
+            } else {
+                timeline::timeline(self, ui);
+            }
         }
         if left_timeline {
             timeline_left::left_panel(self, ui);
         }
         if render_workspace::active(self) {
             render_workspace::panel(self, ui);
+        }
+        if manufacture_side::active(self) && !self.home.open {
+            manufacture_side::panel(self, ui);
         }
         if self.ui.show_browser {
             browser::browser(self, ui);
@@ -1738,6 +1772,8 @@ impl SolveApp {
         params_dialog::show(self, ui.ctx());
         design_properties::show(self, ui.ctx());
         bom_panel::show(self, ui.ctx());
+        manufacture_panel::show(self, ui.ctx());
+        manufacture_job::show(self, ui.ctx());
         material_card_review::show(self, ui.ctx());
         recovery_ui::show(self, ui.ctx());
         stand_up::show(self, ui.ctx());

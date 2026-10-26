@@ -212,7 +212,8 @@ pub fn nav_preset(id: &str) -> &'static NavPreset {
     NAV_PRESETS.iter().find(|p| p.id == id).unwrap_or(&NAV_PRESETS[0])
 }
 /// Stable control-channel names; presentation labels may be shorter.
-pub const PAGES: [&str; 9] = ["General", "Interface", "Design", "Navigation", "Keyboard Shortcuts", "Sketch", "Graphics", "AI", "Plugins"];
+pub const PAGES: [&str; 10] =
+    ["General", "Interface", "Design", "Navigation", "Keyboard Shortcuts", "Sketch", "Graphics", "AI", "Plugins", "Simulation"];
 pub const PAGE_GENERAL: usize = 0;
 pub const PAGE_INTERFACE: usize = 1;
 pub const PAGE_DESIGN: usize = 2;
@@ -222,7 +223,8 @@ pub const PAGE_SKETCH: usize = 5;
 pub const PAGE_GRAPHICS: usize = 6;
 pub const PAGE_AI: usize = 7;
 pub const PAGE_PLUGINS: usize = 8;
-const WINDOW_PAGES: [ui_kit::WindowPage<SolveApp>; 9] = [
+pub const PAGE_SIMULATION: usize = 9;
+const WINDOW_PAGES: [ui_kit::WindowPage<SolveApp>; 10] = [
     ui_kit::WindowPage { icon: "settings", label: "ui.general", group: None, handle: "prefs:page:General", scroll: true, draw: window_page::<0> },
     ui_kit::WindowPage {
         icon: "settings_palette",
@@ -280,6 +282,14 @@ const WINDOW_PAGES: [ui_kit::WindowPage<SolveApp>; 9] = [
         handle: "prefs:page:Plugins",
         scroll: true,
         draw: window_page::<8>,
+    },
+    ui_kit::WindowPage {
+        icon: "settings",
+        label: "ui.simulation",
+        group: Some("prefs.extend"),
+        handle: "prefs:page:Simulation",
+        scroll: true,
+        draw: window_page::<9>,
     },
 ];
 
@@ -530,6 +540,28 @@ preference_settings! {
     /// View changes (axis view, Look At, Home) animate; `look_at_speed` scales how fast.
     look_at_anim: bool = true, PAGE_NAVIGATION => check("Animate view changes", "Axis view, Look At, Home and Fit");
     look_at_speed: f32 = 1.0, PAGE_NAVIGATION, accept(0.25..=4.0) => enabled_slider(look_at_anim, "Animation speed", 0.5..=3.0, 0.25, |v| format!("{v:.2}×"));
+    /// Machining Simulation: how many cells the stock is drawn with at each Drawing detail.
+    sim_cells_draft: u32 = 20_000, PAGE_SIMULATION, accept(1_000..=2_000_000) => number("ui.sim_cells_draft", 1_000..=2_000_000);
+    sim_cells_normal: u32 = 60_000, PAGE_SIMULATION, accept(1_000..=2_000_000) => number("ui.sim_cells_normal", 1_000..=2_000_000);
+    sim_cells_fine: u32 = 150_000, PAGE_SIMULATION, accept(1_000..=2_000_000) => number("ui.sim_cells_fine", 1_000..=2_000_000);
+    sim_cells_smooth: u32 = 300_000, PAGE_SIMULATION, accept(1_000..=2_000_000) => number("ui.sim_cells_smooth", 1_000..=2_000_000);
+    /// The Drawing detail a new simulation starts on (0 Draft, 1 Normal, 2 Fine, 3 Smooth).
+    sim_detail: u8 = 2, PAGE_SIMULATION, accept(0..=3) => number("ui.sim_detail", 0..=3);
+    /// The smallest cell the stock drawing uses (mm), however many cells are asked for.
+    sim_finest_cell: f32 = 0.02, PAGE_SIMULATION, accept(0.005..=1.0) => slider("ui.sim_finest_cell", 0.005..=0.5, 0.005, |v| format!("{v:.3} mm"), "prefs:sim_finest");
+    /// How long the whole program takes to play when a simulation starts (seconds).
+    sim_play_seconds: f32 = 20.0, PAGE_SIMULATION, accept(1.0..=600.0) => slider("ui.sim_play_seconds", 2.0..=120.0, 1.0, |v| format!("{v:.0} s"), "prefs:sim_play");
+    /// The machine's rapid speed used for the cutting time (mm/min).
+    sim_rapid_rate: f32 = 5000.0, PAGE_SIMULATION, accept(100.0..=100_000.0) => slider("ui.sim_rapid_rate", 500.0..=30000.0, 500.0, |v| format!("{v:.0} mm/min"), "prefs:sim_rapid");
+    /// The fastest the tool turns in the picture (revolutions a second; 0 keeps it still).
+    sim_spin_cap: f32 = 3.0, PAGE_SIMULATION, accept(0.0..=30.0) => slider("ui.sim_spin_cap", 0.0..=10.0, 0.5, |v| format!("{v:.1} rev/s"), "prefs:sim_spin");
+    /// The cell size of the collision check a simulation starts with (mm).
+    sim_check_resolution: f32 = 0.5, PAGE_SIMULATION, accept(0.01..=10.0) => slider("ui.sim_check_resolution", 0.05..=5.0, 0.05, |v| format!("{v:.2} mm"), "prefs:sim_check");
+    /// What a new simulation shows.
+    sim_show_stock: bool = true, PAGE_SIMULATION => check_tr("ui.sim_show_stock");
+    sim_show_path: bool = true, PAGE_SIMULATION => check_tr("ui.sim_show_path");
+    sim_show_tool: bool = true, PAGE_SIMULATION => check_tr("ui.sim_show_tool");
+    sim_check_collisions: bool = false, PAGE_SIMULATION => check_tr("ui.sim_check_collisions");
     /// Default modelling orientation: `z` (Z up) or `y` (Y up) (#3).
     up_axis: String = "z".into(), PAGE_DESIGN;
     /// A STEP or IGES file whose header names a Y-up exporter (SolidWorks) is stood up as it
@@ -1242,6 +1274,26 @@ fn page(app: &mut SolveApp, ui: &mut egui::Ui, t: &Tokens) {
         return;
     }
     match app.prefs_window.section {
+        PAGE_SIMULATION => {
+            for draw in [
+                setting::sim_cells_draft,
+                setting::sim_cells_normal,
+                setting::sim_cells_fine,
+                setting::sim_cells_smooth,
+                setting::sim_detail,
+                setting::sim_finest_cell,
+                setting::sim_play_seconds,
+                setting::sim_rapid_rate,
+                setting::sim_spin_cap,
+                setting::sim_show_stock,
+                setting::sim_show_path,
+                setting::sim_show_tool,
+                setting::sim_check_collisions,
+                setting::sim_check_resolution,
+            ] {
+                draw(app, ui);
+            }
+        }
         PAGE_GENERAL => general::show(app, ui),
         PAGE_INTERFACE => interface::interface(app, ui, t),
         PAGE_DESIGN => design::show(app, ui),
@@ -1494,6 +1546,21 @@ pub fn set(app: &mut SolveApp, p: &serde_json::Value) -> Result<serde_json::Valu
     }
     if !accepted::ui_scale(&new) || !accepted::look_at_speed(&new) {
         return Err("`ui_scale` must be 0.5…2.5 and `look_at_speed` 0.25…4".into());
+    }
+    let simulation = [
+        accepted::sim_cells_draft(&new),
+        accepted::sim_cells_normal(&new),
+        accepted::sim_cells_fine(&new),
+        accepted::sim_cells_smooth(&new),
+        accepted::sim_detail(&new),
+        accepted::sim_finest_cell(&new),
+        accepted::sim_play_seconds(&new),
+        accepted::sim_rapid_rate(&new),
+        accepted::sim_spin_cap(&new),
+        accepted::sim_check_resolution(&new),
+    ];
+    if simulation.contains(&false) {
+        return Err("the `sim_*` settings are outside their ranges (see Preferences, Simulation)".into());
     }
     if solidcraft_engine::doc::display_quality::DisplayQuality::parse(&new.display_quality).is_none() {
         return Err("`display_quality` must be coarse, normal, fine or ultra".into());
