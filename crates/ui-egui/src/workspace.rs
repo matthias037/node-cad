@@ -12,6 +12,17 @@ pub fn drawing_tab(tab: &str) -> bool {
     DRAWING_TABS.contains(&tab)
 }
 
+/// The translation key of a Drawing tab's name.
+pub fn drawing_tab_key(tab: &str) -> Option<&'static str> {
+    Some(match tab {
+        "DRAWING LAYOUT" => "ui.drawing_tab_layout",
+        "DRAWING ANNOTATE" => "ui.drawing_tab_annotate",
+        "DRAWING PARTS" => "ui.drawing_tab_parts",
+        "DRAWING REVIEW" => "ui.drawing_tab_review",
+        _ => return None,
+    })
+}
+
 /// Unique saved tab keys keep Drawing customisations separate from Design.
 pub fn tab_label(tab: &str) -> &str {
     match tab {

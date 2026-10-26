@@ -225,7 +225,7 @@ pub(crate) fn browser_contents(app: &mut SolveApp, ui: &mut egui::Ui) {
     }
     ui.add_space(Tokens::get().space_8);
     ui_kit::text(ui, crate::i18n::tr_label("Source design"), ui_kit::Text::Heading("drawing_source"));
-    ui.label(&app.session.doc.name);
+    ui.label(crate::i18n::tr_name(&app.session.doc.name));
     if ui_kit::button(ui, crate::i18n::tr_label("Source properties"), ui_kit::Button::Normal).clicked() {
         app.start("document.metadata");
     }

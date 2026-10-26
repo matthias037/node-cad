@@ -856,7 +856,7 @@ fn browser_header(app: &mut SolveApp, ui: &mut egui::Ui, collapsible: bool) {
         right -= 18.0;
     }
     let count = if crate::drawing_workspace::active(app) {
-        crate::i18n::tr_label("0 objects").to_string()
+        crate::i18n::tr(if app.session.drawing.is_some() { "ui.drawing_sheets_one" } else { "ui.drawing_sheets_none" }).to_string()
     } else {
         let bodies = app.session.model.state().bodies.len();
         let key = if bodies == 1 { "ui.browser_bodies_one" } else { "ui.browser_bodies_other" };

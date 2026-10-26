@@ -774,6 +774,10 @@ fn ribbon_button_galley(painter: &egui::Painter, label: &str, width: f32, color:
 
 /// Ribbon headings use the translated labels, with normal word casing instead of registry caps.
 fn ribbon_label(app: &SolveApp, label: &str) -> String {
+    // Drawing's tabs have their own names ("Layout" is also a preference, "Disposition").
+    if let Some(key) = crate::workspace::drawing_tab_key(label) {
+        return app.tr(key).to_string();
+    }
     let label = crate::workspace::tab_label(label);
     let label = app
         .tr_label(label)

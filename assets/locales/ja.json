@@ -2633,5 +2633,12 @@
   "Top view": "平面図",
   "ui.drawing_sheet_label": "シート 1 · {format} · {scale}",
   "ui.drawing_dimension_count": "寸法 {count}",
-  "ui.workspace_drawing_tabs": "レイアウト · 注記 · 部品と表 · レビュー"
+  "ui.workspace_drawing_tabs": "レイアウト · 注記 · 部品と表 · レビュー",
+  "ui.drawing_tab_layout": "レイアウト",
+  "ui.drawing_tab_annotate": "注記",
+  "ui.drawing_tab_parts": "部品と表",
+  "ui.drawing_tab_review": "レビュー",
+  "ui.drawing_sheets_one": "シート 1 枚",
+  "ui.drawing_sheets_none": "シートなし",
+  "Paper size": "用紙サイズ"
 }

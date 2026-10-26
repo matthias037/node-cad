@@ -2633,5 +2633,12 @@
   "Top view": "Vue de dessus",
   "ui.drawing_sheet_label": "Feuille 1 · {format} · {scale}",
   "ui.drawing_dimension_count": "{count} cotes",
-  "ui.workspace_drawing_tabs": "Mise en page · Annotation · Pièces et tableaux · Revue"
+  "ui.workspace_drawing_tabs": "Mise en page · Annotation · Pièces et tableaux · Revue",
+  "ui.drawing_tab_layout": "Mise en page",
+  "ui.drawing_tab_annotate": "Annotation",
+  "ui.drawing_tab_parts": "Pièces et tableaux",
+  "ui.drawing_tab_review": "Revue",
+  "ui.drawing_sheets_one": "1 feuille",
+  "ui.drawing_sheets_none": "Aucune feuille",
+  "Paper size": "Format du papier"
 }

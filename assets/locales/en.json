@@ -2633,5 +2633,12 @@
   "Top view": "Top view",
   "ui.drawing_sheet_label": "Sheet 1 · {format} · {scale}",
   "ui.drawing_dimension_count": "{count} dimensions",
-  "ui.workspace_drawing_tabs": "Layout · Annotate · Parts & Tables · Review"
+  "ui.workspace_drawing_tabs": "Layout · Annotate · Parts & Tables · Review",
+  "ui.drawing_tab_layout": "Layout",
+  "ui.drawing_tab_annotate": "Annotate",
+  "ui.drawing_tab_parts": "Parts & Tables",
+  "ui.drawing_tab_review": "Review",
+  "ui.drawing_sheets_one": "1 sheet",
+  "ui.drawing_sheets_none": "No sheet",
+  "Paper size": "Paper size"
 }

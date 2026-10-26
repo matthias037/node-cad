@@ -2633,5 +2633,12 @@
   "Top view": "俯视图",
   "ui.drawing_sheet_label": "图纸 1 · {format} · {scale}",
   "ui.drawing_dimension_count": "{count} 个尺寸",
-  "ui.workspace_drawing_tabs": "布局 · 标注 · 零件和表格 · 审阅"
+  "ui.workspace_drawing_tabs": "布局 · 标注 · 零件和表格 · 审阅",
+  "ui.drawing_tab_layout": "布局",
+  "ui.drawing_tab_annotate": "标注",
+  "ui.drawing_tab_parts": "零件和表格",
+  "ui.drawing_tab_review": "审阅",
+  "ui.drawing_sheets_one": "1 张图纸",
+  "ui.drawing_sheets_none": "无图纸",
+  "Paper size": "纸张尺寸"
 }
