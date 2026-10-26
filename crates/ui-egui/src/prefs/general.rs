@@ -13,6 +13,7 @@ pub(super) fn show(app: &mut SolveApp, ui: &mut egui::Ui) {
                         for locale in crate::i18n::LOCALES {
                             if ui_kit::list_picker(ui, locale.id, locale.name, app.preferences.language == locale.id).clicked() {
                                 app.preferences.language = locale.id.into();
+                                app.preferences.language_chosen = true;
                             }
                         }
                     });

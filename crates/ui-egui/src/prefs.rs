@@ -16,6 +16,13 @@ pub const LEGACY_STORAGE_KEY: &str = "solvecraft.prefs";
 /// The interface language of a first launch, before any preference is saved: NØDE's own.
 pub const FIRST_LANGUAGE: &str = "fr";
 
+/// The launch language: the one the user picked, else [`FIRST_LANGUAGE`].
+pub fn launch_language(app: &mut crate::SolveApp) {
+    if !app.preferences.language_chosen {
+        app.preferences.language = FIRST_LANGUAGE.into();
+    }
+}
+
 /// The stored preferences, from the current key or else the legacy one.
 pub fn stored(get: impl Fn(&str) -> Option<String>) -> Option<String> {
     get(STORAGE_KEY).or_else(|| get(LEGACY_STORAGE_KEY))
@@ -504,6 +511,10 @@ preference_settings! {
     custom_themes: Vec<crate::theme_files::ThemeFile> = Vec::new();
     /// Interface language (a registered locale ID). A first launch speaks [`FIRST_LANGUAGE`].
     language: String = "en".into(), 0;
+    /// Whether the user picked `language` in Preferences. Until then a launch speaks
+    /// [`FIRST_LANGUAGE`], even with preferences saved by an earlier version, which wrote the
+    /// English default for everyone (NØDE CAD opened in English for returning visitors).
+    language_chosen: bool = false, 0;
     /// Shared workspace composition; system windows and popups retain their purpose.
     layout: crate::shell::LayoutMode = Default::default(), PAGE_INTERFACE;
     /// Show command names beneath ribbon icons, independently of workspace layout.
@@ -2300,6 +2311,23 @@ mod tests {
         assert!(set(&mut app, &json!({"up_axis": "x"})).is_err());
         assert!(set(&mut app, &json!({"theme": "sepia"})).is_err());
         assert!(set(&mut app, &json!({"language": "xx"})).is_err());
+    }
+
+    #[test]
+    fn a_launch_speaks_french_until_the_user_picks_a_language() {
+        // Preferences saved by an earlier version: the English default, never chosen.
+        let mut app = SolveApp::new(solidcraft_engine::Session::default(), Default::default());
+        app.load_prefs(r#"{"language": "en", "theme": "dark"}"#);
+        super::launch_language(&mut app);
+        assert_eq!(app.preferences.language, "fr");
+        // Picked in Preferences: kept across launches.
+        app.preferences.language = "en".into();
+        app.preferences.language_chosen = true;
+        let saved = app.prefs();
+        let mut next = SolveApp::new(solidcraft_engine::Session::default(), Default::default());
+        next.load_prefs(&saved);
+        super::launch_language(&mut next);
+        assert_eq!(next.preferences.language, "en");
     }
 
     #[test]

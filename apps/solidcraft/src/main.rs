@@ -705,10 +705,10 @@ fn main() -> eframe::Result {
             // the installed agents and the endpoints a person adds.
             app.agent_chat.node_ia_only = !cfg!(feature = "agents-libres");
             app.cpu_meshing = safe_mode;
-            match cc.storage.and_then(|s| solidcraft_ui_egui::prefs::stored(|k| s.get_string(k))).filter(|_| !safe_mode) {
-                Some(p) => app.load_prefs(&p),
-                None => app.preferences.language = solidcraft_ui_egui::prefs::FIRST_LANGUAGE.into(),
+            if let Some(p) = cc.storage.and_then(|s| solidcraft_ui_egui::prefs::stored(|k| s.get_string(k))).filter(|_| !safe_mode) {
+                app.load_prefs(&p);
             }
+            solidcraft_ui_egui::prefs::launch_language(&mut app);
             mark("app state and prefs");
             let gpu = cc.wgpu_render_state.as_ref().map(|rs| LostWatch {
                 lost: rs.device_lost.clone(),
