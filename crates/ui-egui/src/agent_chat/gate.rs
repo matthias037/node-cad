@@ -220,12 +220,16 @@ fn is_scratch(params: &Value) -> bool {
         return false;
     }
     let ok = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("png"));
+    // The server names its folder by the temporary directory (`/var/folders/…` on macOS) and its
+    // `allow_paths` resolved (`/private/var/folders/…`): the same folder, compared resolved, or
+    // every view the agent looked at asked the person first (demo test of 28/10/2026).
+    let resolved = |p: &std::path::Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let folder = path.parent().map(resolved);
     ok && params.get("allow_paths").and_then(Value::as_array).is_some_and(|roots| {
-        roots
-            .iter()
-            .filter_map(Value::as_str)
-            .map(std::path::Path::new)
-            .any(|r| r.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("solidcraft-mcp-")) && path.starts_with(r))
+        roots.iter().filter_map(Value::as_str).map(std::path::Path::new).any(|r| {
+            r.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("solidcraft-mcp-"))
+                && (path.starts_with(r) || folder.as_ref().is_some_and(|f| f.starts_with(resolved(r))))
+        })
     })
 }
 
@@ -346,6 +350,21 @@ mod tests {
         let elsewhere = json!({"path": "/home/u/Desktop/shot.png", "allow_paths": ["/tmp/solidcraft-mcp-41-a3", "/home/u/Desktop"]});
         assert!(matches!(request("ui.screenshot", &elsewhere, 0), Verdict::Ask(_)));
         assert_eq!(request("ui.render", &json!({"width": 400}), 0), Verdict::Run { change: false });
+        // The same folder named through a link (macOS: /var → /private/var) on one side only.
+        let dir = std::env::temp_dir().join(format!("solidcraft-mcp-gate-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let link = std::env::temp_dir().join(format!("gate-link-{}", std::process::id()));
+        let _ = std::fs::remove_file(&link);
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&dir, &link).unwrap();
+        #[cfg(unix)]
+        {
+            let shot = link.join("shot-0.png");
+            let named = json!({"path": shot.to_string_lossy(), "allow_paths": [dir.canonicalize().unwrap().to_string_lossy()]});
+            assert_eq!(request("ui.render", &named, 0), Verdict::Run { change: false }, "{named}");
+            let _ = std::fs::remove_file(&link);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// NØDE IA drives the CAM: setups, tools and operations change the design; planning,
