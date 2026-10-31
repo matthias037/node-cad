@@ -1007,7 +1007,7 @@
   "ai.prefs.availability": "Assistant controls",
   "ai.prefs.background_commands": "Run agent commands in the background",
   "ai.prefs.connect_apps": "Make NØDE CAD available to AI apps on this computer",
-  "ai.prefs.connect_apps_note": "When NØDE CAD starts, adds it as an MCP server to the AI apps found on this computer (OpenCode, Claude Desktop, Claude Code, Cursor, Codex, Gemini CLI, Copilot CLI, Windsurf, Zed, VS Code), so an agent can use it without any setup. Only the solidcraft entry is added or its path refreshed; an entry you changed is left alone, and the file is backed up first. Off: the entries it added are removed. Help > Connect AI assistants… does this by hand.",
+  "ai.prefs.connect_apps_note": "When NØDE CAD starts, adds it as an MCP server to the AI apps found on this computer (OpenCode, Claude Desktop, Claude Code, Cursor, Codex, Gemini CLI, Copilot CLI, Windsurf, Zed, VS Code), so an agent can use it without any setup. Only the node-cad entry is added or its path refreshed; an entry you changed is left alone, and the file is backed up first. Off: the entries it added are removed. Help > Connect AI assistants… does this by hand.",
   "ai.prefs.connect_at_start": "Connect the last-used agent when NØDE CAD starts",
   "ai.prefs.connect_at_start_note": "Starts the agent you connected last (or the default one) in the background each time NØDE CAD starts, so it is ready for chatting. Not when NØDE CAD is started with --control. If it cannot connect, the Assistant shows Connection failed and a Retry button.",
   "ai.prefs.follow_camera": "Turn the camera to sketches",

@@ -682,7 +682,9 @@ pub fn offered(app: &SolveApp) -> Option<&Release> {
 
 /// Whether release builds look for new releases. Off: NØDE CAD publishes no signed releases on
 /// its repository's feed (LATEST_API) yet, and no update signing key is built in ([`install::PUBLIC_KEY`]).
-const RELEASE_CHECKS: bool = false;
+/// On in this crate's own tests, which feed made-up releases, so the update code stays tested for
+/// the day it is turned on.
+const RELEASE_CHECKS: bool = cfg!(test);
 
 /// Checks may run here: a release build with the host's HTTP client, or a test feed.
 pub fn available(app: &mut SolveApp) -> bool {

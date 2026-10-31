@@ -245,7 +245,6 @@ pub(crate) fn assistant_input(ui: &mut Ui, id: egui::Id, value: &mut String, hin
 }
 
 /// The composer hint laid out on one row of at most `width`, cut with an ellipsis.
-#[cfg(any(not(target_arch = "wasm32"), test))]
 pub(crate) fn assistant_hint_galley(ui: &Ui, hint: &str, width: f32) -> std::sync::Arc<egui::Galley> {
     let t = Tokens::get();
     let mut job = egui::text::LayoutJob::simple_singleline(hint.to_owned(), egui::FontId::proportional(t.font_label), ui.visuals().weak_text_color());
@@ -264,7 +263,6 @@ pub(crate) fn assistant_actions<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) 
 }
 
 /// Bottom corners follow the window; the top meets the footer rule square.
-#[cfg(any(not(target_arch = "wasm32"), test))]
 fn composer_corners(t: &Tokens) -> egui::CornerRadius {
     let r = t.radius_xl.saturating_sub(1);
     egui::CornerRadius { nw: 0, ne: 0, sw: r, se: r }

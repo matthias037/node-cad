@@ -1453,7 +1453,8 @@ mod tests {
         }
         assert!(app.status.as_ref().is_none_or(|(_, _, error)| !error), "{:?}", app.status);
         assert!(!app.home.open, "the sample opens once built");
-        assert_eq!(app.session.doc.name, "Sample Plate");
+        // NØDE CAD's first sample is its logo.
+        assert_eq!(app.session.doc.name, "NØDE Logo");
     }
 
     #[test]

@@ -744,7 +744,7 @@
   "ai.prefs.availability": "助理控制",
   "ai.prefs.background_commands": "在背景執行代理命令",
   "ai.prefs.connect_apps": "讓此電腦上的 AI 應用程式可以使用 NØDE CAD",
-  "ai.prefs.connect_apps_note": "NØDE CAD 啟動時，會把自己以 MCP 伺服器的形式加入此電腦上找到的 AI 應用程式（OpenCode、Claude Desktop、Claude Code、Cursor、Codex、Gemini CLI、Copilot CLI、Windsurf、Zed、VS Code），讓代理無需任何設定即可使用。只會新增 solidcraft 項目或更新其路徑；您修改過的項目不會被更動，並且會先備份檔案。關閉：會移除它所新增的項目。「說明 > 連接 AI 助理」可手動完成同樣的操作。",
+  "ai.prefs.connect_apps_note": "NØDE CAD 啟動時，會把自己以 MCP 伺服器的形式加入此電腦上找到的 AI 應用程式（OpenCode、Claude Desktop、Claude Code、Cursor、Codex、Gemini CLI、Copilot CLI、Windsurf、Zed、VS Code），讓代理無需任何設定即可使用。只會新增 node-cad 項目或更新其路徑；您修改過的項目不會被更動，並且會先備份檔案。關閉：會移除它所新增的項目。「說明 > 連接 AI 助理」可手動完成同樣的操作。",
   "ai.prefs.connect_at_start": "NØDE CAD 啟動時連線上次使用的代理",
   "ai.prefs.connect_at_start_note": "每次啟動 NØDE CAD 時，在背景啟動您上次連線的代理（或預設代理），以便隨時開始對話。以 --control 啟動 NØDE CAD 時不會這樣做。若無法連線，助理會顯示「連線失敗」與「重試」按鈕。",
   "ai.prefs.follow_camera": "將相機轉向草圖",

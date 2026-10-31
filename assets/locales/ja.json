@@ -1007,7 +1007,7 @@
   "ai.prefs.availability": "アシスタントの操作",
   "ai.prefs.background_commands": "エージェントのコマンドをバックグラウンドで実行",
   "ai.prefs.connect_apps": "このコンピューターの AI アプリで NØDE CAD を使えるようにする",
-  "ai.prefs.connect_apps_note": "NØDE CAD の起動時に、このコンピューターで見つかった AI アプリ（OpenCode、Claude Desktop、Claude Code、Cursor、Codex、Gemini CLI、Copilot CLI、Windsurf、Zed、VS Code）へ MCP サーバーとして追加します。追加または更新するのは solidcraft のエントリのみで、変更済みのエントリには触れず、ファイルは先にバックアップされます。オフにすると追加したエントリを削除します。",
+  "ai.prefs.connect_apps_note": "NØDE CAD の起動時に、このコンピューターで見つかった AI アプリ（OpenCode、Claude Desktop、Claude Code、Cursor、Codex、Gemini CLI、Copilot CLI、Windsurf、Zed、VS Code）へ MCP サーバーとして追加します。追加または更新するのは node-cad のエントリのみで、変更済みのエントリには触れず、ファイルは先にバックアップされます。オフにすると追加したエントリを削除します。",
   "ai.prefs.connect_at_start": "NØDE CAD の起動時に前回使用したエージェントに接続",
   "ai.prefs.connect_at_start_note": "NØDE CAD を起動するたびに、前回接続したエージェント (またはデフォルトのエージェント) をバックグラウンドで起動し、すぐにチャットできるようにします。--control を付けて起動した場合は行いません。接続できない場合、アシスタントに「接続に失敗しました」と「再試行」ボタンが表示されます。",
   "ai.prefs.follow_camera": "カメラをスケッチに向ける",

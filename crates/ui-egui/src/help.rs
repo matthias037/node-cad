@@ -80,8 +80,8 @@ pub fn run(app: &mut SolveApp, ctx: &egui::Context, item: &str) {
     }
 }
 
-/// Add SolidCraft's MCP server to the AI assistants installed here (`solidcraft-cli mcp setup`),
-/// with the `solidcraft-cli` beside this program. One line per client.
+/// Add NØDE CAD's MCP server to the AI assistants installed here (`node-cad-cli mcp setup`),
+/// with the `node-cad-cli` beside this program. One line per client.
 #[cfg(not(target_arch = "wasm32"))]
 fn connect_assistants() -> Vec<String> {
     use solidcraft_engine::agent_setup as setup;
@@ -125,6 +125,8 @@ fn connect(app: &mut SolveApp, ctx: &egui::Context) {
 pub fn show(app: &mut SolveApp, ctx: &egui::Context, anchor: egui::Pos2) {
     if app.help.menu {
         let mut pick: Option<&str> = None;
+        // NØDE CAD offers the update check only where it can run (update::RELEASE_CHECKS).
+        let updates = crate::update::available(app);
         let resp = Container::new(ctx, Surface::Popup)
             .area(egui::Id::new("sc_help_menu"))
             .fixed_pos(anchor)
@@ -136,6 +138,7 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context, anchor: egui::Pos2) {
                         ("docs", "Documentation", "library"),
                         ("nodeos", "Discover NØDE OS", "library"),
                         ("about", "About NØDE CAD", "help"),
+                        ("updates", crate::i18n::tr("update.check_for_updates"), "update"),
                         ("shortcuts", "Keyboard Shortcuts", "list"),
                         ("messages", "Messages…", "list"),
                         ("report", "Report an Issue…", "bug_report"),
@@ -145,6 +148,7 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context, anchor: egui::Pos2) {
                     ]
                     .into_iter()
                     .filter(|(id, ..)| *id != "install_cli" || cfg!(target_os = "macos"))
+                    .filter(|(id, ..)| *id != "updates" || updates)
                     {
                         let item = crate::context_menu::Item::action(id, label, icon).on_if(available(app, id));
                         if crate::context_menu::list_row(ui, &item).is_some() {

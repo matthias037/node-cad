@@ -10,8 +10,9 @@ pub const APP_ID: &str = "fr.node_os.cad";
 /// The app id of releases before 0.8 (compatibility shim, docs/compatibility.md). eframe kept
 /// the window state under it, so it is also the old settings key.
 pub const LEGACY_APP_ID: &str = "ai.storyteller.solvecraft";
-/// Every earlier app id, newest first (compatibility shim, docs/compatibility.md): SolidCraft 0.8
-/// until NØDE CAD used `ai.storyteller.solidcraft`, releases before 0.8 `LEGACY_APP_ID`.
+/// Every earlier app id, newest first (compatibility shim, docs/compatibility.md): from SolidCraft
+/// 0.8 until NØDE CAD took its own id, `ai.storyteller.solidcraft`; before 0.8 `LEGACY_APP_ID`.
+/// Only their data folders are read: SolidCraft's own desktop entry and metainfo claim the ids.
 pub const PREVIOUS_APP_IDS: [&str; 2] = ["ai.storyteller.solidcraft", LEGACY_APP_ID];
 
 /// Most files and nesting copied from a legacy folder (it holds preferences, autosaves and
@@ -127,8 +128,10 @@ mod tests {
         assert!(desktop.lines().any(|l| l == format!("Icon={APP_ID}")));
         let metainfo = std::fs::read_to_string(linux.join(format!("{APP_ID}.metainfo.xml.in"))).unwrap();
         assert!(metainfo.contains(&format!("<id>{APP_ID}</id>")));
+        // NØDE CAD claims none of the earlier ids: SolidCraft's entry replaces them, and two apps
+        // replacing one id would leave software centres to pick either as its successor.
         for old in PREVIOUS_APP_IDS {
-            assert!(metainfo.contains(&format!("<id>{old}</id>")) && desktop.contains(&format!("{old}.desktop;")));
+            assert!(!metainfo.contains(&format!("<id>{old}</id>")) && !desktop.contains(&format!("{old}.desktop;")));
         }
     }
 

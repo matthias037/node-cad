@@ -1160,9 +1160,9 @@ fn sketch_entity_items(app: &SolveApp) -> Vec<Item> {
         .collect();
     let mut v = Vec::new();
     // A distance to a circle or arc: measured from its centre, its near edge or its far edge.
-    let picked: Vec<&String> =
+    let dim_ids: Vec<&String> =
         app.session.selection.iter().filter_map(|s| if let Sel::SketchConstraint { id } = s { Some(id) } else { None }).collect();
-    if let [id] = picked[..]
+    if let [id] = dim_ids[..]
         && curves.is_empty()
         && points.is_empty()
         && let Some(now) =
@@ -2054,14 +2054,6 @@ pub fn open(app: &mut SolveApp, at: Pos2, held: crate::tool_modifiers::Held) {
     {
         let _ = app.run("select.set", json!({ "items": [sel] }));
         app.menu.picked = Some((at, before, app.session.selection.clone()));
-    } else if app.session.active_sketch.is_some()
-        && let Some(id) = crate::dim_view::hit_text(at).or_else(|| app.viewport.hover.is_none().then(|| crate::dim_view::hit(at)).flatten())
-    {
-        // A dimension's text wins, as for clicks; its lines only off the geometry.
-        let sel = Sel::SketchConstraint { id };
-        if !app.session.selection.contains(&sel) {
-            let _ = app.run("select.set", json!({ "items": [sel] }));
-        }
     } else if app.session.active_sketch.is_some()
         && let Some(h) = app.viewport.hover.clone()
         && let Some((_, sel)) = crate::viewport::candidate(app, &[h])

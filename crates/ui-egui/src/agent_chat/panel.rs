@@ -251,7 +251,6 @@ const CHIP_PAD: f32 = 13.0;
 const CHIP_CROSS: f32 = 14.0;
 
 /// One thing in a group's rows: its heading, a chip for an item, or the "+N more" note.
-#[cfg(not(target_arch = "wasm32"))]
 enum ChipPart<'a> {
     Heading(String),
     /// An item and its place among all of the context's items.
@@ -263,7 +262,6 @@ enum ChipPart<'a> {
 /// each and a chip per item; hovering a chip tells what is known about it. The rows are filled by
 /// hand: egui wraps plain widgets, not framed ones, and one row wider than the chat would widen
 /// the whole panel.
-#[cfg(not(target_arch = "wasm32"))]
 fn context_chips(ui: &mut egui::Ui, context: &Context, removable: bool) -> Option<usize> {
     let mut removed = None;
     if context.is_empty() {
@@ -351,7 +349,6 @@ fn context_chips(ui: &mut egui::Ui, context: &Context, removable: bool) -> Optio
 }
 
 /// `s` cut to `max` characters, with an ellipsis.
-#[cfg(not(target_arch = "wasm32"))]
 fn shorten(s: &str, max: usize) -> String {
     if s.chars().count() <= max { s.to_string() } else { format!("{}…", s.chars().take(max.saturating_sub(1)).collect::<String>()) }
 }
@@ -1224,7 +1221,6 @@ pub(super) fn no_agents(ui: &mut egui::Ui) {
 
 /// The width of a provider or model picker: its label's, from the usual picker width up to 200
 /// points and never wider than the panel, so a short name is read whole and a long one truncates.
-#[cfg(not(target_arch = "wasm32"))]
 fn picker_width(ui: &egui::Ui, label: &str) -> f32 {
     let t = Tokens::get();
     let label: String = label.chars().take(64).collect();
@@ -1235,7 +1231,6 @@ fn picker_width(ui: &egui::Ui, label: &str) -> f32 {
 
 /// An agent's select options are authoritative. Compact value pickers share a strip below the
 /// agent switcher; only a narrow chat wraps them, rather than spending two full rows per option.
-#[cfg(not(target_arch = "wasm32"))]
 fn config_selects(app: &mut SolveApp, ui: &mut egui::Ui, options: &[acp::ConfigOption]) {
     let t = Tokens::get();
     let pending = app.agent_chat.config_pending;
@@ -1269,7 +1264,6 @@ fn config_selects(app: &mut SolveApp, ui: &mut egui::Ui, options: &[acp::ConfigO
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn config_select(app: &mut SolveApp, ui: &mut egui::Ui, option: &acp::ConfigOption, width: f32, pending: bool) {
     let t = Tokens::get();
     let current = option.options.iter().find(|choice| choice.value == option.current_value);
@@ -1341,7 +1335,6 @@ fn config_select(app: &mut SolveApp, ui: &mut egui::Ui, option: &acp::ConfigOpti
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn compact_text(text: &str, max_chars: usize) -> String {
     let mut chars = text.chars();
     let short: String = chars.by_ref().take(max_chars).collect();
@@ -2127,7 +2120,6 @@ fn tool_card(ui: &mut egui::Ui, n: usize, call: &ToolCall) {
 }
 
 /// One part of a card's Details: its heading and the raw text, cut short and scrolling.
-#[cfg(not(target_arch = "wasm32"))]
 fn tool_detail(ui: &mut egui::Ui, heading: &str, text: &str, id: Id) {
     let t = Tokens::get();
     ui.label(RichText::new(heading).size(t.font_small).color(t.text_dim));

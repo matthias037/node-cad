@@ -378,7 +378,7 @@ fn help_menu_checks_with_automatic_checks_off_and_offers_installation() {
     assert!(h.app.updater.open);
     assert!(h.app.preferences.update.skipped.is_empty());
     assert_eq!(h.app.preferences.update.remind_after, 0.0);
-    assert!(h.widget(&format!("SolidCraft {version} is available")).is_some());
+    assert!(h.widget(&format!("NØDE CAD {version} is available")).is_some());
     assert!(h.widget("Download and open").is_some(), "the macOS installation is offered immediately");
     assert!(h.app.updater.job.is_none());
 }
@@ -410,7 +410,7 @@ fn help_check_shows_progress_and_up_to_date_then_closes() {
     tx.send(Ok(release)).unwrap();
     h.frames(2);
     assert_eq!(h.app.updater.status, Status::UpToDate);
-    assert!(h.widget("SolidCraft is up to date.").is_some());
+    assert!(h.widget("NØDE CAD is up to date.").is_some());
     assert!(h.widget("Download").is_none() && h.widget("Update now").is_none());
     let [x, y] = h.widget("Close").unwrap();
     h.call("ui.click", json!({"x": x, "y": y}));
@@ -418,7 +418,7 @@ fn help_check_shows_progress_and_up_to_date_then_closes() {
     // Reopening during the cooldown still shows the result, without another request.
     h.app.updater.last_manual = unix_now();
     h.call("ui.help", json!({"item": "updates"}));
-    assert!(h.widget("SolidCraft is up to date.").is_some());
+    assert!(h.widget("NØDE CAD is up to date.").is_some());
     assert!(h.app.updater.rx.is_none());
 }
 
@@ -431,7 +431,7 @@ fn help_check_reports_network_errors_and_rate_limits_in_the_window() {
         h.frames(2);
         assert_eq!(h.app.updater.status, Status::Failed(error.to_string()));
         assert!(h.widget(&format!("Couldn't check: {error}")).is_some());
-        assert!(h.widget("SolidCraft is up to date.").is_none());
+        assert!(h.widget("NØDE CAD is up to date.").is_none());
         if matches!(error, FetchError::RateLimited { .. }) {
             h.call("ui.help", json!({"item": "updates"}));
             assert!(h.app.updater.rx.is_none(), "the server's rate limit is honoured");
@@ -448,16 +448,16 @@ fn help_check_result_follows_the_selected_language() {
     let release = Release::parse(json!({"tag_name": current_version(), "assets": []}).to_string().as_bytes()).unwrap();
     tx.send(Ok(release)).unwrap();
     h.frames(2);
-    assert!(h.widget("SolidCraft ist aktuell.").is_some());
+    assert!(h.widget("NØDE CAD ist aktuell.").is_some());
     for (language, title, message) in [
-        ("fr", "Rechercher des mises à jour", "SolidCraft est à jour."),
-        ("ja", "アップデートを確認", "SolidCraft は最新です。"),
-        ("zh-TW", "檢查更新", "SolidCraft 已是最新版本。"),
+        ("fr", "Rechercher des mises à jour", "NØDE CAD est à jour."),
+        ("ja", "アップデートを確認", "NØDE CAD は最新です。"),
+        ("zh-TW", "檢查更新", "NØDE CAD 已是最新版本。"),
     ] {
         h.call("ui.prefs", json!({"language": language}));
         assert!(h.widget(title).is_some(), "the window title follows {language}");
         assert!(h.widget(message).is_some(), "the result follows {language}");
-        assert!(h.widget("SolidCraft is up to date.").is_none());
+        assert!(h.widget("NØDE CAD is up to date.").is_none());
     }
 }
 
@@ -467,7 +467,7 @@ fn help_check_explains_when_checks_are_unavailable() {
     h.app.updater.off = true;
     h.call("ui.help", json!({"item": "updates"}));
     assert!(h.widget("Update checks are not available for this installation.").is_some());
-    assert!(h.widget("SolidCraft is up to date.").is_none());
+    assert!(h.widget("NØDE CAD is up to date.").is_none());
     assert!(h.app.updater.rx.is_none());
 }
 
@@ -660,12 +660,12 @@ fn releases_under_either_owner_are_accepted() {
 fn the_version_links_to_its_release_notes() {
     // A release build opens the page of its own release; stable, candidate and nightly tags all exist.
     for v in ["0.17.0", "0.21.0-rc.2", "0.20.0-nightly.20261023.69.1"] {
-        assert_eq!(release_notes_url(v, true), format!("https://github.com/tangency-labs/solidcraft/releases/tag/v{v}"));
+        assert_eq!(release_notes_url(v, true), format!("https://github.com/matthias037/node-cad/releases/tag/v{v}"));
     }
     // A development build has no release of its own: the release history, which is what the issue asks for.
-    assert_eq!(release_notes_url("0.17.0", false), "https://github.com/tangency-labs/solidcraft/releases");
+    assert_eq!(release_notes_url("0.17.0", false), "https://github.com/matthias037/node-cad/releases");
     // Anything that is not a version never ends up in a URL.
-    assert_eq!(release_notes_url("0.1/../../x", true), "https://github.com/tangency-labs/solidcraft/releases");
+    assert_eq!(release_notes_url("0.1/../../x", true), "https://github.com/matthias037/node-cad/releases");
 }
 
 #[test]
@@ -806,7 +806,7 @@ fn open_update_window(managed: Option<&str>) -> (crate::scenario::Harness, Scrat
 fn a_managed_install_points_to_its_manager_instead_of_updating_itself() {
     let (mut h, _dir) = open_update_window(Some("ArtCraft Launcher"));
     assert_eq!(install_method(&mut h.app), None, "no AppImage self-replace");
-    assert!(h.widget("Update available: update SolidCraft in ArtCraft Launcher").is_some());
+    assert!(h.widget("Update available: update NØDE CAD in ArtCraft Launcher").is_some());
     for gone in ["Update now", "Download", "Open release page"] {
         assert!(h.widget(gone).is_none(), "{gone} is not offered");
     }
@@ -822,7 +822,7 @@ fn an_unmanaged_install_updates_itself_as_before() {
     assert_eq!(install_method(&mut h.app), Some(install::Method::AppImage("/home/me/SolidCraft.AppImage".into())));
     assert!(h.widget("Update now").is_some());
     assert!(h.widget("Download").is_some());
-    assert!(h.widget("Update available: update SolidCraft in ArtCraft Launcher").is_none());
+    assert!(h.widget("Update available: update NØDE CAD in ArtCraft Launcher").is_none());
 }
 
 #[test]
@@ -859,15 +859,16 @@ fn install_selection_refreshes_the_button_and_progress_before_completion() {
     h.app.updater.release = Some(shown);
     h.app.updater.kind = Some(InstallKind::AppImage(target));
     h.app.updater.open = true;
-    h.app.services.http_get = Some(Arc::new(move |url| {
-        if url == LATEST_API {
-            return Ok(json!({"tag_name":"v999.1.0", "assets":[
-                {"name": name, "browser_download_url":format!("https://github.com/tangency-labs/solidcraft/releases/download/v999.1.0/{name}")},
-                {"name": install::SUMS, "browser_download_url":"https://github.com/tangency-labs/solidcraft/releases/download/v999.1.0/SHA256SUMS.txt"}
+    h.app.services.http_get =
+        Some(Arc::new(move |url| {
+            if url == LATEST_API {
+                return Ok(json!({"tag_name":"v999.1.0", "assets":[
+                {"name": name, "browser_download_url":format!("https://github.com/matthias037/node-cad/releases/download/v999.1.0/{name}")},
+                {"name": install::SUMS, "browser_download_url":"https://github.com/matthias037/node-cad/releases/download/v999.1.0/SHA256SUMS.txt"}
             ]}).to_string().into_bytes());
-        }
-        Ok(format!("{}  {name}\n", "a".repeat(64)).into_bytes())
-    }));
+            }
+            Ok(format!("{}  {name}\n", "a".repeat(64)).into_bytes())
+        }));
     let (tx, rx) = std::sync::mpsc::channel();
     let rx = std::sync::Mutex::new(rx);
     h.app.services.http_download = Some(Arc::new(move |_, _, _| {
@@ -905,17 +906,18 @@ fn cancel_download_leaves_downloading_immediately() {
     h.app.updater.open = true;
     let (gate_tx, gate_rx) = std::sync::mpsc::channel();
     let gate_rx = std::sync::Mutex::new(gate_rx);
-    h.app.services.http_get = Some(Arc::new(move |url| {
-        if url == LATEST_API {
-            return Ok(json!({"tag_name":"v999.1.0", "assets":[
-                {"name": name, "browser_download_url":format!("https://github.com/tangency-labs/solidcraft/releases/download/v999.1.0/{name}")},
-                {"name": install::SUMS, "browser_download_url":"https://github.com/tangency-labs/solidcraft/releases/download/v999.1.0/SHA256SUMS.txt"}
+    h.app.services.http_get =
+        Some(Arc::new(move |url| {
+            if url == LATEST_API {
+                return Ok(json!({"tag_name":"v999.1.0", "assets":[
+                {"name": name, "browser_download_url":format!("https://github.com/matthias037/node-cad/releases/download/v999.1.0/{name}")},
+                {"name": install::SUMS, "browser_download_url":"https://github.com/matthias037/node-cad/releases/download/v999.1.0/SHA256SUMS.txt"}
             ]}).to_string().into_bytes());
-        }
-        // Stall checksum GET until the test ends so Cancel has to work before the body download.
-        let _ = gate_rx.lock().unwrap().recv();
-        Ok(format!("{}  {name}\n", "a".repeat(64)).into_bytes())
-    }));
+            }
+            // Stall checksum GET until the test ends so Cancel has to work before the body download.
+            let _ = gate_rx.lock().unwrap().recv();
+            Ok(format!("{}  {name}\n", "a".repeat(64)).into_bytes())
+        }));
     h.app.services.http_download = Some(Arc::new(|_, _, _| Err(FetchError::Failed("download must not start".into()))));
     start_install(&mut h.app, &egui::Context::default());
     assert!(h.app.updater.job.is_some());

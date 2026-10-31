@@ -744,7 +744,7 @@
   "ai.prefs.availability": "Controlli dell'assistente",
   "ai.prefs.background_commands": "Esegui i comandi dell'agente in background",
   "ai.prefs.connect_apps": "Rendi NØDE CAD disponibile alle app IA su questo computer",
-  "ai.prefs.connect_apps_note": "All'avvio, NØDE CAD si aggiunge come server MCP alle app IA trovate su questo computer (OpenCode, Claude Desktop, Claude Code, Cursor, Codex, Gemini CLI, Copilot CLI, Windsurf, Zed, VS Code), così un agente può usarlo senza alcuna configurazione. Viene aggiunta o aggiornata nel percorso solo la voce solidcraft; una voce che hai modificato resta intatta e prima viene creata una copia di sicurezza del file. Disattivato: le voci aggiunte vengono rimosse. Aiuto > Connetti assistenti IA… lo fa a mano.",
+  "ai.prefs.connect_apps_note": "All'avvio, NØDE CAD si aggiunge come server MCP alle app IA trovate su questo computer (OpenCode, Claude Desktop, Claude Code, Cursor, Codex, Gemini CLI, Copilot CLI, Windsurf, Zed, VS Code), così un agente può usarlo senza alcuna configurazione. Viene aggiunta o aggiornata nel percorso solo la voce node-cad; una voce che hai modificato resta intatta e prima viene creata una copia di sicurezza del file. Disattivato: le voci aggiunte vengono rimosse. Aiuto > Connetti assistenti IA… lo fa a mano.",
   "ai.prefs.connect_at_start": "Connetti l'ultimo agente usato all'avvio di NØDE CAD",
   "ai.prefs.connect_at_start_note": "A ogni avvio di NØDE CAD avvia in background l'agente connesso per ultimo (o quello predefinito), così è pronto per la chat. Non avviene se NØDE CAD è avviato con --control. Se non riesce a connettersi, l'Assistente mostra Connessione non riuscita e un pulsante Riprova.",
   "ai.prefs.follow_camera": "Orienta la camera sugli schizzi",

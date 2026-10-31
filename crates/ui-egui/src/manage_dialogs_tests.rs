@@ -878,7 +878,8 @@ fn physical_material_duplicate_preserves_visual_values_and_keeps_builtin_immutab
     assert_eq!((copied.color, copied.opacity, copied.pbr), (look.color, look.opacity, look.pbr));
     assert_eq!(h.app.session.doc.materials, assignments);
     let after = h.app.session.execute("material.list", &json!({})).unwrap();
-    assert_eq!(&after["materials"].as_array().unwrap()[..14], builtins["materials"].as_array().unwrap().as_slice());
+    let builtins = builtins["materials"].as_array().unwrap();
+    assert_eq!(&after["materials"].as_array().unwrap()[..builtins.len()], builtins.as_slice());
 }
 
 #[test]

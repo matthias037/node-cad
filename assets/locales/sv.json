@@ -744,7 +744,7 @@
   "ai.prefs.availability": "Assistentkontroller",
   "ai.prefs.background_commands": "Kör agentkommandon i bakgrunden",
   "ai.prefs.connect_apps": "Gör NØDE CAD tillgängligt för AI-appar på den här datorn",
-  "ai.prefs.connect_apps_note": "När NØDE CAD startar läggs det till som MCP-server i de AI-appar som hittas på den här datorn (OpenCode, Claude Desktop, Claude Code, Cursor, Codex, Gemini CLI, Copilot CLI, Windsurf, Zed, VS Code), så att en agent kan använda det utan någon inställning. Endast solidcraft-posten läggs till eller får sin sökväg uppdaterad; en post som du har ändrat lämnas orörd, och filen säkerhetskopieras först. Av: de poster som lades till tas bort. Hjälp > Anslut AI-assistenter… gör detta manuellt.",
+  "ai.prefs.connect_apps_note": "När NØDE CAD startar läggs det till som MCP-server i de AI-appar som hittas på den här datorn (OpenCode, Claude Desktop, Claude Code, Cursor, Codex, Gemini CLI, Copilot CLI, Windsurf, Zed, VS Code), så att en agent kan använda det utan någon inställning. Endast node-cad-posten läggs till eller får sin sökväg uppdaterad; en post som du har ändrat lämnas orörd, och filen säkerhetskopieras först. Av: de poster som lades till tas bort. Hjälp > Anslut AI-assistenter… gör detta manuellt.",
   "ai.prefs.connect_at_start": "Anslut senast använda agent när NØDE CAD startar",
   "ai.prefs.connect_at_start_note": "Startar den agent du anslöt senast (eller standardagenten) i bakgrunden varje gång NØDE CAD startar, så att den är redo för chatt. Inte när NØDE CAD startas med --control. Om den inte kan ansluta visar assistenten Anslutningen misslyckades och en knapp Försök igen.",
   "ai.prefs.follow_camera": "Vrid kameran mot skisser",

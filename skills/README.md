@@ -11,6 +11,7 @@ The contributor skills (everything except modeling, editing, checking and mechan
 | Skill | Loads when the agent |
 |---|---|
 | [`solidcraft-contributing`](solidcraft-contributing/SKILL.md) | helps someone set up a fork, choose and claim an issue, and submit a contribution for review; the rules every PR follows |
+| [`node-cad-name`](node-cad-name/SKILL.md) | writes anything users or AI clients see, or renames something: what says NØDE CAD, what keeps the SolidCraft name |
 | [`solidcraft-ground-rules`](solidcraft-ground-rules/SKILL.md) | adds a dependency, asset or wording: independence, licences, attribution, the product name |
 | [`solidcraft-crash-safety`](solidcraft-crash-safety/SKILL.md) | writes non-test Rust, handles hostile input or investigates a crash report |
 | [`solidcraft-commands`](solidcraft-commands/SKILL.md) | adds a command or decides which crate code belongs in |

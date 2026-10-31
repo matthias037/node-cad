@@ -23,7 +23,7 @@ The server is `solidcraft-cli mcp` (`crates/mcp/src/`, `docs/mcp.md`). Tools are
 - The control channel is a local-only interface with a token. A new method needs an entry in `docs/control-protocol.md`; long work follows `skills/solidcraft-performance/SKILL.md`.
 
 ## Bundled agent skills
-The modelling skills (`skills/solidcraft-modeling`, `-editing`, `-checking`, `-mechanisms`) are built into the MCP server for its `skill_reference` tool (`crates/mcp/src/skill_reference.rs`). The contributor skills are not.
+The modelling skills (`skills/node-cad-modeling`, `-editing`, `-checking`, `-mechanisms`) are built into the MCP server for its `skill_reference` tool (`crates/mcp/src/skill_reference.rs`). The contributor skills are not.
 - When a command, parameter name or behaviour those skills describe changes, update them in the same PR. `skills_name_only_real_tools_and_commands` in `crates/mcp/src/tests.rs` fails when a skill names a tool or command that is gone.
 - Adding a bundled file means adding it to `skill_reference.rs` and to that test.
 - `skills/README.md` explains the layout and the other tests; `cargo xtask skills` checks that AGENTS.md and every SKILL.md cite real paths, commands and skills.

@@ -6,23 +6,7 @@ NØDE CAD is a clean-room, pure-Rust parametric 3D CAD app (sketch solver, featu
 Work: ROADMAP.md, "Where help is wanted most" in CONTRIBUTING.md, issues labelled `help wanted`, `good first issue`, `needs-triage`; architecture in `docs/architecture.md`. Act when the code, docs and rules settle a question; ask only when it changes what users see. Local `plan/` notes are optional.
 
 ## Product name
-This fork ships as **NØDE CAD** (NØDE OS brand). Everything a user, a customer or an AI client
-sees says NØDE CAD: window title, menus, dialogs, every locale, crash and issue reports, headers
-written into exported files, the executables (`node-cad`, `node-cad-cli`), design files
-(`.nodecad`), the MCP server (`node-cad`, resources `nodecad://…`, the agent chat's bridge
-`node-cad-app`), the macOS bundle (`NØDE CAD.app`, id `fr.node-os.cad`), the Linux app id
-(`fr.node_os.cad`) and the app icon (`assets/icons/app/shared/source/app_icon.rs`). Text written
-into files, folder names, user agents and driver ids uses ASCII `NODE CAD` / `NODE-CAD`. Never put
-"SolidCraft" back into anything a user or an AI client can see.
-
-What keeps the upstream (SolidCraft) name, so upstream changes still merge and nobody's data is
-lost: Cargo package and crate names (`solidcraft`, `solidcraft-cli`, `solidcraft-*`: `cargo run -p
-solidcraft` still works) and Rust paths, `SOLIDCRAFT_*` environment variables, settings, recovery
-and data folder names, storage and preference keys, keychain service names, and the format tags
-written inside files (`solidcraft/N`, `solidcraft-theme/1`, …). Earlier names survive only as the
-compatibility shims listed in `docs/compatibility.md` (`.sc`, `.solidcraft` and `.solvecraft` designs
-still open; `solidcraft-cli` and `solvecraft-cli` forward to `node-cad-cli`); don't add new uses of
-them anywhere else. SolidCraft's copyright stays in LICENSE-*, NOTICE and THIRD-PARTY-LICENSES.txt.
+This fork ships as **NØDE CAD** (NØDE OS brand). Never put "SolidCraft" back into anything a user or an AI client can see; crate names, `SOLIDCRAFT_*` variables, folders, keys and format tags keep it so upstream still merges. What says which: `skills/node-cad-name/SKILL.md`.
 
 ## Hard rules (what enforces each)
 - Independent: never copy another product's code, icons, text or templates; never drive or take data from commercial CAD. `skills/solidcraft-ground-rules/SKILL.md`.
@@ -48,7 +32,8 @@ them anywhere else. SolidCraft's copyright stays in LICENSE-*, NOTICE and THIRD-
 | Working on | Read |
 |---|---|
 | A PR, a claim, review, CI or evidence | `skills/solidcraft-contributing/SKILL.md` |
-| Licences, assets, clean-room, the name | `skills/solidcraft-ground-rules/SKILL.md` |
+| Licences, assets, clean-room | `skills/solidcraft-ground-rules/SKILL.md` |
+| The product name, what keeps SolidCraft's | `skills/node-cad-name/SKILL.md` |
 | Non-test Rust, hostile input, a crash report | `skills/solidcraft-crash-safety/SKILL.md` |
 | A command, a crate boundary | `skills/solidcraft-commands/SKILL.md` |
 | A dialog, panel, camera, icon, colour | `skills/solidcraft-ui/SKILL.md` |

@@ -744,7 +744,7 @@
   "ai.prefs.availability": "Kontrol asisten",
   "ai.prefs.background_commands": "Jalankan perintah agen di latar belakang",
   "ai.prefs.connect_apps": "Sediakan NØDE CAD untuk aplikasi AI di komputer ini",
-  "ai.prefs.connect_apps_note": "Saat NØDE CAD dimulai, menambahkannya sebagai server MCP ke aplikasi AI yang ditemukan di komputer ini (OpenCode, Claude Desktop, Claude Code, Cursor, Codex, Gemini CLI, Copilot CLI, Windsurf, Zed, VS Code), sehingga agen dapat memakainya tanpa pengaturan apa pun. Hanya entri solidcraft yang ditambahkan atau path-nya diperbarui; entri yang Anda ubah dibiarkan, dan file dicadangkan lebih dulu. Nonaktif: entri yang ditambahkannya dihapus. Bantuan > Hubungkan asisten AI… melakukannya secara manual.",
+  "ai.prefs.connect_apps_note": "Saat NØDE CAD dimulai, menambahkannya sebagai server MCP ke aplikasi AI yang ditemukan di komputer ini (OpenCode, Claude Desktop, Claude Code, Cursor, Codex, Gemini CLI, Copilot CLI, Windsurf, Zed, VS Code), sehingga agen dapat memakainya tanpa pengaturan apa pun. Hanya entri node-cad yang ditambahkan atau path-nya diperbarui; entri yang Anda ubah dibiarkan, dan file dicadangkan lebih dulu. Nonaktif: entri yang ditambahkannya dihapus. Bantuan > Hubungkan asisten AI… melakukannya secara manual.",
   "ai.prefs.connect_at_start": "Hubungkan agen yang terakhir dipakai saat NØDE CAD dimulai",
   "ai.prefs.connect_at_start_note": "Memulai agen yang terakhir Anda hubungkan (atau yang default) di latar belakang setiap kali NØDE CAD dimulai, sehingga siap untuk mengobrol. Tidak berlaku jika NØDE CAD dimulai dengan --control. Jika tidak dapat terhubung, Asisten menampilkan Koneksi gagal dan tombol Coba lagi.",
   "ai.prefs.follow_camera": "Arahkan kamera ke sketsa",

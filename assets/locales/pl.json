@@ -741,7 +741,7 @@
   "ai.prefs.availability": "Sterowanie asystentem",
   "ai.prefs.background_commands": "Uruchamiaj polecenia agenta w tle",
   "ai.prefs.connect_apps": "Udostępnij NØDE CAD aplikacjom AI na tym komputerze",
-  "ai.prefs.connect_apps_note": "Przy uruchomieniu NØDE CAD dodaje go jako serwer MCP do aplikacji AI znalezionych na tym komputerze (OpenCode, Claude Desktop, Claude Code, Cursor, Codex, Gemini CLI, Copilot CLI, Windsurf, Zed, VS Code), aby agent mógł go używać bez konfiguracji. Dodawany jest tylko wpis solidcraft lub odświeżana jego ścieżka; zmieniony przez Ciebie wpis pozostaje nietknięty, a plik jest najpierw kopiowany. Wyłączone: dodane wpisy są usuwane. Pomoc > Połącz asystentów AI… robi to ręcznie.",
+  "ai.prefs.connect_apps_note": "Przy uruchomieniu NØDE CAD dodaje go jako serwer MCP do aplikacji AI znalezionych na tym komputerze (OpenCode, Claude Desktop, Claude Code, Cursor, Codex, Gemini CLI, Copilot CLI, Windsurf, Zed, VS Code), aby agent mógł go używać bez konfiguracji. Dodawany jest tylko wpis node-cad lub odświeżana jego ścieżka; zmieniony przez Ciebie wpis pozostaje nietknięty, a plik jest najpierw kopiowany. Wyłączone: dodane wpisy są usuwane. Pomoc > Połącz asystentów AI… robi to ręcznie.",
   "ai.prefs.connect_at_start": "Łącz ostatnio używanego agenta przy uruchomieniu NØDE CAD",
   "ai.prefs.connect_at_start_note": "Przy każdym uruchomieniu NØDE CAD uruchamia w tle ostatnio połączonego agenta (lub domyślnego), aby był gotowy do rozmowy. Nie działa, gdy NØDE CAD jest uruchomiony z --control. Jeśli nie uda się połączyć, Asystent pokaże Połączenie nieudane i przycisk Ponów.",
   "ai.prefs.follow_camera": "Obracaj kamerę do szkiców",

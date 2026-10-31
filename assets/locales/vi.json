@@ -744,7 +744,7 @@
   "ai.prefs.availability": "Điều khiển trợ lý",
   "ai.prefs.background_commands": "Chạy các lệnh của agent dưới nền",
   "ai.prefs.connect_apps": "Cho phép các ứng dụng AI trên máy tính này kết nối với NØDE CAD",
-  "ai.prefs.connect_apps_note": "Khi NØDE CAD khởi động, tự động thêm phần mềm dưới dạng MCP server vào các ứng dụng AI tìm thấy trên máy tính này (OpenCode, Claude Desktop, Claude Code, Cursor, Codex, Gemini CLI, Copilot CLI, Windsurf, Zed, VS Code) để AI agent có thể sử dụng ngay mà không cần cấu hình thủ công. Chỉ mục cấu hình solidcraft sẽ được thêm mới hoặc làm mới đường dẫn; các mục bạn tự tùy chỉnh sẽ được giữ nguyên và file được sao lưu .bak trước khi sửa. Tắt: các mục đã thêm sẽ được gỡ bỏ. Trợ giúp > Kết nối trợ lý ảo AI… để thực hiện thủ công.",
+  "ai.prefs.connect_apps_note": "Khi NØDE CAD khởi động, tự động thêm phần mềm dưới dạng MCP server vào các ứng dụng AI tìm thấy trên máy tính này (OpenCode, Claude Desktop, Claude Code, Cursor, Codex, Gemini CLI, Copilot CLI, Windsurf, Zed, VS Code) để AI agent có thể sử dụng ngay mà không cần cấu hình thủ công. Chỉ mục cấu hình node-cad sẽ được thêm mới hoặc làm mới đường dẫn; các mục bạn tự tùy chỉnh sẽ được giữ nguyên và file được sao lưu .bak trước khi sửa. Tắt: các mục đã thêm sẽ được gỡ bỏ. Trợ giúp > Kết nối trợ lý ảo AI… để thực hiện thủ công.",
   "ai.prefs.connect_at_start": "Kết nối tác tử dùng gần nhất khi NØDE CAD khởi động",
   "ai.prefs.connect_at_start_note": "Mỗi lần NØDE CAD khởi động, chạy ngầm tác tử bạn kết nối gần nhất (hoặc tác tử mặc định) để sẵn sàng trò chuyện. Không áp dụng khi NØDE CAD được khởi động với --control. Nếu không kết nối được, Trợ lý hiển thị “Kết nối thất bại” và nút “Thử lại”.",
   "ai.prefs.follow_camera": "Xoay camera theo phác thảo",

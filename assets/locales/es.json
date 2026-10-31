@@ -744,7 +744,7 @@
   "ai.prefs.availability": "Controles del Asistente",
   "ai.prefs.background_commands": "Ejecutar los comandos del agente en segundo plano",
   "ai.prefs.connect_apps": "Poner NØDE CAD a disposición de las aplicaciones de IA de este equipo",
-  "ai.prefs.connect_apps_note": "Al iniciar NØDE CAD, lo añade como servidor MCP a las aplicaciones de IA que encuentre en este equipo (OpenCode, Claude Desktop, Claude Code, Cursor, Codex, Gemini CLI, Copilot CLI, Windsurf, Zed, VS Code), para que un agente pueda usarlo sin configurar nada. Solo se añade la entrada solidcraft o se actualiza su ruta; una entrada que hayas cambiado se deja intacta y el archivo se copia antes. Desactivado: se eliminan las entradas que añadió. Ayuda › Conectar asistentes de IA… lo hace a mano.",
+  "ai.prefs.connect_apps_note": "Al iniciar NØDE CAD, lo añade como servidor MCP a las aplicaciones de IA que encuentre en este equipo (OpenCode, Claude Desktop, Claude Code, Cursor, Codex, Gemini CLI, Copilot CLI, Windsurf, Zed, VS Code), para que un agente pueda usarlo sin configurar nada. Solo se añade la entrada node-cad o se actualiza su ruta; una entrada que hayas cambiado se deja intacta y el archivo se copia antes. Desactivado: se eliminan las entradas que añadió. Ayuda › Conectar asistentes de IA… lo hace a mano.",
   "ai.prefs.connect_at_start": "Conectar el último agente usado al iniciar NØDE CAD",
   "ai.prefs.connect_at_start_note": "Inicia el agente que conectaste por última vez (o el predeterminado) en segundo plano cada vez que se abre NØDE CAD",
   "ai.prefs.follow_camera": "Girar la cámara hacia los bocetos",

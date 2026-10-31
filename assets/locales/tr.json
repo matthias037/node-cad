@@ -744,7 +744,7 @@
   "ai.prefs.availability": "Asistan kontrolleri",
   "ai.prefs.background_commands": "Ajan komutlarını arka planda çalıştır",
   "ai.prefs.connect_apps": "NØDE CAD'ı bu bilgisayardaki AI uygulamalarına aç",
-  "ai.prefs.connect_apps_note": "NØDE CAD başladığında, bu bilgisayarda bulduğu AI uygulamalarına (OpenCode, Claude Desktop, Claude Code, Cursor, Codex, Gemini CLI, Copilot CLI, Windsurf, Zed, VS Code) onu bir MCP sunucusu olarak ekler; böylece bir ajan kurulum yapmadan kullanabilir. Yalnızca solidcraft girdisi eklenir veya yolu yenilenir; değiştirdiğiniz bir girdiye dokunulmaz ve dosya önce yedeklenir. Kapalı: eklediği girdiler kaldırılır. Yardım > AI asistanlarını bağla… bunu elle yapar.",
+  "ai.prefs.connect_apps_note": "NØDE CAD başladığında, bu bilgisayarda bulduğu AI uygulamalarına (OpenCode, Claude Desktop, Claude Code, Cursor, Codex, Gemini CLI, Copilot CLI, Windsurf, Zed, VS Code) onu bir MCP sunucusu olarak ekler; böylece bir ajan kurulum yapmadan kullanabilir. Yalnızca node-cad girdisi eklenir veya yolu yenilenir; değiştirdiğiniz bir girdiye dokunulmaz ve dosya önce yedeklenir. Kapalı: eklediği girdiler kaldırılır. Yardım > AI asistanlarını bağla… bunu elle yapar.",
   "ai.prefs.connect_at_start": "NØDE CAD başladığında en son kullanılan ajana bağlan",
   "ai.prefs.connect_at_start_note": "NØDE CAD her başladığında, en son bağlandığınız ajanı (veya varsayılanı) arka planda başlatır; böylece sohbete hazır olur. NØDE CAD --control ile başlatıldığında çalışmaz. Bağlanamazsa Asistan, Bağlantı başarısız mesajını ve bir Yeniden dene düğmesini gösterir.",
   "ai.prefs.follow_camera": "Kamerayı eskizlere çevir",

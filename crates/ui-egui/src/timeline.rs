@@ -1238,18 +1238,23 @@ mod tests {
         let _language = crate::i18n::scope("ja");
         let translated = crate::i18n::tr_diagnostic(diagnostic);
         assert_ne!(translated, diagnostic);
+        // A warning is followed by NØDE CAD's plain-words hint about the yellow mark.
+        let hint = |warning: &str| crate::i18n::tr_label(super::warning_hint(warning)).to_string();
         assert_eq!(
             super::status_text("My feature", "ExtrudeFeature", Some(diagnostic), Some(diagnostic)),
-            format!("My feature  (ExtrudeFeature)\nエラー: {translated}\n警告: {translated}")
+            format!("My feature  (ExtrudeFeature)\nエラー: {translated}\n警告: {translated}\n{}", hint(diagnostic))
         );
         assert_eq!(super::status_text("My feature", "ExtrudeFeature", None, None), "My feature  (ExtrudeFeature)");
         // Unknown diagnostics remain intact, including names and measured values.
         assert_eq!(
             super::status_text("My feature", "ExtrudeFeature", None, Some("Custom part: 1.25 mm")),
-            "My feature  (ExtrudeFeature)\n警告: Custom part: 1.25 mm"
+            format!("My feature  (ExtrudeFeature)\n警告: Custom part: 1.25 mm\n{}", hint("Custom part: 1.25 mm"))
         );
         let _english = crate::i18n::scope("en");
-        assert_eq!(super::status_text("Box", "BoxFeature", Some("error"), Some("warning")), "Box  (BoxFeature)\nError: error\nWarning: warning");
+        assert_eq!(
+            super::status_text("Box", "BoxFeature", Some("error"), Some("warning")),
+            format!("Box  (BoxFeature)\nError: error\nWarning: warning\n{}", hint("warning"))
+        );
     }
 
     #[test]

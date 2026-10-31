@@ -744,7 +744,7 @@
   "ai.prefs.availability": "Ovládání asistenta",
   "ai.prefs.background_commands": "Spouštět příkazy agenta na pozadí",
   "ai.prefs.connect_apps": "Zpřístupnit NØDE CAD AI aplikacím v tomto počítači",
-  "ai.prefs.connect_apps_note": "Při spuštění NØDE CAD přidá jako server MCP do AI aplikací nalezených v tomto počítači (OpenCode, Claude Desktop, Claude Code, Cursor, Codex, Gemini CLI, Copilot CLI, Windsurf, Zed, VS Code), takže ho agent může používat bez jakéhokoli nastavení. Přidá se, nebo se obnoví jeho cesta, jen položka solidcraft; položka, kterou jste změnili, zůstane beze změny a soubor se předtím zálohuje. Vypnuto: položky, které přidal, se odeberou. Totéž provede ručně Nápověda > Připojit AI asistenty…",
+  "ai.prefs.connect_apps_note": "Při spuštění NØDE CAD přidá jako server MCP do AI aplikací nalezených v tomto počítači (OpenCode, Claude Desktop, Claude Code, Cursor, Codex, Gemini CLI, Copilot CLI, Windsurf, Zed, VS Code), takže ho agent může používat bez jakéhokoli nastavení. Přidá se, nebo se obnoví jeho cesta, jen položka node-cad; položka, kterou jste změnili, zůstane beze změny a soubor se předtím zálohuje. Vypnuto: položky, které přidal, se odeberou. Totéž provede ručně Nápověda > Připojit AI asistenty…",
   "ai.prefs.connect_at_start": "Při spuštění NØDE CADu připojit naposledy použitého agenta",
   "ai.prefs.connect_at_start_note": "Při každém spuštění NØDE CADu na pozadí spustí agenta, kterého jste připojili naposledy (nebo výchozího), aby byl připravený k chatu. Neplatí, když se NØDE CAD spouští s --control. Pokud se nepodaří připojit, Asistent zobrazí „Připojení selhalo“ a tlačítko Zkusit znovu.",
   "ai.prefs.follow_camera": "Natáčet kameru k náčrtům",
