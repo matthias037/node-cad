@@ -14,11 +14,11 @@ use crate::{Result, Session};
 
 pub static COMMANDS: &[CommandSpec] = &[
     CommandSpec::new("document.metadata", "Design Properties", read).icon("settings").noundo().doc_only().params(
-        "→ metadata: the design's metadata object as saved (other tools' keys too); properties: each of SolidCraft's design \
+        "→ metadata: the design's metadata object as saved (other tools' keys too); properties: each of NØDE CAD's design \
          properties (project, part number, revision…), its text or null (absent, or not text)",
     ),
     CommandSpec::new("document.metadata.set", "Change Design Properties", set).icon("settings").doc_only().params(
-        "key and value, or values: {key: value, …} (all or nothing, one undo step). SolidCraft's keys, the ones document.metadata's \
+        "key and value, or values: {key: value, …} (all or nothing, one undo step). NØDE CAD's keys, the ones document.metadata's \
          properties lists, take text (\"\" or null removes); another tool's data goes under its reverse-DNS key such as \
          com.example.tool (an object; null removes) → metadata, changed: [keys]",
     ),

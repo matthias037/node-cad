@@ -1457,7 +1457,7 @@ fn known_params(p: &Value, cmd: &str, own: &[&str], hint: &str) -> Result<()> {
 
 fn prim_cylinder(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "solid.cylinder";
-    known_params(p, cmd, &["radius", "diameter", "height", "base", "axis"], " (base: the centre of its bottom face, [x, y, z])")?;
+    known_params(p, cmd, &["radius", "diameter", "height", "base", "axis", "references"], " (base: the centre of its bottom face, [x, y, z])")?;
     let radius = radius_expr(s, p, cmd)?;
     let height = req_expr(cmd, p, "height")?;
     check_expr(s, &radius, Kind::Length, cmd, "radius")?;

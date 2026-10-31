@@ -76,7 +76,8 @@ fn face_tris(m: &Mesh, f: usize) -> Vec<[Vec3; 3]> {
 }
 
 /// A face or edge given by its body and a point alone, as agents write it: the index of the
-/// face or edge nearest the point (body_topology's indices), so it reads as a full selection.
+/// face or edge nearest the point (body_topology's indices), so it reads as a full selection. A
+/// point farther than 1 mm or 5 % of the body's size from it is left as it is, a pick of nothing.
 fn with_index(st: &solidcraft_doc::ModelState, v: &Value) -> Value {
     let (Some(kind), Some(body), Some(point), None) =
         (v.get("type").and_then(Value::as_str), v.get("body").and_then(Value::as_str), v.get("point").and_then(crate::params::vec3), v.get("index"))
@@ -85,14 +86,16 @@ fn with_index(st: &solidcraft_doc::ModelState, v: &Value) -> Value {
     };
     let Some(b) = st.body(body) else { return v.clone() };
     let m = b.mesh();
+    let near = (0.05 * m.bounds().diagonal()).max(1.0);
     let index = match kind {
-        "edge" => edge_index(&m, None, point),
+        "edge" => edge_index(&m, None, point).filter(|&i| m.edges.get(i).is_some_and(|e| polyline_dist(e, point) <= near)),
         "face" => m
             .triangles
             .iter()
             .zip(&m.tri_face)
             .filter_map(|(t, f)| m.tri(t).map(|[a, b, c]| (solidcraft_geom::compare::closest_on_triangle(point, a, b, c).dist(point), *f as usize)))
             .min_by(|x, y| x.0.total_cmp(&y.0))
+            .filter(|(d, _)| *d <= near)
             .map(|(_, f)| f),
         _ => None,
     };

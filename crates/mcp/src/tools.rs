@@ -382,7 +382,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "open",
             "Open a design",
-            "Open a .nodecad design file (or a .sc or .solidcraft one), a STEP file (.step/.stp: a new design whose bodies come from the file, as an \
+            "Open a .nodecad design file (designs saved under an earlier extension open too), a STEP file (.step/.stp: a new design whose bodies come from the file, as an \
              Import base feature in a component named after the file; an assembly's parts become nested components) or a \
              mesh (.3mf/.stl/.obj/.glb/.gltf: mesh bodies in such a component; a glTF file's nodes become nested components and its \
              materials appearances); the result reports the component (id, component_name). Replaces the current design; insert into it \
@@ -391,7 +391,7 @@ pub fn tool_definitions() -> Vec<Value> {
              so it is turned by default (`up: \"z\"` keeps its axes). `names` picks what the bodies are named after when the solids' own names say nothing useful.",
             obj(
                 json!({
-                    "path": string("Path to a .nodecad (or .sc, .solidcraft), .step/.stp, .3mf, .stl, .obj, .glb or .gltf file"),
+                    "path": string("Path to a .nodecad, .step/.stp, .3mf, .stl, .obj, .glb or .gltf file"),
                     "up": {"type": "string", "enum": ["z", "y"], "description": "STEP and glTF only. z keeps the file's axes; y: the file has Y up, so its bodies are turned to stand Z up. Default: z for STEP, y for glTF"},
                     "names": {"type": "string", "enum": ["auto", "solid", "product", "instance"], "description": "STEP, IGES, FreeCAD and Rhino. auto (default): keep meaningful solid names, replace placeholders with the nearest named product, else instance; solid: the solid's own name; product: the part's name; instance: the occurrence's name, else the product's"},
                 }),
@@ -402,7 +402,7 @@ pub fn tool_definitions() -> Vec<Value> {
         tool(
             "save",
             "Save the design",
-            "Save the design to `path` or its current file (a design opened as .solidcraft keeps that name). New designs are .sc files. The default is a design container; a .json path selects plain JSON. Set format to container or json to override the path. \
+            "Save the design to `path` or its current file (a design opened under an earlier extension keeps that name). New designs are .nodecad files. The default is a design container; a .json path selects plain JSON. Set format to container or json to override the path. \
              By default the path must lie in one of the agent's folders: the folder of a design opened or saved in this session (not its hidden files), \
              NØDE CAD's recovery folder, or a folder this server was started with `--allow-path DIR`. For a folder outside them, ask the user \
              to add `--allow-path` and that folder to this server's arguments in their MCP client configuration.",

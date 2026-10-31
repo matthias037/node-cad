@@ -71,7 +71,7 @@ pub static COMMANDS: &[CommandSpec] = &[
             "component: id or name of a linked component; path?: its placement (occurrence ids, default its first) → in the app \
              window: open the design it links in a tab of its own with the assembly drawn around it (component.finish_edit goes \
              back); fails when it is not linked, the assembly has no file yet, something is open or running in it, or the file is \
-             missing, on a network location not allowed yet or open in another SolidCraft; asked during the agent's turn it opens \
+             missing, on a network location not allowed yet or open in another NØDE CAD; asked during the agent's turn it opens \
              once the turn ends (queued: true); elsewhere it only checks",
         ),
     CommandSpec::new("component.finish_edit", "Finish Edit", crate::checked!("component.finish_edit", finish_edit))

@@ -163,8 +163,8 @@ fn the_min_of_a_ring_is_its_wall() {
 }
 
 /// A ring's wall as 0.21.0-rc.7 saved it, a `round_distance` from the outer circle's near edge to
-/// the inner one's far edge, still opens, drives the sketch and reads as min to min; its
-/// condition changes as a new dimension's does.
+/// the inner one's far edge, still opens, holds the sketch and reads as min to min; its condition
+/// changes as a new dimension's does.
 #[test]
 fn a_ring_wall_saved_by_rc7_opens_and_changes() {
     let mut s = Session::default();
@@ -176,7 +176,6 @@ fn a_ring_wall_saved_by_rc7_opens_and_changes() {
     run(&mut s, "sketch.dimension", json!({"entities": ["c2"], "type": "radius", "value": 15}));
     run(&mut s, "sketch.constraint.horizontal_vertical", json!({"points": ["c1.center", "c2.center"]}));
     run(&mut s, "sketch.finish", json!({}));
-    // The constraint as rc.7 wrote it: 20 - (d + 15) = 2 when the centres are 3 apart.
     fn constraints(v: &mut Value) -> Option<&mut Vec<Value>> {
         if v.get("constraints").is_some_and(Value::is_array) {
             return v.get_mut("constraints")?.as_array_mut();
@@ -187,16 +186,21 @@ fn a_ring_wall_saved_by_rc7_opens_and_changes() {
             _ => None,
         }
     }
+    // The constraint as rc.7 wrote it: the wall is 20 - (3 + 15) = 2, the far edge of the inner
+    // circle reaching back past the outer one's near edge.
     let mut saved: Value = serde_json::from_str(&s.doc.to_json()).unwrap();
     constraints(&mut saved).expect("the sketch's constraints").push(json!({
-        "id": "k_rc7", "type": "round_distance", "a": {"near": 0}, "b": {"far": 1}, "value": 1.0, "inside": true
+        "id": "k_rc7", "type": "round_distance", "a": {"near": 0}, "b": {"far": 1}, "value": 2.0, "inside": true
     }));
     let mut reopened = Session::new(solidcraft_doc::Document::from_json(&saved.to_string()).unwrap());
     run(&mut reopened, "sketch.edit", json!({"sketch": "Sketch1"}));
-    assert!(point(&reopened, "c2.center").dist(Vec2::new(4.0, 0.0)) < 1e-7, "a wall of 1: {:?}", point(&reopened, "c2.center"));
+    assert!(point(&reopened, "c2.center").dist(Vec2::new(3.0, 0.0)) < 1e-7, "{:?}", point(&reopened, "c2.center"));
     let sk = sketch(&reopened);
     let k = &sk.constraints.iter().find(|c| c.id == "k_rc7").unwrap().kind;
+    assert!((solidcraft_sketch::measure_dimension(&sk, k).unwrap() - 2.0).abs() < 1e-9);
     assert_eq!(crate::cmd::arc_conditions_of(&sk, k), Some([Some("min"), Some("min")]));
     let r = run(&mut reopened, "sketch.dimension_condition", json!({"dimension": "k_rc7", "arc_condition": "center"}));
-    assert_eq!(r["measured"], 4.0, "{r}");
+    assert_eq!(r["measured"], 3.0, "{r}");
+    let r = run(&mut reopened, "sketch.dimension_condition", json!({"dimension": "k_rc7", "arc_condition": "max"}));
+    assert_eq!(r["measured"], 38.0, "3 + 20 + 15: {r}");
 }

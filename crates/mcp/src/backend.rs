@@ -799,7 +799,7 @@ impl Backend for Auto {
         match (&self.remote, &self.headless) {
             (Some(r), _) => r.describe(),
             (None, Some(h)) => format!(
-                "{}, because the SolidCraft app was not running when this server started; if it starts before any design work \
+                "{}, because the NØDE CAD app was not running when this server started; if it starts before any design work \
                  is done here, the next call is bridged to it",
                 h.describe()
             ),
@@ -821,8 +821,8 @@ impl Backend for Auto {
     }
     fn notice(&self) -> Option<String> {
         self.headless.as_ref().map(|_| {
-            "Note: this is a headless session because the SolidCraft app was not found; the user cannot see this work. \
-             Ask them to start SolidCraft. While this session has no features, the next call connects to the app; once it \
+            "Note: this is a headless session because the NØDE CAD app was not found; the user cannot see this work. \
+             Ask them to start NØDE CAD. While this session has no features, the next call connects to the app; once it \
              has work, it stays here."
                 .to_owned()
         })

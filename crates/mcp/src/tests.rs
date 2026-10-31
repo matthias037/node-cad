@@ -954,7 +954,8 @@ fn a_batch_reports_split_bodies_free_parts_and_overlaps() {
     );
     let check = &r["check"];
     assert_eq!(check["split_bodies"], json!([{"body": "Leaf", "solids": 2}]), "{r}");
-    assert_eq!(check["free_parts"], json!(["Leaf:1", "Pin:1"]), "{r}");
+    // The design's first part starts grounded; the pin, placed after it, is free.
+    assert_eq!(check["free_parts"], json!(["Pin:1"]), "{r}");
     assert_eq!(check["interferences"], 1, "{r}");
     assert_eq!(check["overlaps"][0]["volume_mm3"].as_f64().map(f64::round), Some((std::f64::consts::PI * 9.0 * 3.0).round()), "{r}");
     assert_eq!(check["fix_before_reporting"].as_array().map(Vec::len), Some(3), "{r}");

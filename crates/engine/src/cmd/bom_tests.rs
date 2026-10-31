@@ -266,7 +266,7 @@ fn a_components_refusals_speak_of_part_properties() {
     let bogus = refusal(&mut s, json!({"component": "Pin", "values": {"bogus": "x"}}));
     assert!(
         bogus.ends_with(
-            "`bogus` is not a part property: SolidCraft's are project, part_number, revision, author, organization, description, \
+            "`bogus` is not a part property: NØDE CAD's are project, part_number, revision, author, organization, description, \
              license, bom_type; another tool's data goes under a reverse-DNS key such as `com.example.tool`"
         ),
         "{bogus}"

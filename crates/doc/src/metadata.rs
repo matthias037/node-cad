@@ -447,13 +447,13 @@ mod tests {
         let refusal = |owner, key: &str| Metadata::default().set(owner, key, json!("x")).unwrap_err().to_string();
         assert_eq!(
             refusal(Design, "colour"),
-            "`colour` is not a design property: SolidCraft's are project, part_number, revision, author, organization, \
+            "`colour` is not a design property: NØDE CAD's are project, part_number, revision, author, organization, \
              description, license; another tool's data goes under a reverse-DNS key such as `com.example.tool`",
             "the design's wording is as it was"
         );
         assert_eq!(
             refusal(Component, "colour"),
-            "`colour` is not a part property: SolidCraft's are project, part_number, revision, author, organization, \
+            "`colour` is not a part property: NØDE CAD's are project, part_number, revision, author, organization, \
              description, license, bom_type; another tool's data goes under a reverse-DNS key such as `com.example.tool`"
         );
         for owner in [Design, Component] {
