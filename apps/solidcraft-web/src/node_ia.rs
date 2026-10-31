@@ -37,7 +37,8 @@ async fn send(req: HttpRequest) -> HttpAnswer {
     if let Some(body) = &req.body {
         init.set_body(&js_sys::Uint8Array::from(body.as_slice()));
     }
-    let response: web_sys::Response = JsFuture::from(window.fetch_with_str_and_init(&req.url, &init)).await.map_err(said)?.dyn_into().map_err(said)?;
+    let response: web_sys::Response =
+        JsFuture::from(window.fetch_with_str_and_init(&req.url, &init)).await.map_err(said)?.dyn_into().map_err(said)?;
     let status = response.status();
     let buffer = JsFuture::from(response.array_buffer().map_err(said)?).await.map_err(said)?;
     Ok((status, js_sys::Uint8Array::new(&buffer).to_vec()))

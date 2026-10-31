@@ -20,6 +20,17 @@ Everything about it is on one page: **Preferences → AI**.
 - **Show Assistant button in application bar** (on by default): the **Assistant** icon in the application bar
   row, which stays there however wide the window is. Turn it off to keep only the shortcut and
   the menu entry.
+- **Connect the last-used agent when NØDE CAD starts** (off by default): each launch starts
+  the agent you connected last (the default one if you never connected), in the background,
+  once NØDE CAD has looked for the installed agents. The panel's header shows **Starting…**,
+  then **Ready**, or **Connection failed** with **Retry** in place of **Connect** (the agent is
+  missing, could not start, or ended while starting); the conversation says why. A design
+  opened in place of the empty one NØDE CAD starts with keeps the agent connected, as long
+  as nothing was asked in that empty design's chat.
+- **Open the Assistant panel when NØDE CAD starts** (off by default): the panel (or its own
+  window) is shown at each launch.
+
+Neither applies when NØDE CAD is started with `--control` for automation.
 
 With AI features on, the panel opens from:
 
@@ -29,7 +40,7 @@ With AI features on, the panel opens from:
 
 Nothing runs until you need it: NØDE CAD looks for installed agents (a quick `--version`
 each, in the background) when the panel or the AI page first opens, and starts an agent only
-when you send a message or press **Connect**.
+when you send a message or press **Connect** (or at launch, when you turned that on above).
 
 ## The panel
 
@@ -52,12 +63,25 @@ clicks and scrolling over the panel stay in the chat. The docked layout retains 
   icon, the agent's state, and a count of anything waiting for your answer. Click the icon to
   unfold it. **Close** (×) hides the panel. Neither stops the agent; **Stop** does.
 - **The agent switcher** under the title picks the agent for this conversation; switching stops
-  the one running. Next to it, when the agent has modes of its own (Claude Code has *Default*,
-  *Accept Edits*, *Plan*…), a second drop-down sets the agent's mode. When the agent reports its models (an ACP agent's
-  model list, or an endpoint's `/models`), a model drop-down shows the one in use and changes it;
-  NØDE CAD remembers the last choice for each agent and puts it back on the next session. An
-  endpoint's agent also keeps it as its default model. An agent that reports no models shows no
-  drop-down.
+  the one running. When an ACP agent reports **configuration options** (including OpenCode V2),
+  a compact inline strip below it shows the agent's model, reasoning effort, mode, and any other
+  supported select options, wrapping when space is tight. Hover a selector for its full label and
+  description. Their names and choices come from the agent: not every model offers adjustable
+  reasoning effort. Changing the model can change or remove the effort choices. A selection is
+  shown as applied only after the agent reports it; a rejected change leaves the confirmed
+  selection in place and shows an error.
+- **Older agents and API endpoints** keep their model and mode drop-downs when they report those
+  choices (an ACP agent's legacy model/mode lists, or an endpoint's `/models`). NØDE CAD remembers
+  the last model choice for each agent and puts it back on the next session when still available.
+  An endpoint's agent also keeps it as its default model. An agent that reports no choices shows
+  no drop-down. When these model lists include more than one provider (Hermes and OpenCode name
+  each model `Provider · model`, or say `Provider: …` in its description), a provider drop-down
+  comes first and the model drop-down lists only that provider's models, without the provider in
+  front. It opens on the provider of the model in use; picking another provider changes nothing
+  until one of its models is chosen. Models with no provider named are listed under *Other*.
+- **Reasoning effort is not permissions.** The agent's thinking setting does not change
+  NØDE CAD's Ask / Edits / All approval policy. Reasoning options belong to the current session;
+  changing them here does not rewrite OpenCode's configuration or another OpenCode session.
 
 Messages use right-aligned user bubbles and plain assistant text. Consecutive tool calls share
 an activity group: click a row to inspect its output; failed calls have an error tint. Approval
@@ -108,6 +132,20 @@ clears the files waiting on the chips too.
 
 ## Typing while the agent works
 
+Each design tab has its own conversation, agent session, draft, attachments and queued messages.
+A new tab starts with an empty chat and a session of its own; a sign-in the chat confirmed in one
+tab still counts in the others, so a new tab doesn't mark the agent as signed out. Switching away stops the current turn and keeps its
+completed changes in that design's undo history. Returning restores the conversation; queued
+messages wait for **Send**. Closing a design closes its conversation. Conversations are kept
+only while the tabs remain open.
+
+When the agent itself creates a new design or opens a file, its conversation follows the new
+design and the same turn continues. Its completed changes stay in each design's own undo
+history. The original tab starts a fresh conversation if you return to it. Opening a file that
+is already in another tab returns an error instead of displacing that tab's conversation;
+select that tab yourself to continue there. Your own New, Open and tab switches still stop
+the current turn. Stop also cancels a file the agent is still opening.
+
 The input stays enabled during a turn. **Enter** queues the message: it shows in the conversation
 as a **Queued** bubble that you can **Edit** or remove (×) until it is sent. Several queued
 messages go as one prompt, in order, when the turn ends normally.
@@ -127,21 +165,25 @@ messages go as one prompt, in order, when the turn ends normally.
 
 Preferences → AI → **Agents** lists every agent the chat can use, each with its kind (a program or
 an endpoint), version or model, whether it looks signed in, **Test**, **Default** (the one a new
-conversation starts with), its own permission setting, and **Remove** for the ones you added.
+conversation starts with), its own permission setting, and **Edit** and **Remove** for the ones you added.
 
 ### Found by themselves
 
 NØDE CAD looks for agents that speak the [Agent Client Protocol](https://agentclientprotocol.com)
 on your `PATH` and in the usual install folders a desktop app's `PATH` often misses (npm's
 global folder, nvm, Volta, bun, `~/.local/bin`, `~/.grok/bin`, Homebrew, `%APPDATA%\npm`). For each one it
-shows its **version** (from `--version`, given three seconds) and whether it looks **signed in**.
+shows its **version** (from `--version`, given three seconds) and whether a **login was found**.
 Version checks and agent sessions also use those folders on their `PATH`, so adapters can find
 runtimes such as Node when NØDE CAD is opened from Finder or the Dock. Existing absolute
 `PATH` entries keep their order; no shell startup files are run.
 NØDE CAD only checks whether the agent's own login file (`~/.claude/.credentials.json`,
 `~/.codex/auth.json`, `~/.gemini/oauth_creds.json`, …) or one of its key variables exists. It never
 reads the file and never starts the agent to find out. On macOS Claude Code keeps its login in
-the keychain, so NØDE CAD doesn't guess there.
+the keychain, so NØDE CAD doesn't guess there. A found login file may be expired: **Test** or a
+chat connection verifies it. A successful ACP connection shows **signed in**; an authentication
+rejection shows **not signed in**. These results apply to that agent until a newer connection
+result or **Refresh**, which checks the installed agents again. An unrelated connection error
+doesn't change the last known login state.
 
 | Agent | What to install |
 |---|---|
@@ -153,7 +195,12 @@ the keychain, so NØDE CAD doesn't guess there.
 | GitHub Copilot CLI, Qwen Code, goose | listed with their install command when missing |
 
 The panel lists agents that aren't installed with their install command and a **Copy** button.
-**Refresh** looks again after you install one. **Test** starts an agent briefly, asks it for a
+**Refresh** looks again after you install one. An agent whose program is there but fails its
+`--version` check without printing a version (an install that didn't finish, such as an npm
+install whose setup script didn't run, or a program built for another kind of computer) is
+still listed, marked **does not start** with the system's reason. Connecting to it first says
+why and gives its install command; reinstall it until `--version` works in a terminal, then
+press **Refresh**. A check that runs out of time is not counted as a failure. **Test** starts an agent briefly, asks it for a
 session and ends it again.
 
 ### Flatpak
@@ -199,7 +246,13 @@ Grok Build also supports `XAI_API_KEY` for users who choose API authentication.
 - **Custom command:** any other program that speaks ACP on stdin and stdout, such as
   `my-agent --acp`. NØDE CAD starts it directly, not through a shell.
 - **OpenAI-compatible API:** a preset (Ollama `http://localhost:11434/v1`, LM Studio
-  `http://localhost:1234/v1`, OpenAI) or a custom URL, the model name, and an optional key.
+  `http://localhost:1234/v1`, OpenAI, Mammouth AI `https://api.mammouth.ai/v1`, OpenCode Go `https://opencode.ai/zen/go/v1`) or a custom URL, the model name, and an optional key.
+  OpenCode Go models are routed to their endpoint by themselves (`/responses`,
+  `/messages` or Gemini for those families, `/chat/completions` for the rest),
+  each conversation request carrying the session header Go asks for, so one
+  preset covers every model.
+  A model the list does not know is retried on the next protocol when Go names
+  the mismatch.
 - **Anthropic-compatible API:** a preset (Anthropic) or a custom URL, for an endpoint that
   speaks the Anthropic Messages API (`{base}/v1/messages`). This covers Anthropic itself and
   providers that offer an Anthropic-compatible endpoint, such as DeepSeek and Qwen.
@@ -208,7 +261,58 @@ Grok Build also supports `XAI_API_KEY` for users who choose API authentication.
   OpenAI-compatible endpoint for its models; an Anthropic-compatible one gets a short message,
   because not every such endpoint lists models (Qwen's has no model list). For these agents
   NØDE CAD runs the conversation itself, with the same tools, limits and questions as for a
-  coding agent, and at most 24 model requests per message.
+  coding agent, and no cap on model requests per message (Stop ends it). **Request timeout** is how long one model request may
+  take: 300 s by default, from 30 s to an hour. A slow local model (a large model on modest
+  hardware, or a long message with many tool results) may need more; raise it here or in the
+  endpoint's entry under **Agents**, where a change applies from the next request. A request that
+  runs out of time ends the message with the limit it hit and where to raise it.
+
+**Edit** on an agent you added opens the same dialog filled with its name and command, or its
+protocol, endpoint, model and request timeout, and **Save** changes it in place: it keeps its id,
+its permission setting and the tools you always allow for it. A stored key is never shown: leave
+the key field empty to keep it, or type a new one to replace it. A saved key still only goes to
+HTTPS or this computer, so moving an endpoint with a key to a plain `http://` address elsewhere is
+refused. The running conversation takes a new request timeout at once; a new command, endpoint
+or model applies the next time the agent connects.
+
+For Ollama, choosing a model checks its reported capabilities in the background. If its
+capabilities list lacks `tools`, a warning below the model picker explains that the model can
+only chat and suggests choosing one with tool support. Results are cached in memory per base URL and
+model, with a limit of 128 entries. NØDE CAD recognises Ollama through `/api/version` at the
+endpoint's origin or the Ollama preset. Failed checks and older servers without a capabilities
+field show no warning. The check never blocks sending a message.
+
+### Local models
+
+Choose a model that supports native tool calling to read or change the design. With Ollama,
+look for `tools` in the model's capabilities; a model that only supports chat cannot operate
+NØDE CAD. Other OpenAI-compatible endpoints also need a model with native tool support.
+
+If tools were available but a completed turn made no tool calls or changes, the panel shows a
+short notice when the reply was empty, or when an explicit edit request received only text.
+Ordinary answers to questions do not show it. Edit requests are recognised conservatively from
+English opening words such as “make”, “rename”, or “can you move”; other phrasing may stay quiet.
+Cancelled and failed turns keep their existing messages. Text describing a call is never run.
+A reply that stopped at its length limit, or that the model declined, says that instead of the
+tool-calling notice: an endpoint reports it as `max_tokens` or `refusal` (Anthropic), or as
+`length`, `content_filter` or a refusal (OpenAI-compatible). A tool call cut off at the length
+limit is not run.
+
+### An agent inside WSL (Windows)
+
+An agent installed inside WSL keeps its own settings, skills and sign-in there. Add it as a
+**Custom command** that starts it through `wsl.exe`, for example:
+
+```
+wsl.exe -d Ubuntu -e bash -lc claude-agent-acp
+```
+
+`bash -lc` runs your login shell's setup, so the agent is found where your `PATH` puts it (npm,
+nvm, Volta). When the command's program is `wsl` or `wsl.exe`, NØDE CAD gives the agent its
+working folder and the `solidcraft-app` server's program as WSL shows them (`C:\Users\…` becomes
+`/mnt/c/Users/…`). The server itself still runs on Windows and reaches the app at `127.0.0.1`, so
+this works with WSL's default networking. If you moved WSL's drive mounts away from `/mnt`
+(`automount.root` in `/etc/wsl.conf`), those paths won't match and the agent can't start the server.
 
 ## Signing in
 
@@ -247,6 +351,22 @@ The agent reaches the open design only through NØDE CAD's own tools (the
   while you do; click it to open the viewer (the message's pictures one at a time, with **‹** and
   **›** or the arrow keys, closed with Esc or a click outside). A long message scrolls inside its
   box, so **Send** and the buttons beside it stay in view.
+- **Attach selection:** tick it to send what is selected in the model with your message, so the
+  agent knows what "this edge" or "that feature" is. The box shows how many things are selected, counted as you clicked them (the two halves of a rim you clicked once are one).
+  Faces and edges go with the names and numbers the agent's tools take and with their size and
+  place (so they can be found again after an edit), features with their name and kind, bodies with
+  their name. The agent gets them as text after your message; the conversation shows your message
+  as typed with the things as chips below it, grouped (Elements, Features, Bodies) with a count;
+  hover a chip for what the agent was told about it. At most 64 things go with one message; the
+  rest are counted ("+N more"), not dropped silently. The selection is read when you send, also for
+  a message that waits in the queue.
+- **Pick context:** press it to choose what the message is about on purpose. A picker opens with
+  three lists, **Elements** (faces, edges, vertices), **Features** (steps of the timeline) and
+  **Bodies**; click things in the model, the timeline or the browser to put them in the list that
+  is active (click a list to make it active; click a picked thing again to take it out). **OK**
+  puts them as chips above the message box, each with a **×**; they go with the next message like
+  an attached selection (and are shown the same way), and the box is empty again afterwards.
+  **Cancel** keeps what was picked before.
 
 ## Permissions
 
@@ -282,9 +402,10 @@ saves, opens or inserts. A sweep's or pattern's `path` (curve ids) and an occurr
   everything that's waiting, and a question nobody answers is declined after four minutes. The
   [MCP server's folder limits](mcp.md) still apply after you allow: the design's folder, the
   recovery folder and the server's own scratch folder.
-- **A limit per message.** The agent may make 24 changes per message by default; you can set
-  the number on the AI page. Reading the design doesn't count. When it reaches the limit, it's
-  told to stop and report what's left; send another message to let it carry on.
+- **An optional limit per message.** There's none by default. Untick **Unlimited** on the AI
+  page to cap the changes the agent may make per message (it starts at 24). Reading the design
+  doesn't count. At the limit, it's told to stop and report what's left; send another message to
+  let it carry on. **Stop** always works.
 - **No crash reports,** whatever the permissions. Crash reports can hold other designs and file
   paths.
 - **Not the rest of the app.** It can't click the interface, change settings, quit, or drive the
@@ -319,3 +440,36 @@ cargo build --release -p solidcraft-ui-egui --example acp_test_agent
 Then add it under Preferences → AI → **Add agent… → Custom command** with the path of
 `target/release/examples/acp_test_agent`. Put "save" in your message to see an Allow / Deny card,
 or "ask" to see the agent ask its own permission.
+
+## Benchmarking the Assistant
+
+`node-cad-cli bench-assistant` runs the eleven tasks of the
+[standard model test (v1, #4851)](https://github.com/matthias037/node-cad/issues/4851) against a
+desktop app that is already running with a control port, and checks each result on the design
+itself. Use it to see how well a local model drives NØDE CAD before you post its results.
+
+```sh
+node-cad --control 9271
+# In another terminal:
+node-cad-cli bench-assistant --connect 127.0.0.1:9271 \
+  --base-url http://localhost:11434/v1 --model qwen2.5:7b \
+  --json results.json --markdown results.md
+```
+
+Each task replaces the open design with a new one, so save your work first. The command adds the
+endpoint as an API agent named "bench", starts a new chat with All permissions for every task,
+sends the prompt once, and waits for the turn to end. It runs only the setup the test prescribes
+(the box some tasks start from) and does none of the modelling itself. When it finishes it stops
+the agent and puts your permission setting back.
+
+- The control token comes from `--token`, `SOLIDCRAFT_CONTROL_TOKEN`, or the app's
+  [token file](control-protocol.md#token), in that order.
+- `--tasks 1,2,5` runs only those tasks, `--repeat N` runs the test N times, and `--timeout-s`
+  (default 300) is each turn's deadline; a turn that runs past it is stopped and fails as "timeout".
+- A failed task gets one of the issue's failure categories ("wrote the call as text", "wrong or
+  unknown command", "wrong arguments", "the endpoint refused tools", "an empty reply", "only
+  talked", "gave up after errors", or "hit the request limit"), or "wrong result" when the calls
+  worked but the design is not what the task asks for.
+- `--markdown` writes the issue's comment template filled in; add the quantization, download
+  size, and runtime before you post it. `--json` keeps each task's failed rules, conversation, and
+  design before and after. Both files are rewritten after every task.

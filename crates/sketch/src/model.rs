@@ -202,6 +202,55 @@ pub struct Curve {
     pub infinite: bool,
 }
 
+/// How two circles lie, for a [`ConstraintKind::CircleCircleDistance`]: which gap between their
+/// edges it measures, along the line through their centres.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TwoCircles {
+    /// Each outside the other: the gap between them, `distance − ra − rb`.
+    #[default]
+    Apart,
+    /// Crossing each other: how far they overlap, `ra + rb − distance`.
+    Crossing,
+    /// One inside the other: the narrowest gap between the inner one and the outer one,
+    /// `|ra − rb| − distance`.
+    Nested,
+}
+
+impl TwoCircles {
+    /// Saved only when the circles are not apart.
+    pub fn is_apart(&self) -> bool {
+        *self == TwoCircles::Apart
+    }
+    /// How circles of radii `ra` and `rb` with centres `distance` apart lie (touching circles
+    /// count as apart, or as nested when one touches the other from inside).
+    pub fn of(distance: f64, ra: f64, rb: f64) -> TwoCircles {
+        if distance >= ra + rb {
+            TwoCircles::Apart
+        } else if distance <= (ra - rb).abs() {
+            TwoCircles::Nested
+        } else {
+            TwoCircles::Crossing
+        }
+    }
+    /// The gap between the edges of such circles (what the dimension measures).
+    pub fn gap(self, distance: f64, ra: f64, rb: f64) -> f64 {
+        match self {
+            TwoCircles::Apart => distance - ra - rb,
+            TwoCircles::Crossing => ra + rb - distance,
+            TwoCircles::Nested => (ra - rb).abs() - distance,
+        }
+    }
+    /// How far apart the centres are when the gap is `value` (the inverse of [`Self::gap`]).
+    pub fn centres_apart(self, value: f64, ra: f64, rb: f64) -> f64 {
+        match self {
+            TwoCircles::Apart => ra + rb + value,
+            TwoCircles::Crossing => ra + rb - value,
+            TwoCircles::Nested => (ra - rb).abs() - value,
+        }
+    }
+}
+
 /// Geometric constraints and dimensions. Indices refer to `Sketch::points` (`p`, `q`) or
 /// `Sketch::curves` (`l`, `c`, `a`, `b`). Dimension values are millimetres or radians.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -328,6 +377,28 @@ pub enum ConstraintKind {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         inside: bool,
     },
+    /// Distance from point `p` to the edge of circle or arc `c`, along the radius through the
+    /// point: `|p − centre| − radius` while the point is outside the circle or, `inside`, how
+    /// far within the edge it lies, `radius − |p − centre|`. Zero puts the point on the circle.
+    /// An arc is measured to its whole circle.
+    PointCircleDistance {
+        p: usize,
+        c: usize,
+        value: f64,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        inside: bool,
+    },
+    /// Distance between the edges of circles or arcs `a` and `b`, along the line through their
+    /// centres: the gap between them, how far they overlap, or the narrowest gap between the
+    /// inner one and the outer one, as `circles` says ([`TwoCircles`]). Zero is tangency in each
+    /// case. Arcs are measured to their whole circles.
+    CircleCircleDistance {
+        a: usize,
+        b: usize,
+        value: f64,
+        #[serde(default, skip_serializing_if = "TwoCircles::is_apart")]
+        circles: TwoCircles,
+    },
     Length {
         l: usize,
         value: f64,
@@ -407,6 +478,8 @@ impl ConstraintKind {
             | PointLineDistance { value, .. }
             | LineCircleDistance { value, .. }
             | RoundDistance { value, .. }
+            | PointCircleDistance { value, .. }
+            | CircleCircleDistance { value, .. }
             | Length { value, .. }
             | LineAngle { value, .. }
             | ArcSweep { value, .. }
@@ -429,6 +502,8 @@ impl ConstraintKind {
             | PointLineDistance { value, .. }
             | LineCircleDistance { value, .. }
             | RoundDistance { value, .. }
+            | PointCircleDistance { value, .. }
+            | CircleCircleDistance { value, .. }
             | Length { value, .. }
             | LineAngle { value, .. }
             | ArcSweep { value, .. }
@@ -468,6 +543,8 @@ impl ConstraintKind {
             | PointLineDistance { .. }
             | LineCircleDistance { .. }
             | RoundDistance { .. }
+            | PointCircleDistance { .. }
+            | CircleCircleDistance { .. }
             | Length { .. } => "LinearDimension",
             Radius { .. } => "RadialDimension",
             Diameter { .. } => "DiameterDimension",
@@ -512,6 +589,8 @@ impl ConstraintKind {
                 }
                 (ps, cs)
             }
+            PointCircleDistance { p, c, .. } => (vec![p], vec![c]),
+            CircleCircleDistance { a, b, .. } => (vec![], vec![a, b]),
             Symmetric { p, q, l } => (vec![p, q], vec![l]),
             Fix { p } => (vec![p], vec![]),
             Smooth { a, b } => (vec![], vec![a, b]),
@@ -586,6 +665,14 @@ impl ConstraintKind {
                         RoundEnd::Near(c) | RoundEnd::Far(c) => fc(c),
                     }
                 }
+            }
+            PointCircleDistance { p, c, .. } => {
+                fp(p);
+                fc(c);
+            }
+            CircleCircleDistance { a, b, .. } => {
+                fc(a);
+                fc(b);
             }
             Symmetric { p, q, l } => {
                 fp(p);
@@ -688,6 +775,9 @@ pub struct Sketch {
     /// 3D curves (world coordinates) carried by the sketch.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub wires: Vec<crate::wire::Wire>,
+    /// Curves drawn from formulas (#8352): the fit point splines they place, with their formulas.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub equations: Vec<crate::equation::EquationCurve>,
     /// Next number per id prefix (`l` → l1, l2…).
     #[serde(default)]
     counters: std::collections::BTreeMap<String, u64>,
@@ -717,6 +807,7 @@ impl Sketch {
             offsets: Vec::new(),
             freeform_offsets: Vec::new(),
             wires: Vec::new(),
+            equations: Vec::new(),
             counters: Default::default(),
             view: SketchView::default(),
         }
@@ -790,7 +881,7 @@ impl Sketch {
         self.points.get(i).map(|p| p.pos)
     }
 
-    fn check_pos(p: Vec2) -> Result<Vec2> {
+    pub(crate) fn check_pos(p: Vec2) -> Result<Vec2> {
         if in_range(p) { Ok(p) } else { Err(SketchError::Invalid(format!("point {:?}", [p.x, p.y]))) }
     }
 
@@ -921,13 +1012,46 @@ impl Sketch {
     }
 
     pub fn add_constraint(&mut self, kind: ConstraintKind, param: Option<String>) -> Result<String> {
+        self.validate(&kind)?;
+        if let Some(same) = self.same_constraint(&kind) {
+            return Ok(same.to_string());
+        }
         if self.constraints.len() >= MAX_CONSTRAINTS {
             return Err(SketchError::TooLarge);
         }
-        self.validate(&kind)?;
         let id = self.fresh("k")?;
         self.constraints.push(Constraint { id: id.clone(), kind, param, driven: false, text: None });
         Ok(id)
+    }
+
+    /// The id of a geometric (not dimensional) constraint that already says what `kind` says: the
+    /// same kind on the same entities, in either order where the order doesn't matter.
+    pub fn same_constraint(&self, kind: &ConstraintKind) -> Option<&str> {
+        use ConstraintKind::*;
+        let pair = |x: usize, y: usize| if x <= y { (x, y) } else { (y, x) };
+        let key = |k: &ConstraintKind| -> Option<(u8, usize, usize, usize)> {
+            Some(match *k {
+                Coincident { p, q } => (0, pair(p, q).0, pair(p, q).1, 0),
+                PointOnCurve { p, c } => (1, p, c, 0),
+                Horizontal { l } => (2, l, 0, 0),
+                Vertical { l } => (3, l, 0, 0),
+                HorizontalPoints { p, q } => (4, pair(p, q).0, pair(p, q).1, 0),
+                VerticalPoints { p, q } => (5, pair(p, q).0, pair(p, q).1, 0),
+                Parallel { a, b } => (6, pair(a, b).0, pair(a, b).1, 0),
+                Perpendicular { a, b } => (7, pair(a, b).0, pair(a, b).1, 0),
+                Collinear { a, b } => (8, pair(a, b).0, pair(a, b).1, 0),
+                Tangent { a, b } => (9, pair(a, b).0, pair(a, b).1, 0),
+                Equal { a, b } => (10, pair(a, b).0, pair(a, b).1, 0),
+                Concentric { a, b } => (11, pair(a, b).0, pair(a, b).1, 0),
+                Midpoint { p, l } => (12, p, l, 0),
+                Symmetric { p, q, l } => (13, pair(p, q).0, pair(p, q).1, l),
+                Fix { p } => (14, p, 0, 0),
+                Smooth { a, b } => (15, pair(a, b).0, pair(a, b).1, 0),
+                _ => return None,
+            })
+        };
+        let want = key(kind)?;
+        self.constraints.iter().find(|c| key(&c.kind) == Some(want)).map(|c| c.id.as_str())
     }
 
     /// Check indices and entity kinds of a constraint.
@@ -1052,6 +1176,14 @@ impl Sketch {
                     }
                 }
             }
+            PointCircleDistance { c, .. } => need_round(c)?,
+            CircleCircleDistance { a, b, .. } => {
+                if a == b {
+                    return Err(SketchError::Invalid("a distance between circles needs two different circles or arcs".into()));
+                }
+                need_round(a)?;
+                need_round(b)?;
+            }
             Tangent { a, b } => {
                 let free = |i: usize| self.curves.get(i).is_some_and(|c| c.kind.is_freeform());
                 if !(is_round(a) || is_round(b) || free(a) || free(b)) {
@@ -1088,7 +1220,8 @@ impl Sketch {
     /// with nothing that fixes a size: no other driving length dimension, nothing fixed,
     /// projected or patterned, no offsets and no 3D curves. Every geometric constraint
     /// (coincident, horizontal, parallel, tangent, equal, symmetric, …) and every angle holds
-    /// on the scaled sketch as it held before. `None` when the sketch does not qualify.
+    /// on the scaled sketch as it held before. `None` when the sketch does not qualify, also
+    /// when its curves form several separate chains (#3786): the dimension sizes only its own.
     pub fn scaled_for_first_dimension(&self, factor: f64) -> Option<Sketch> {
         if !(factor.is_finite() && (1e-6..=1e6).contains(&factor)) {
             return None;
@@ -1105,6 +1238,31 @@ impl Sketch {
             || !self.wires.is_empty()
             || self.curves.iter().any(|c| c.fixed || c.link.is_some())
             || self.points.iter().enumerate().any(|(i, p)| (p.fixed || p.link.is_some()) && (i != 0 || p.pos != Vec2::ZERO))
+        {
+            return None;
+        }
+        // Shapes nothing joins (#3786) are not one drawing: only one connected chain of curves
+        // scales. Curves and driving constraints join their points; the origin is a point too.
+        let mut parent: Vec<usize> = (0..self.points.len()).collect();
+        for c in &self.curves {
+            let ids = c.kind.point_ids();
+            for w in ids.windows(2) {
+                if let [a, b] = *w {
+                    union(&mut parent, a, b);
+                }
+            }
+        }
+        for c in self.constraints.iter().filter(|c| !c.driven) {
+            let ids = self.constraint_points(&c.kind);
+            for w in ids.windows(2) {
+                if let [a, b] = *w {
+                    union(&mut parent, a, b);
+                }
+            }
+        }
+        let mut roots = self.curves.iter().filter_map(|c| c.kind.point_ids().first().map(|&p| find(&mut parent, p)));
+        if let Some(first) = roots.next()
+            && roots.any(|r| r != first)
         {
             return None;
         }
@@ -1517,7 +1675,7 @@ impl Sketch {
                 if !(rho.is_finite() && *rho > 1e-6 && *rho < 1.0 - 1e-6) {
                     return Err(SketchError::Invalid("rho must be between 0 and 1".into()));
                 }
-                "k"
+                "n"
             }
         };
         let id = self.curve_id(id, prefix)?;
@@ -1534,13 +1692,89 @@ impl Sketch {
                 owned.extend(c.kind.point_ids());
             }
         }
+        let on_ends = self.points_on_ends_of(which);
         self.drop_curves(which);
+        for (p, q) in on_ends {
+            // Only a full sketch refuses one more; the point then comes loose as before.
+            let _ = self.add_constraint(ConstraintKind::Coincident { p, q }, None);
+        }
         let mut orphans: Vec<usize> = owned.into_iter().filter(|p| *p != 0 && !self.point_used_by_curve(*p)).collect();
         orphans.sort_unstable();
         orphans.dedup();
+        self.keep_ties_through(&orphans);
         self.remove_points(&orphans);
         self.prune_links();
         self.prune_patterns();
+    }
+
+    /// Points held on one of the curves `which` exactly at one of its ends, and that end: a point
+    /// on a curve at its end meets whatever else ends there, so when the curve goes the two are
+    /// tied instead of coming apart (a trimmed circle ending on a line where a fillet starts kept
+    /// its end there only through the line). Pairs already in one coincident group are left out.
+    fn points_on_ends_of(&self, which: &[usize]) -> Vec<(usize, usize)> {
+        let mut groups: Vec<usize> = (0..self.points.len()).collect();
+        for c in &self.constraints {
+            if let ConstraintKind::Coincident { p, q } = c.kind
+                && p < groups.len()
+                && q < groups.len()
+            {
+                union(&mut groups, p, q);
+            }
+        }
+        let mut pairs = Vec::new();
+        for k in &self.constraints {
+            let ConstraintKind::PointOnCurve { p, c } = k.kind else { continue };
+            let Some((a, b)) = which.contains(&c).then(|| self.curves.get(c).and_then(|k| k.kind.ends())).flatten() else { continue };
+            let Some(at) = self.point(p) else { continue };
+            for end in [a, b] {
+                let Some(e) = self.point(end) else { continue };
+                if end != p && at.dist(e) <= crate::END_TOL && find(&mut groups, p) != find(&mut groups, end) {
+                    union(&mut groups, p, end);
+                    pairs.push((p, end));
+                }
+            }
+        }
+        pairs
+    }
+
+    /// Points held together only through points about to go stay together: two rectangles'
+    /// corners made coincident with one arc end are tied to each other when a trim takes that
+    /// end away, instead of coming apart where they still meet.
+    fn keep_ties_through(&mut self, gone: &[usize]) {
+        if gone.is_empty() {
+            return;
+        }
+        let gone: std::collections::BTreeSet<usize> = gone.iter().copied().collect();
+        let n = self.points.len();
+        // Coincident groups with every point, and with the points that stay only.
+        let (mut all, mut kept): (Vec<usize>, Vec<usize>) = ((0..n).collect(), (0..n).collect());
+        for c in &self.constraints {
+            if let ConstraintKind::Coincident { p, q } = c.kind {
+                union(&mut all, p, q);
+                if !gone.contains(&p) && !gone.contains(&q) {
+                    union(&mut kept, p, q);
+                }
+            }
+        }
+        let mut first = std::collections::BTreeMap::<usize, usize>::new();
+        let mut ties = Vec::new();
+        for x in (0..n).filter(|x| !gone.contains(x)) {
+            let group = find(&mut all, x);
+            match first.get(&group).copied() {
+                None => {
+                    first.insert(group, x);
+                }
+                Some(f) if find(&mut kept, f) != find(&mut kept, x) => {
+                    union(&mut kept, f, x);
+                    ties.push((f, x));
+                }
+                Some(_) => {}
+            }
+        }
+        for (p, q) in ties {
+            // Only a full sketch refuses one more; the points then come apart as before.
+            let _ = self.add_constraint(ConstraintKind::Coincident { p, q }, None);
+        }
     }
 
     fn point_used_by_curve(&self, p: usize) -> bool {
@@ -1550,6 +1784,8 @@ impl Sketch {
     /// Remove curves only (points stay), remapping constraints.
     fn drop_curves(&mut self, which: &[usize]) {
         self.prune_offsets_for_removed_curves(which);
+        let removed: std::collections::BTreeSet<String> = which.iter().filter_map(|i| self.curves.get(*i).map(|c| c.id.clone())).collect();
+        self.prune_equations(&removed);
         let mut cmap = vec![None; self.curves.len()];
         let mut n = 0;
         for (i, slot) in cmap.iter_mut().enumerate() {

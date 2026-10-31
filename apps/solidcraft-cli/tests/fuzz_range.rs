@@ -4,8 +4,7 @@ use std::process::Command;
 
 #[test]
 fn overflowing_seed_range_is_an_error_not_a_panic() {
-    let output =
-        Command::new(env!("CARGO_BIN_EXE_node-cad-cli")).args(["fuzz", "--from", "18446744073709551615", "--count", "2"]).output().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_node-cad-cli")).args(["fuzz", "--from", "18446744073709551615", "--count", "2"]).output().unwrap();
     assert_eq!(output.status.code(), Some(1));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("seed range exceeds u64::MAX"), "{stderr}");
@@ -14,8 +13,7 @@ fn overflowing_seed_range_is_an_error_not_a_panic() {
 
 #[test]
 fn empty_seed_range_at_maximum_is_valid() {
-    let output =
-        Command::new(env!("CARGO_BIN_EXE_node-cad-cli")).args(["fuzz", "--from", "18446744073709551615", "--count", "0"]).output().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_node-cad-cli")).args(["fuzz", "--from", "18446744073709551615", "--count", "0"]).output().unwrap();
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     assert!(String::from_utf8_lossy(&output.stdout).starts_with("0 seeds, 0 design steps,"));
 }

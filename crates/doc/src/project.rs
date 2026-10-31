@@ -238,13 +238,14 @@ fn resolve_uncached(
         }
         LinkSource::Origin => vec![LinkGeom::Point(plane.to_local(Vec3::ZERO))],
         LinkSource::Axis { name } => {
-            let d = match name.to_ascii_uppercase().as_str() {
-                "X" => Vec3::X,
-                "Y" => Vec3::Y,
-                "Z" => Vec3::Z,
-                _ => return Err(DocError::Unknown(format!("axis `{name}`"))),
+            let (o, d) = match name.to_ascii_uppercase().as_str() {
+                "X" => (Vec3::ZERO, Vec3::X),
+                "Y" => (Vec3::ZERO, Vec3::Y),
+                "Z" => (Vec3::ZERO, Vec3::Z),
+                // A construction axis, by name (#9324), where the timeline so far puts it.
+                _ => crate::eval::construction_axis_in(Some(doc), st, name, 0)?,
             };
-            let o = plane.to_local(Vec3::ZERO);
+            let o = plane.to_local(o);
             let d2 = Vec2::new(d.dot(plane.x), d.dot(plane.y));
             match d2.normalized() {
                 Some(u) if d2.len() > 1e-9 => vec![LinkGeom::Line(o - u * AXIS_HALF, o + u * AXIS_HALF)],
@@ -263,7 +264,10 @@ fn resolve_uncached(
             let pr = if Plane::named(name).is_some() {
                 PlaneRef::Origin { name: name.clone() }
             } else {
-                PlaneRef::Construction { name: name.clone().into() }
+                // Resolved to the feature's id here, once (#1134); a name that finds no feature
+                // dangles below, as it did when the reference carried the name.
+                let feature = doc.find_feature(name).map(|f| crate::FeatureId(f.id)).unwrap_or(crate::FeatureId::DANGLING);
+                PlaneRef::Construction { feature }
             };
             let other = doc.resolve_plane_in(vals, &pr, 0, Some(st)).map_err(|_| lost(&format!("plane {name}")))?;
             plane_trace(plane, &other).into_iter().collect()
@@ -306,6 +310,41 @@ fn exact_edges(body: &crate::ModelBody, plane: &Plane, edges: &[usize]) -> Vec<O
 /// `edges` of `body` projected on `plane`: each exactly ([`exact_edges`]) or fitted to its
 /// polyline in `mesh`.
 fn projected_edges(body: &crate::ModelBody, mesh: &Mesh, plane: &Plane, edges: &[usize]) -> Vec<LinkGeom> {
+    let mut out = projected_edges_apart(body, mesh, plane, edges);
+    meet_at_shared_ends(&mut out, order::join_tolerance(mesh));
+    out
+}
+
+/// Where curve ends lie within `gap` of each other, moves them onto the first of them. A fitted
+/// round's edges end a few 1e-5 mm short of their neighbours (#8284); the sketch only shares a
+/// point between ends 1e-7 apart, and without it the outline has no closed profile.
+fn meet_at_shared_ends(geom: &mut [LinkGeom], gap: f64) {
+    let mut seen: Vec<Vec2> = Vec::new();
+    let mut snap = |p: &mut Vec2| match seen.iter().find(|q| q.dist(*p) <= gap) {
+        Some(q) => *p = *q,
+        None => seen.push(*p),
+    };
+    for g in geom {
+        match g {
+            LinkGeom::Line(a, b) | LinkGeom::Arc { a, b, .. } | LinkGeom::Conic { a, b, .. } => {
+                snap(a);
+                snap(b);
+            }
+            LinkGeom::Spline { pts, periodic: false, .. } => {
+                if let Some(first) = pts.first_mut() {
+                    snap(first);
+                }
+                if let Some(last) = pts.last_mut() {
+                    snap(last);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Each of `edges` projected on its own ([`projected_edges`] without the ends brought together).
+fn projected_edges_apart(body: &crate::ModelBody, mesh: &Mesh, plane: &Plane, edges: &[usize]) -> Vec<LinkGeom> {
     let mut out = Vec::new();
     for (e, exact) in edges.iter().zip(exact_edges(body, plane, edges)) {
         match exact {
@@ -572,6 +611,32 @@ pub fn refresh_links(doc: &Document, vals: &BTreeMap<String, Value>, st: &ModelS
     refresh_links_in(doc, vals, st, plane, sk, None)
 }
 
+/// Lay every text that runs along a curve of its sketch along that curve as the solve left it.
+/// The texts are laid out with the other links, before the solve, which can move their path (a
+/// path dimensioned from a parameter): without this a text followed its path one evaluation
+/// late. The warnings for texts that no longer lay out.
+pub(crate) fn relay_path_texts(sk: &mut Sketch) -> Vec<String> {
+    let texts: Vec<(String, LinkSource)> = sk
+        .links
+        .iter()
+        .filter(|l| !l.lost && matches!(&l.source, LinkSource::Text { style, .. } if style.path.is_some()))
+        .map(|l| (l.id.clone(), l.source.clone()))
+        .collect();
+    let mut warn = Vec::new();
+    for (id, source) in texts {
+        match sk.text_source_geometry(&source) {
+            Ok(geom) if geom.is_empty() => warn.push(format!("the {} makes no outline", source.describe())),
+            Ok(geom) => {
+                if let Err(e) = sk.update_link(&id, &geom) {
+                    warn.push(format!("{}: {e}", source.describe()));
+                }
+            }
+            Err(e) => warn.push(format!("{}: {e}", source.describe())),
+        }
+    }
+    warn
+}
+
 fn refresh_links_in(
     doc: &Document,
     vals: &BTreeMap<String, Value>,
@@ -662,8 +727,17 @@ fn refresh_links_in(
                 }
                 sk.set_link_source(&l.id, r.source);
                 let _ = sk.set_link_wires(&l.id, &r.wires);
+                // Words built from text parameters change shape when the parameters do: that
+                // rebuild is the text following them, not a reference that changed under it.
+                let words_follow = matches!(&l.source, LinkSource::Text { exprs, .. } if exprs.text.is_some());
+                let others = |sk: &Sketch| (sk.constraints.len(), sk.curves.len().saturating_sub(sk.link_curves(&l.id).len()));
+                let before = others(sk);
                 match sk.update_link(&l.id, &r.geom) {
-                    Ok(true) => warn.push(format!("projected {} changed shape and was rebuilt", l.source.describe())),
+                    Ok(true) if words_follow => {}
+                    // A rebuilt projection is only worth a warning when it took something of
+                    // the user's with it: a constraint, a dimension or a curve drawn on it.
+                    Ok(true) if others(sk) == before => {}
+                    Ok(true) => warn.push(format!("projected {} changed shape and was rebuilt; constraints on it were removed", l.source.describe())),
                     Ok(false) if r.moved => warn.push(format!("projected {} was re-found on the nearest geometry", l.source.describe())),
                     Ok(false) => {}
                     Err(e) => {
@@ -1011,17 +1085,40 @@ fn silhouette(plane: &Plane, m: &Mesh) -> Vec<LinkGeom> {
         })
         .map(|(a, b, _)| (plane.to_local(*a), plane.to_local(*b)))
         .collect();
-    fit_segments(&segs, size)
+    fit_segments(&segs, size, true)
 }
 
 /// Section of a mesh (or one of its faces) with the sketch plane.
 pub(crate) fn section(plane: &Plane, m: &Mesh, face: Option<u32>) -> Vec<LinkGeom> {
+    let size = m.bounds().diagonal().max(1e-9);
+    let (segs, exact) = section_segments(plane, m, face);
+    let segs: Vec<(Vec2, Vec2)> = segs.into_iter().map(|(a, b, _)| (a, b)).collect();
+    let loose = size * 2e-3;
+    let refine = |v: Vec<LinkGeom>| -> Vec<LinkGeom> { v.into_iter().map(|g| refine_round(g, &exact, loose)).collect() };
+    let lossy = refine(fit_segments(&segs, size, false));
+    // Lines and arcs that follow the section closely (the corners of a rounded profile stay
+    // where they are) are kept when they take no more curves than the loose fit.
+    let close = refine(fit_segments(&segs, size, true));
+    let plain = |v: &[LinkGeom]| v.iter().all(|g| matches!(g, LinkGeom::Line(..) | LinkGeom::Arc { .. } | LinkGeom::Circle(..)));
+    if plain(&close) && close.len() <= lossy.len() { close } else { lossy }
+}
+
+/// The segments where the plane crosses the mesh's triangles (in plane coordinates, each with
+/// its B-rep face), and the crossings that lie exactly on the surface (on a ruling).
+fn section_segments(plane: &Plane, m: &Mesh, face: Option<u32>) -> (Vec<(Vec2, Vec2, u32)>, Vec<Vec2>) {
     let size = m.bounds().diagonal().max(1e-9);
     let q = size * 1e-7;
     let key = |p: Vec3| ((p.x / q).round() as i64, (p.y / q).round() as i64, (p.z / q).round() as i64);
     // Surface normal at each mesh vertex where the surface is smooth (None at creases), over
     // all faces and per face.
     type Key = (i64, i64, i64);
+    // A vertex this close to the plane is on it, and lies on the same side for every edge it
+    // ends (so a plane through a vertex, or on a face, cuts every edge there alike): below when
+    // the mesh lies on or above the plane (the cut at its bottom face), else above (at its top
+    // face, through an apex). An edge with an end on the plane crosses it at that end.
+    let snap = size * 1e-9;
+    let zero_above = m.positions.iter().any(|p| plane.height(*p) < -snap);
+    let above = |h: f64| if h.abs() <= snap { zero_above } else { h > 0.0 };
     let mut normals: BTreeMap<Key, Option<Vec3>> = BTreeMap::new();
     let mut face_normals: BTreeMap<(u32, Key), Option<Vec3>> = BTreeMap::new();
     // Faces on either side of each mesh edge.
@@ -1054,14 +1151,25 @@ pub(crate) fn section(plane: &Plane, m: &Mesh, face: Option<u32>) -> Vec<LinkGeo
     let crossing = |a: Vec3, b: Vec3| -> Option<Vec3> {
         let (a, b) = if key(a) <= key(b) { (a, b) } else { (b, a) };
         let (ha, hb) = (plane.height(a), plane.height(b));
-        if (ha > 0.0) == (hb > 0.0) {
+        if above(ha) == above(hb) {
             return None;
+        }
+        if let Some(p) = [(a, ha), (b, hb)].into_iter().find(|(_, h)| h.abs() <= snap).map(|(p, _)| p) {
+            exact.borrow_mut().push(plane.to_local(p));
+            return Some(p);
         }
         let d = b - a;
         // An edge inside one face takes that face's normals (its ends may lie on the face's
         // boundary, a crease for the whole mesh); an edge between faces, the merged ones, so
         // both faces agree on the crossing.
-        let inside = edge_faces.get(&(key(a), key(b))).and_then(|fs| fs.first().filter(|f| fs.len() == 2 && fs.iter().all(|x| x == *f)).copied());
+        let faces = edge_faces.get(&(key(a), key(b)));
+        let inside = faces.and_then(|fs| fs.first().filter(|f| fs.len() == 2 && fs.iter().all(|x| x == *f)).copied());
+        // An edge where a curved face meets another (a cylinder's rim on its cap) lies on the
+        // curved face: its normals there put the crossing on the curve, not on the chord.
+        let face_normal = |f: u32, p: Vec3| face_normals.get(&(f, key(p))).copied().flatten();
+        let curved =
+            || faces?.iter().copied().find(|f| matches!((face_normal(*f, a), face_normal(*f, b)), (Some(x), Some(y)) if x.dot(y) < 1.0 - 1e-12));
+        let inside = inside.or_else(curved);
         let normal = |p: Vec3| match inside {
             Some(f) => face_normals.get(&(f, key(p))).copied().flatten(),
             None => normals.get(&key(p)).copied().flatten(),
@@ -1106,7 +1214,7 @@ pub(crate) fn section(plane: &Plane, m: &Mesh, face: Option<u32>) -> Vec<LinkGeo
         }
         Some(h(0.5 * (lo + hi)))
     };
-    let mut segs: Vec<(Vec2, Vec2)> = Vec::new();
+    let mut segs: Vec<(Vec2, Vec2, u32)> = Vec::new();
     for (t, f) in m.triangles.iter().zip(&m.tri_face) {
         if face.is_some_and(|x| x != *f) {
             continue;
@@ -1122,13 +1230,11 @@ pub(crate) fn section(plane: &Plane, m: &Mesh, face: Option<u32>) -> Vec<LinkGeo
         if let [a, b] = pts[..] {
             let (a, b) = (plane.to_local(a), plane.to_local(b));
             if a.dist(b) > size * 1e-9 {
-                segs.push((a, b));
+                segs.push((a, b, *f));
             }
         }
     }
-    let exact = exact.into_inner();
-    let loose = size * 2e-3;
-    fit_segments(&segs, size).into_iter().map(|g| refine_round(g, &exact, loose)).collect()
+    (segs, exact.into_inner())
 }
 
 /// Re-fit a circle or arc through the exact section points near it, when there are enough.
@@ -1159,9 +1265,11 @@ fn refine_round(g: LinkGeom, exact: &[Vec2], tol: f64) -> LinkGeom {
 }
 
 /// Chain loose 2D segments into polylines (merging coincident ends) and fit each chain.
-fn fit_segments(segs: &[(Vec2, Vec2)], size: f64) -> Vec<LinkGeom> {
+fn fit_segments(segs: &[(Vec2, Vec2)], size: f64, preserve_arcs: bool) -> Vec<LinkGeom> {
     // Mesh chords stray from the surface by up to the display tolerance (1/1000 of the size).
-    let loose = Some(size * 2e-3);
+    // A silhouette's vertices lie on the surface, so it is fitted tightly: a loose fit lets a line
+    // swallow the start of a tangent arc, or an arc run on into the straight edge after it.
+    let loose = Some(if preserve_arcs { size * 1e-5 } else { size * 2e-3 });
     let q = size * 1e-7;
     let key = |p: Vec2| ((p.x / q).round() as i64, (p.y / q).round() as i64);
     let mut nodes: BTreeMap<(i64, i64), (Vec2, Vec<usize>)> = BTreeMap::new();
@@ -1209,17 +1317,94 @@ fn fit_segments(segs: &[(Vec2, Vec2)], size: f64) -> Vec<LinkGeom> {
     for s in starts {
         while nodes.get(&s).is_some_and(|n| n.1.iter().any(|e| !used.get(*e).copied().unwrap_or(true))) {
             let c = walk(s, &mut used);
-            fit_chain(&c, loose, &mut out);
+            fit_chain_with_arcs(&c, loose, &mut out, preserve_arcs);
         }
     }
     let keys: Vec<(i64, i64)> = nodes.keys().copied().collect();
     for s in keys {
         while nodes.get(&s).is_some_and(|n| n.1.iter().any(|e| !used.get(*e).copied().unwrap_or(true))) {
             let c = walk(s, &mut used);
-            fit_chain(&c, loose, &mut out);
+            fit_chain_with_arcs(&c, loose, &mut out, preserve_arcs);
         }
     }
+    if preserve_arcs {
+        snap_tangent_arcs(&mut out, size * 1e-3);
+    }
     out
+}
+
+/// A fitted arc is only a least-squares circle: make it exactly tangent to the straight edges
+/// it runs into, ending on them where they touch it, with one radius.
+fn snap_tangent_arcs(out: &mut [LinkGeom], tol: f64) {
+    for i in 0..out.len() {
+        let Some(LinkGeom::Arc { c, a, b }) = out.get(i).cloned() else { continue };
+        let r = (c.dist(a) + c.dist(b)) / 2.0;
+        // (arc end, line index, line end index, tangent point, unit normal towards the centre, centre distance)
+        let mut hits: Vec<(usize, usize, usize, Vec2, Vec2, f64)> = Vec::new();
+        for (end, e) in [a, b].into_iter().enumerate() {
+            for (j, g) in out.iter().enumerate() {
+                let LinkGeom::Line(p, q) = g else { continue };
+                let Some(u) = (*q - *p).normalized() else { continue };
+                let foot = *p + u * (c - *p).dot(u);
+                let d = c.dist(foot);
+                if (d - r).abs() > tol || foot.dist(e) > 0.5 * r {
+                    continue;
+                }
+                let Some(n) = (c - foot).normalized() else { continue };
+                // The end of the line nearest the arc, and the tangent point must lie before it.
+                let (near, far) = if p.dist(e) <= q.dist(e) { (0, *q) } else { (1, *p) };
+                let near_pt = if near == 0 { *p } else { *q };
+                // The line must itself end next to the arc: not just lie on the same infinite line.
+                if (foot - far).dot(near_pt - far) <= 0.0 || near_pt.dist(foot) > 0.25 * r {
+                    continue;
+                }
+                hits.push((end, j, near, foot, n, d));
+            }
+        }
+        let mut hits_by_end: [Option<(usize, usize, Vec2, Vec2, f64)>; 2] = [None, None];
+        for (end, j, near, foot, n, d) in hits {
+            if let Some(slot) = hits_by_end.get_mut(end)
+                && slot.is_none()
+            {
+                *slot = Some((j, near, foot, n, d));
+            }
+        }
+        let (mut c, mut r) = (c, r);
+        if let [Some((_, _, _, n1, d1)), Some((_, _, _, n2, d2))] = hits_by_end {
+            // One circle tangent to both lines: equal distance to each.
+            let det = n1.cross(n2);
+            if det.abs() > 1e-6 {
+                let m = (d1 + d2) / 2.0;
+                let (r1, r2) = (m - d1, m - d2);
+                let delta = Vec2::new((r1 * n2.y - r2 * n1.y) / det, (n1.x * r2 - n2.x * r1) / det);
+                c += delta;
+                r = m;
+            }
+        } else if let [Some((_, _, _, _, d)), None] | [None, Some((_, _, _, _, d))] = hits_by_end {
+            r = d;
+        }
+        let on = |q: Vec2| c + (q - c).normalized().unwrap_or(Vec2::X) * r;
+        let (mut na, mut nb) = (on(a), on(b));
+        for (end, hit) in hits_by_end.into_iter().enumerate() {
+            let Some((j, near, _, n, _)) = hit else { continue };
+            let t = c - n * r;
+            if let Some(LinkGeom::Line(p, q)) = out.get_mut(j) {
+                if near == 0 {
+                    *p = t;
+                } else {
+                    *q = t;
+                }
+            }
+            if end == 0 {
+                na = t;
+            } else {
+                nb = t;
+            }
+        }
+        if let Some(LinkGeom::Arc { c: cc, a: aa, b: bb }) = out.get_mut(i) {
+            (*cc, *aa, *bb) = (c, na, nb);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1298,9 +1483,9 @@ fn fits_line(p: &[Vec2], tol: f64) -> bool {
 /// Circle through the chain (centre, radius, signed sweep from the first to the last point).
 /// `exact`: the points lie on the curve (edge tessellation), else they are approximate
 /// (mesh sections and silhouettes) and the circle is a least-squares fit.
-fn fits_circle(p: &[Vec2], tol: f64, exact: bool) -> Option<(Vec2, f64, f64)> {
+fn fits_circle(p: &[Vec2], tol: f64, exact: bool, preserve_arcs: bool) -> Option<(Vec2, f64, f64)> {
     let n = p.len();
-    if n < 3 || (!exact && n < 5) {
+    if n < 3 || (!exact && !preserve_arcs && n < 5) {
         return None;
     }
     let closed = p.first()?.dist(*p.last()?) <= tol;
@@ -1348,6 +1533,10 @@ fn arc_geom(p: &[Vec2], c: Vec2, r: f64, sweep: f64, tol: f64) -> Option<LinkGeo
 /// else greedy maximal pieces. `loose`: the points are approximate (within `loose` mm), and
 /// sharp corners always split the chain.
 pub(crate) fn fit_chain(raw: &[Vec2], loose: Option<f64>, out: &mut Vec<LinkGeom>) {
+    fit_chain_with_arcs(raw, loose, out, false);
+}
+
+fn fit_chain_with_arcs(raw: &[Vec2], loose: Option<f64>, out: &mut Vec<LinkGeom>, preserve_arcs: bool) {
     let mut p: Vec<Vec2> = Vec::with_capacity(raw.len());
     let scale = raw.iter().fold(0.0_f64, |m, q| m.max(q.x.abs()).max(q.y.abs())).max(1.0);
     let ext = match (
@@ -1397,10 +1586,12 @@ pub(crate) fn fit_chain(raw: &[Vec2], loose: Option<f64>, out: &mut Vec<LinkGeom
                 _ => 0.0,
             }
         };
-        let corners: Vec<usize> = (0..n).filter(|i| turn(*i) > 30f64.to_radians()).collect();
+        // A coarsely tessellated round turns up to ~35 degrees per chord; keep those together.
+        let corner_turn = if preserve_arcs { 50f64 } else { 30f64 }.to_radians();
+        let corners: Vec<usize> = (0..n).filter(|i| turn(*i) > corner_turn).collect();
         let cut = |a: usize, b: usize, out: &mut Vec<LinkGeom>| {
             if let Some(s) = p.get(a..=b) {
-                fit_piece(s, tol, exact, out);
+                fit_piece(s, tol, exact, preserve_arcs, out);
             }
         };
         if closed && let Some(&c0) = corners.first() {
@@ -1414,7 +1605,7 @@ pub(crate) fn fit_chain(raw: &[Vec2], loose: Option<f64>, out: &mut Vec<LinkGeom
             let mut start = 0;
             for c in cs.into_iter().chain([m - 1]) {
                 if let Some(s) = q.get(start..=c) {
-                    fit_piece(s, tol, exact, out);
+                    fit_piece(s, tol, exact, preserve_arcs, out);
                 }
                 start = c;
             }
@@ -1427,11 +1618,21 @@ pub(crate) fn fit_chain(raw: &[Vec2], loose: Option<f64>, out: &mut Vec<LinkGeom
         }
         return;
     }
-    fit_piece(&p, tol, exact, out);
+    fit_piece(&p, tol, exact, preserve_arcs, out);
 }
 
-fn fit_piece(p: &[Vec2], tol: f64, exact: bool, out: &mut Vec<LinkGeom>) {
+fn fit_piece(p: &[Vec2], tol: f64, exact: bool, preserve_arcs: bool, out: &mut Vec<LinkGeom>) {
     if p.len() < 2 {
+        return;
+    }
+    // A near-straight run is a line, not an arc of huge radius.
+    let curved = |sw: f64| !preserve_arcs || exact || sw.abs() >= 20f64.to_radians();
+    let fitted_arc = || fits_circle(p, tol, exact, preserve_arcs).filter(|(_, _, sw)| curved(*sw)).and_then(|(c, r, sw)| arc_geom(p, c, r, sw, tol));
+    if preserve_arcs
+        && (exact || p.len() >= 4)
+        && let Some(g) = fitted_arc()
+    {
+        out.push(g);
         return;
     }
     if fits_line(p, tol) {
@@ -1440,9 +1641,7 @@ fn fit_piece(p: &[Vec2], tol: f64, exact: bool, out: &mut Vec<LinkGeom>) {
         }
         return;
     }
-    if let Some((c, r, sw)) = fits_circle(p, tol, exact)
-        && let Some(g) = arc_geom(p, c, r, sw, tol)
-    {
+    if !preserve_arcs && let Some(g) = fitted_arc() {
         out.push(g);
         return;
     }
@@ -1459,7 +1658,7 @@ fn fit_piece(p: &[Vec2], tol: f64, exact: bool, out: &mut Vec<LinkGeom>) {
         let mut jc = i + 1;
         let mut arc = None;
         while jc + 1 < n {
-            match p.get(i..=jc + 1).and_then(|s| fits_circle(s, tol, exact)) {
+            match p.get(i..=jc + 1).and_then(|s| fits_circle(s, tol, exact, preserve_arcs)) {
                 Some(f) => {
                     arc = Some(f);
                     jc += 1;
@@ -1469,7 +1668,7 @@ fn fit_piece(p: &[Vec2], tol: f64, exact: bool, out: &mut Vec<LinkGeom>) {
         }
         if jc >= jl + 2
             && jc - i >= 3
-            && let Some((c, r, sw)) = arc
+            && let Some((c, r, sw)) = arc.filter(|(_, _, sw)| curved(*sw))
             && let Some(g) = p.get(i..=jc).and_then(|s| arc_geom(s, c, r, sw, tol))
         {
             out.push(g);

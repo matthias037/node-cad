@@ -1,5 +1,8 @@
 //! File/start presentation; callers retain commands, caches and recovery ownership.
-use super::{metrics::dimension, text::paint_text};
+use super::{
+    metrics::dimension,
+    text::{paint_text, paint_text_aligned},
+};
 use crate::theme::Tokens;
 use egui::{Align2, FontId, InnerResponse, Rect, Response, Sense, Stroke, TextureId, Ui, Vec2, pos2, vec2};
 
@@ -16,6 +19,9 @@ pub(crate) struct RecentRow<'a> {
     pub when: &'a str,
     pub workspace: &'a str,
     pub thumbnail: Option<(TextureId, Vec2)>,
+    /// The design's picture could not be made (empty or unreadable). Draws a dimmed placeholder,
+    /// so it reads as "no preview" rather than as one still loading.
+    pub thumbnail_failed: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -96,7 +102,7 @@ impl FileView {
 
     pub(crate) fn recent_list<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
         let t = Tokens::get();
-        egui::Frame::NONE.fill(t.file_surface).stroke(Stroke::new(1.0, t.file_border)).corner_radius(t.radius_xl).show(ui, |ui| {
+        egui::Frame::NONE.fill(t.file_surface).stroke(t.tertiary_border(t.file_border)).corner_radius(t.radius_xl).show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
             let key = ui.id().with("file_recent_index");
             ui.ctx().data_mut(|data| data.insert_temp(key, 0_usize));
@@ -221,10 +227,11 @@ impl FileView {
         let t = Tokens::get();
         ui.add_space(t.space_10);
         let (rect, _) = ui.allocate_exact_size(vec2(dimension(ui.available_width()), 1.0), Sense::hover());
-        ui.painter().hline(
+        t.secondary_hline(
+            ui.painter(),
             (rect.left() + t.space_12)..=(rect.right() - t.space_12).max(rect.left() + t.space_12),
             rect.center().y,
-            Stroke::new(1.0, t.file_rail_ink.gamma_multiply(0.25)),
+            t.file_rail_ink.gamma_multiply(0.25),
         );
         ui.add_space(t.space_10);
     }
@@ -265,7 +272,7 @@ impl FileView {
         });
         if let Some((key, index)) = list {
             if index > 0 {
-                ui.painter().hline(rect.x_range(), rect.top(), Stroke::new(1.0, t.file_border));
+                ui.painter().hline(rect.x_range(), rect.top(), t.tertiary_border(t.file_border));
             }
             ui.ctx().data_mut(|data| data.insert_temp(key, index.saturating_add(1)));
         }
@@ -273,12 +280,15 @@ impl FileView {
         let preview = Rect::from_min_size(inner.min, vec2(t.space_24 * 2.0, inner.height()).min(inner.size()));
         thumbnail(ui, preview, row.thumbnail);
         if row.thumbnail.is_none() {
+            // A design whose picture could not be made shows a fainter box, so it reads as "no
+            // preview" rather than as one still being drawn.
+            let opacity = if row.thumbnail_failed { 0.4 } else { 1.0 };
             crate::icons::paint_accented(
                 ui.painter(),
                 Rect::from_center_size(preview.center(), Vec2::splat(t.space_24.min(preview.height()))),
                 "box",
                 None,
-                1.0,
+                opacity,
             );
         }
         let left = (preview.right() + t.space_14).min(inner.right());
@@ -294,7 +304,15 @@ impl FileView {
                 t.form_ink,
                 false,
             );
-            paint_text(ui, Rect::from_min_max(pos2(left, half), content.max), row.path, FontId::monospace(t.font_body), t.file_dim, false);
+            paint_text_aligned(
+                ui,
+                Rect::from_min_max(pos2(left, half), content.max),
+                row.path,
+                FontId::monospace(t.font_body),
+                t.file_dim,
+                false,
+                true,
+            );
         } else {
             let when_width = t.space_24 * 5.0;
             let workspace_width = t.form_label_width * 2.0;
@@ -311,13 +329,14 @@ impl FileView {
                 t.form_ink,
                 false,
             );
-            paint_text(
+            paint_text_aligned(
                 ui,
                 Rect::from_min_max(pos2(path_left, content.top()), pos2((when_left - t.space_14).max(path_left), content.bottom())),
                 row.path,
                 FontId::monospace(t.font_body),
                 t.file_dim,
                 false,
+                true,
             );
             paint_text(
                 ui,
@@ -400,12 +419,18 @@ fn card(ui: &Ui, rect: Rect, response: &Response, primary: bool) {
         t.file_surface
     };
     let border = if primary || response.has_focus() { t.file_primary_border } else { t.file_border };
-    ui.painter().rect(rect, t.radius_xl, fill, Stroke::new(if primary { 1.5 } else { 1.0 }, border), egui::StrokeKind::Inside);
+    ui.painter().rect(
+        rect,
+        t.radius_xl,
+        fill,
+        if primary || response.has_focus() { Stroke::new(if primary { 1.5 } else { 1.0 }, border) } else { t.tertiary_border(border) },
+        egui::StrokeKind::Inside,
+    );
 }
 
 fn thumbnail(ui: &Ui, rect: Rect, texture: Option<(TextureId, Vec2)>) {
     let t = Tokens::get();
-    ui.painter().rect(rect, t.radius_md, t.file_surface, Stroke::new(1.0, t.file_border), egui::StrokeKind::Inside);
+    ui.painter().rect(rect, t.radius_md, t.file_surface, t.tertiary_border(t.file_border), egui::StrokeKind::Inside);
     if let Some((texture, size)) = texture.filter(|(_, size)| size.is_finite() && size.x > 0.0 && size.y > 0.0) {
         let scale = (rect.width() / size.x).min(rect.height() / size.y);
         let target = Align2::CENTER_CENTER.align_size_within_rect(size * scale, rect);
@@ -426,7 +451,7 @@ fn recovery_panel(
     let border = if banner { t.file_recovery_border } else { t.file_border };
     egui::Frame::NONE
         .fill(fill)
-        .stroke(Stroke::new(1.0, border))
+        .stroke(if banner { Stroke::new(1.0, border) } else { t.tertiary_border(border) })
         .corner_radius(t.radius_xl)
         .inner_margin(egui::Margin::symmetric(t.space_16 as i8, t.space_12 as i8))
         .show(ui, |ui| {

@@ -105,13 +105,15 @@ impl StraightPreview {
         let cache = self.cached.as_ref()?;
         let mut scene = GpuScene::default();
         let mut bounds = cache.bounds;
-        let color = if operation == "cut" {
-            colors.removed
+        let (color, cut_edge) = if operation == "cut" {
+            (colors.removed, [colors.removed[0], colors.removed[1], colors.removed[2], 255])
         } else if operation == "intersect" {
-            [colors.added[0], colors.added[1], colors.added[2], colors.removed[3]]
+            ([colors.added[0], colors.added[1], colors.added[2], colors.removed[3]], colors.edge)
         } else {
-            colors.added
+            (colors.added, colors.edge)
         };
+        let color = scene.color(color);
+        let cut_edge = scene.color(cut_edge);
         let triangle = |scene: &mut GpuScene, points: [Vec3; 3], normal: Vec3| {
             for point in points {
                 if matches!(operation, "cut" | "intersect") {
@@ -131,7 +133,7 @@ impl StraightPreview {
                     bounds.add(point);
                 }
             }
-            let edge_color = if operation == "cut" { [color[0], color[1], color[2], 255] } else { colors.edge };
+            let edge_color = if operation == "cut" { cut_edge } else { scene.color(colors.edge) };
             for &[a, b] in &surface.edges {
                 let normal = (b - a).cross(surface.normal).normalized()?;
                 triangle(&mut scene, [a + low, b + low, b + high], normal);
@@ -349,7 +351,7 @@ mod tests {
     #[test]
     fn identity_component_feedback_skips_moved_and_repeated_placements() {
         let mut h = Harness::new();
-        let made = h.app.run("component.create", json!({"name":"Imported part"})).unwrap();
+        let made = h.app.run("component.create", json!({"name":"Imported part","grounded":false})).unwrap();
         h.app.run("solid.box", json!({"length":4,"width":3,"height":5,"body_name":"Stock"})).unwrap();
         let world = h.app.session.world_state();
         let face =

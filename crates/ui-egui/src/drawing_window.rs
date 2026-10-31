@@ -116,7 +116,13 @@ pub(crate) fn save(app: &mut SolveApp, ext: &'static str) {
     let bytes = match ext {
         "pdf" => drawing_pdf(&sh),
         "svg" => drawing_svg(&sh).into_bytes(),
-        _ => drawing_dxf(&sh).into_bytes(),
+        _ => match drawing_dxf(&sh) {
+            Ok(text) => text.into_bytes(),
+            Err(e) => {
+                app.drawing_window.message = Some((e, true));
+                return;
+            }
+        },
     };
     let base = if sh.title.titre.trim().is_empty() { "plan".to_string() } else { sh.title.titre.trim().replace(['/', '\\', ':'], "-") };
     let name = format!("{base}.{ext}");

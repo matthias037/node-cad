@@ -122,10 +122,7 @@ impl Core {
         let request = HttpRequest {
             method: "POST",
             url: format!("{}/chat/completions", self.cfg.base_url),
-            headers: vec![
-                ("Content-Type".into(), "application/json".into()),
-                ("Authorization".into(), format!("Bearer {}", self.cfg.token)),
-            ],
+            headers: vec![("Content-Type".into(), "application/json".into()), ("Authorization".into(), format!("Bearer {}", self.cfg.token))],
             body: Some(body.to_string().into_bytes()),
             timeout_s: REQUEST_TIMEOUT_S,
         };
@@ -193,6 +190,7 @@ impl Core {
             title: None,
             kind: None,
             status: Some(if failed { ToolStatus::Failed } else { ToolStatus::Completed }),
+            input: None,
             output: Some(text.chars().take(2000).collect()),
         });
         self.history.push(json!({"role": "tool", "tool_call_id": call.id, "content": text}));
@@ -266,7 +264,9 @@ impl solidcraft_mcp::Backend for InPage<'_> {
         }
         let (req, _reply) = crate::ControlRequest::new(method, params);
         match crate::control::handle(self.app, self.ctx, &req) {
-            crate::control::Outcome::Done(v) if v.get("ok").and_then(Value::as_bool) == Some(true) => Ok(v.get("result").cloned().unwrap_or(Value::Null)),
+            crate::control::Outcome::Done(v) if v.get("ok").and_then(Value::as_bool) == Some(true) => {
+                Ok(v.get("result").cloned().unwrap_or(Value::Null))
+            }
             crate::control::Outcome::Done(v) => Err(v.get("error").and_then(Value::as_str).unwrap_or("error").to_string()),
             crate::control::Outcome::Screenshot { .. } => Err("a picture of the window is not available in the browser".into()),
         }
@@ -296,6 +296,7 @@ pub fn pump(app: &mut SolveApp, ctx: &egui::Context) {
             title: Some(core::tool_title(&call.name, &args)),
             kind: Some(String::new()),
             status: Some(ToolStatus::InProgress),
+            input: call.arguments.as_ref().ok().filter(|a| a.is_object()).cloned(),
             output: None,
         });
         // Stopped meanwhile: the rest is answered without running.

@@ -21,6 +21,19 @@ Setting `SOLIDCRAFT_SAFE_MODE=1` does the same. From 0.10.2, if two launches in 
 before the window opens, the next one starts in safe mode by itself. `SOLIDCRAFT_RENDERER=cpu`
 uses only the software renderer and keeps your settings.
 
+## A design won't open or hangs while opening
+
+- **Open the previous save.** Every save keeps the version it replaced next to it as
+  `<file>.bak` (see [Files](files.md)). Copy it to a new name ending in `.nodecad`, for
+  example `bracket-previous.nodecad`, and open that. Work saved after the previous save is
+  not in it.
+- **Check the crash reports.** If NØDE CAD crashed while the design was open, the newest report
+  in the `crashes` folder (see the table below) usually holds a `design.nodecad` with the
+  design as it was. `node-cad-cli crashes` lists the reports.
+- **Unsaved designs** are in the `recovery` folder, not next to the file.
+- **Report it.** GitHub doesn't accept `.nodecad` (or `.solidcraft`) attachments, so zip the file
+  (`design.nodecad.zip`) and attach it to an issue, with the crash report if there is one.
+
 ## Reset the settings
 
 NØDE CAD keeps its settings and its data in the folders below. All installed versions share
@@ -41,7 +54,7 @@ folder. Older releases used other folder names next to these; NØDE CAD only rea
 you can leave them alone.
 
 - The **`recovery`** folder holds autosaves of designs that were never saved. Rename the data
-  folder rather than deleting it, so you can still open those autosaves (`.nodecad` files)
+  folder rather than deleting it, so you can still open those autosaves (`.nodecad` files, or `.sc` and `.solidcraft` from earlier releases)
   with File > Open.
 - The **`crashes`** folder holds crash reports. Please attach the newest one to a bug report.
 
@@ -55,12 +68,24 @@ NØDE CAD needs Direct3D 12 or Vulkan on Windows, Metal on macOS, and Vulkan or 
 Linux. Without a graphics driver it falls back to the system's software renderer (WARP on
 Windows, llvmpipe or lavapipe on Linux), which is slow but works. From 0.10.2, if no window can
 be opened at all, NØDE CAD tries the software renderer once and otherwise shows a message
-saying what failed (earlier versions closed without a word). Things to try:
+saying what failed (earlier versions closed without a word).
+
+On Windows, if the graphics API cannot create the window's renderer, NØDE CAD tries the
+remaining APIs in order: Direct3D 12 → Vulkan → OpenGL, then software rendering. The status
+message and **Preferences › Graphics** say which API failed and why. The saved graphics
+preference stays unchanged. With an explicit `WGPU_BACKEND`, a failed start shows the error
+and exits without switching; change or remove that variable to try another API.
+
+Things to try:
 
 - Install the graphics driver from the GPU maker (Intel, AMD, NVIDIA) rather than Windows Update.
 - In a virtual machine, turn on 3D acceleration. Over Remote Desktop, try it on the machine itself.
 - Run `node-cad --crash-log` to list recent crash reports, and attach the newest one to an
   issue.
+- On an Intel Mac (Intel Iris graphics, macOS 12), "Parent device is lost" at start comes from
+  the Metal compiler refusing wgpu's indirect-call validation shader. NØDE CAD leaves that
+  validation off on Intel Macs. To change it, set `WGPU_VALIDATION_INDIRECT_CALL=1` (on) or `0`
+  (off) before starting; a value you set is always kept.
 
 ## The desktop stutters or freezes while NØDE CAD builds bodies
 
@@ -68,6 +93,37 @@ Some graphics drivers hang on the shader NØDE CAD uses to build bodies on the G
 system then resets the GPU. NØDE CAD already builds bodies on the CPU on the AMD FirePro
 D300/D500/D700 (Mac Pro 2013). On another GPU that does this, start NØDE CAD with
 `SOLIDCRAFT_CPU_TESS=1` set to build bodies on the CPU, and open an issue with the GPU's name.
+
+## The interface looks blurry on Linux with display scaling
+
+On Linux, NØDE CAD runs through XWayland whenever an X display is available, because file
+drag and drop from a file manager only works there (niri is the exception and stays on native
+Wayland). A compositor that doesn't let X11 apps scale themselves draws an XWayland window at
+100 % and stretches it to the monitor's scale, so text and icons look soft. That happens with
+fractional scaling (125 %, 140 %), and on GNOME 47 (RHEL and Rocky Linux 10) at any scale,
+200 % included. The diagnostics in a bug report show it as about 1 physical pixel per point at
+a scale of 200 %.
+
+Run NØDE CAD on native Wayland instead: Preferences › Graphics › **Window system** ›
+Wayland, which applies at the next start. Versions without that setting (0.21.0 and earlier)
+take `SOLIDCRAFT_WAYLAND=1` in the environment:
+
+```
+SOLIDCRAFT_WAYLAND=1 solidcraft
+```
+
+On native Wayland, dropping files onto the window doesn't work; use File > Open or pass the file
+on the command line.
+[Wayland, XWayland and niri](https://github.com/matthias037/node-cad/blob/main/docs/nix.md#wayland-xwayland-and-niri)
+has the details.
+
+## Trackpad pinch does nothing on Linux
+
+A Wayland compositor reports touchpad gestures only to native Wayland windows. Through
+XWayland there is no gesture protocol, so a pinch never reaches NØDE CAD at all (two-finger
+scrolling still works there, because X11 reports it as a wheel). Run NØDE CAD on native
+Wayland (see above) and pinch zooms the view at the cursor, as it already did on macOS and
+the browser.
 
 ## NØDE CAD closes right away on Windows
 
@@ -91,18 +147,36 @@ from the Start menu after you sign in again. From 0.11.1 the setting can also li
 `graphics.json` in the settings folder, as `{"msaa": 4, "backend": "dx12"}` (`auto` is the
 order above). Safe mode ignores it and always uses the software renderer.
 
+With OpenGL on Windows, the window has the Windows title bar above NØDE CAD's application bar
+instead of using the application bar as its title bar. Some OpenGL drivers (older Intel HD and
+UHD graphics) otherwise show the picture a title bar's height lower than the window, so clicks
+land above what they point at.
+
 ## NØDE CAD restarted, saying the graphics device was reset
 
 When the graphics driver stops responding, the system resets it (on Windows, "Display driver
 stopped responding and has recovered"), and the graphics device NØDE CAD draws with is gone
 for good: the window can't draw anything more. NØDE CAD then closes, keeps your unsaved
 changes for recovery as it does after a crash, and starts again; the new window says what
-happened and offers the changes back. If the device is reset again within ten minutes of that
-restart, the next start uses software rendering, which doesn't depend on the graphics driver.
-Updating the graphics driver from the GPU maker usually stops the resets.
+happened, with what the graphics driver reported, and offers the changes back. The old window
+closes on its own; NØDE CAD doesn't wait for the driver to release it. If the device is reset
+again within ten minutes of that restart, the next start uses software rendering, which doesn't
+depend on the graphics driver. Updating the graphics driver from the GPU maker usually stops the
+resets. Laptops that lose the device on waking from sleep (often with an NVIDIA GPU that doesn't
+drive the screen) can keep NØDE CAD on the integrated GPU instead: Preferences › Graphics.
 
 ## A design saved by 0.10 won't open in an older version
 
 Designs saved by a newer NØDE CAD use a newer file format. Older versions refuse them with
 "this design was saved by a newer NØDE CAD" and don't change the file. Open them with the
 current version.
+
+## Save As says the file can't be found (Windows)
+
+If saving into *Documents* (or *Pictures*, *Desktop* and other protected folders) fails with a
+"File not found" message from the Windows save dialog and nothing is saved, Windows Security's
+*Controlled folder access* is probably blocking NØDE CAD. Windows usually also shows an
+"Unauthorized changes blocked" notification. Either save to a folder that isn't protected, or
+allow NØDE CAD: *Windows Security › Virus & threat protection › Ransomware protection ›
+Controlled folder access › Allow an app through Controlled folder access*, then add
+`solidcraft.exe`.

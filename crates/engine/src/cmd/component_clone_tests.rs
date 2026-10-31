@@ -5,7 +5,7 @@ fn run(s: &mut Session, cmd: &str, p: Value) -> Value {
     s.execute(cmd, &p).unwrap()
 }
 fn component(s: &mut Session, name: &str) -> u64 {
-    run(s, "component.create", json!({"name":name}))["component"].as_u64().unwrap()
+    run(s, "component.create", json!({"name":name,"grounded":false}))["component"].as_u64().unwrap()
 }
 fn volume(s: &mut Session, id: u64) -> f64 {
     run(s, "component.properties", json!({"component":id}))["total"]["volume_mm3"].as_f64().unwrap()
@@ -73,6 +73,25 @@ fn reassigned_body_is_an_independent_base_feature() {
     run(&mut s, "parameters.change", json!({"name":parameter,"expression":"3 mm"}));
     near(volume(&mut s, part), 12.0);
     near(volume(&mut s, new), 8.0);
+}
+
+#[test]
+fn deleting_an_independent_base_keeps_the_copied_component() {
+    let mut s = Session::default();
+    box2(&mut s);
+    let part = component(&mut s, "Part");
+    run(&mut s, "component.move_bodies", json!({"component":part,"bodies":["Cube"]}));
+    let new = copy(&mut s, part)["component"].as_u64().unwrap();
+    let base = s.doc.features.iter().find(|f| f.component == new && matches!(f.kind, solidcraft_doc::FeatureKind::Import { .. })).unwrap();
+    assert!(!base.inserted && !s.doc.feature_owns_component(base));
+    let (base, others) = (base.id, s.doc.features.iter().filter(|f| f.component == new).count() - 1);
+    let (components, occurrences, joints) = (s.doc.components.clone(), s.doc.occurrences.clone(), s.doc.assembly.joints.clone());
+    let reply = run(&mut s, "timeline.delete", json!({"feature": base.to_string()}));
+    assert_eq!(reply["deleted"], json!([base]));
+    assert_eq!(s.doc.components, components);
+    assert_eq!(s.doc.occurrences, occurrences);
+    assert_eq!(s.doc.assembly.joints, joints);
+    assert_eq!(s.doc.features.iter().filter(|f| f.component == new).count(), others);
 }
 
 #[test]
@@ -222,7 +241,7 @@ fn renamed_pattern_outputs_and_later_body_operands_follow_clone() {
     let new = copied["component"].as_u64().unwrap();
     near(volume(&mut s, new), 24.0);
     let state = s.model.state();
-    let target = state.bodies.iter().find(|b| b.name == "Custom Output (copy)").unwrap();
+    let target = state.bodies.iter().find(|b| b.name == "Custom Output (2)").unwrap();
     near(solidcraft_kernel::measure(&target.body).unwrap().centroid.y, 6.0);
     assert_eq!(s.doc.features.iter().filter(|f| f.component == new && matches!(f.kind, solidcraft_doc::FeatureKind::Move { .. })).count(), 1);
 }
@@ -312,7 +331,7 @@ fn selected_second_occurrence_emboss_copy_remaps_target_and_author_paths_and_reo
     let placement = copied["occurrence"].as_u64().unwrap();
     let emboss = s.doc.features.iter().find(|f| f.component == new && matches!(f.kind, solidcraft_doc::FeatureKind::Emboss { .. })).unwrap();
     let solidcraft_doc::FeatureKind::Emboss { face: Some(face), .. } = &emboss.kind else { panic!("missing selected face") };
-    assert_eq!(face.body, "Sleeve (copy)");
+    assert_eq!(face.body, "Sleeve (2)");
     assert_eq!(face.path, vec![placement]);
     assert_eq!(face.author_path, vec![placement]);
     near(volume(&mut s, new), original_volume);
@@ -413,14 +432,14 @@ fn external_transfer_entry_and_internal_rotated_transfer_clone_once() {
     let copied = copy(&mut s, parent);
     assert_eq!(copied["frozen_bodies"], json!(["Foreign"]));
     let state = s.model.state();
-    let body = state.body("Foreign (copy)").unwrap();
+    let body = state.body("Foreign (2)").unwrap();
     let after = body.mesh().bounds();
     assert!(before.min.dist(after.min) < 1e-6);
     assert!(before.max.dist(after.max) < 1e-6);
     assert!(body.transferred);
     let mut reopened = Session { doc: solidcraft_doc::Document::from_json(&s.doc.to_json()).unwrap().into(), ..Session::default() };
     reopened.refresh();
-    assert!(reopened.model.state().body("Foreign (copy)").unwrap().mesh().bounds().min.dist(before.min) < 1e-6);
+    assert!(reopened.model.state().body("Foreign (2)").unwrap().mesh().bounds().min.dist(before.min) < 1e-6);
 }
 
 #[test]
@@ -442,7 +461,7 @@ fn suppressed_external_entry_does_not_supply_clone_baseline() {
     run(&mut s, "component.move_bodies", json!({"component":part,"bodies":["Foreign"]}));
     let before = s.model.state().body("Foreign").unwrap().mesh().bounds();
     copy(&mut s, part);
-    let after = s.model.state().body("Foreign (copy)").unwrap().mesh().bounds();
+    let after = s.model.state().body("Foreign (2)").unwrap().mesh().bounds();
     assert!(before.min.dist(after.min) < 1e-6);
     assert!(before.max.dist(after.max) < 1e-6);
 }
@@ -462,7 +481,7 @@ fn transferred_frozen_face_paint_ignores_consumed_legacy_offset() {
     let original = s.doc.appearances.faces.iter().find(|face| face.body == "Foreign").unwrap();
     let expected = solidcraft_doc::naming::point_on_face(&s.model.state(), original.name.as_ref().unwrap(), original.point).unwrap().0;
     copy(&mut s, part);
-    let paint = s.doc.appearances.faces.iter().find(|face| face.body == "Foreign (copy)").unwrap();
+    let paint = s.doc.appearances.faces.iter().find(|face| face.body == "Foreign (2)").unwrap();
     assert!(paint.point.dist(expected) < 1e-6, "{:?} versus {expected:?}", paint.point);
 }
 
@@ -677,8 +696,8 @@ fn paste_new_of_a_design_linked_twice_moves_the_copy_of_each_body() {
     assert_eq!(corners(&s, copied), lifted(), "{:?}", body_names(&s));
     // The material of a body goes to its copy, and no material is kept for a body that does not exist.
     let names = body_names(&s);
-    assert!(s.doc.materials.contains_key("Aa (2) (copy)"));
-    assert_eq!(s.doc.materials.get("Aa (2) (copy)"), s.doc.materials.get("Aa (2)"));
+    assert!(s.doc.materials.contains_key("Aa (2)(2)"));
+    assert_eq!(s.doc.materials.get("Aa (2)(2)"), s.doc.materials.get("Aa (2)"));
     assert!(s.doc.materials.keys().all(|body| names.contains(body)), "{:?} for {names:?}", s.doc.materials.keys().collect::<Vec<_>>());
 }
 

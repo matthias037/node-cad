@@ -123,7 +123,11 @@ fn the_gate_refuses_in_the_page_too() {
     let body = net.body(1);
     let last = body["messages"].as_array().unwrap().last().unwrap().clone();
     assert_eq!(last["role"], "tool");
-    assert!(app.agent_chat.items.iter().any(|i| matches!(i, Item::Tool { status: Some(ToolStatus::Failed), .. })), "{:?}", app.agent_chat.items.len());
+    assert!(
+        app.agent_chat.items.iter().any(|i| matches!(i, Item::Tool { status: Some(ToolStatus::Failed), .. })),
+        "{:?}",
+        app.agent_chat.items.len()
+    );
 }
 
 /// The relay's refusal (no subscription, allowance used) is shown as it wrote it, and the turn

@@ -16,7 +16,7 @@ use solidcraft_engine::Session;
 
 /// Every English text `label()` can be asked to translate.
 fn english_texts() -> BTreeSet<String> {
-    const EN: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/locales/en.json"));
+    const EN: &str = include_str!(concat!(env!("OUT_DIR"), "/locales/en.json"));
     let messages: serde_json::Map<String, serde_json::Value> = serde_json::from_str(EN).expect("en.json is valid JSON");
     messages.values().filter_map(|v| v.as_str().map(str::to_string)).collect()
 }
@@ -33,7 +33,18 @@ fn take(app: &SolveApp, out: &mut BTreeSet<String>) {
     let components: Vec<u64> = app.session.doc.components.iter().map(|c| c.id).collect();
     let groups: Vec<u64> = app.session.doc.browser_groups.iter().map(|g| g.id).collect();
 
-    for target in [Target::Viewport, Target::Origin, Target::Units, Target::Toolbar, Target::Workspace, Target::NamedViews] {
+    for target in [
+        Target::Viewport,
+        Target::Origin,
+        Target::Units,
+        Target::Toolbar,
+        Target::HistoryControls,
+        Target::Workspace,
+        Target::NamedViews,
+        Target::InsertDesign,
+        Target::VisualStyle,
+        Target::ViewTool,
+    ] {
         take_items(out, &context_menu::items(app, &target));
     }
     for name in &bodies {
@@ -81,16 +92,26 @@ fn every_menu_label_is_in_the_english_catalog() {
 
     // The labels that depend on state, so their other branch is seen too.
     let names: Vec<String> = app.session.model.state().bodies.iter().map(|b| b.name.clone()).collect();
-    app.ui.show_origin = false;
+    app.set_origin_shown(false);
     take(&app, &mut seen);
     for name in &names {
-        app.ui.locked_bodies.push(name.clone());
+        app.session.visibility.locked_bodies.push(name.clone());
         app.session.visibility.hidden_bodies.push(name.clone());
     }
     take(&app, &mut seen);
-    app.ui.locked_bodies.clear();
+    app.session.visibility.locked_bodies.clear();
     app.session.visibility.hidden_bodies.clear();
     take(&app, &mut seen);
+
+    // Linked components offer source-file actions absent from the sample design.
+    let linked = app.session.execute("component.create", &json!({"name": "Linked part"})).expect("linked component");
+    let component = linked["component"].as_u64().expect("component id");
+    app.session
+        .doc_mut()
+        .links
+        .insert(component, solidcraft_engine::doc::DesignLink { path: "part.solidcraft".into(), feature: 0, ..Default::default() });
+    take(&app, &mut seen);
+    assert!(seen.contains("Open Linked Design"));
 
     // A menu that stops yielding labels would empty `seen` and turn the
     // whole test into a tautology, so the sweep has to stay broad.

@@ -3,7 +3,7 @@
 //! drags, toolbar starts) the way a person would use it, with checks on the result.
 //!
 //! A scenario is a JSON list of steps:
-//! - `{"start": "solid.extrude"}`: a toolbar click; `{"key": "E", "shift"?, "cmd"?}`; `{"text": "20"}`
+//! - `{"start": "solid.extrude"}`: a toolbar click; `{"key": "E", "shift"?, "cmd"?, "ctrl"?, "alt"?, "pressed"?}`; `{"text": "20"}`
 //! - `{"widget": "Revolute", "near"?: "Type"}`: click a dialog field, choice or button by its
 //!   text (with `near`: the one in that label's row)
 //! - `{"click": AT, "double"?, "shift"?, "ctrl"?, "button"?}`, `{"move": AT, "shift"?, "alt"?, "ctrl"?, "cmd"?}`,
@@ -31,6 +31,7 @@
 //!   "close"}`: the app dies (or closes) and a new one starts on the same folders
 //! - `{"script": "examples/…/x.json"}`: run a command script through the engine; `"$DIR"` in a
 //!   `call` step's string parameters is the scenario's folder
+//! - `{"frames": 20}`: advance up to 600 frames at the harness clock (60 Hz)
 //! - `{"note": "…"}`: a comment; `{"pending": "why"}`: the scenario waits for a fix (its test
 //!   is ignored)
 //! - `{"expect": {…}}`: checks, see [`check`]; `{"until": {…}}` waits (frames) until they pass
@@ -145,6 +146,8 @@ pub struct Harness {
     /// The last frame's platform output (with its accessibility tree: dialog widgets are found
     /// by their text there).
     pub output: egui::PlatformOutput,
+    /// The last frame's painted shapes.
+    pub shapes: Vec<egui::epaint::ClippedShape>,
     /// Files the scenario saves and opens live here; file pickers answer from it.
     pub dir: PathBuf,
     /// The file the next Open picker returns (a `choose_file` step).
@@ -182,6 +185,7 @@ impl Harness {
                 ctx
             },
             output: Default::default(),
+            shapes: Vec::new(),
             dir: scratch_dir(),
             next_file: Rc::new(RefCell::new(None)),
             queue: None,
@@ -213,11 +217,18 @@ impl Harness {
 
     /// Lay out and draw one frame (feeding queued pointer and key events).
     pub fn frame(&mut self) {
+        self.frame_with(Vec::new());
+    }
+
+    /// One frame that receives all these events at once (a quick tap, or input queued during a
+    /// slow frame), before any queued ones.
+    pub fn frame_with(&mut self, events: Vec<egui::Event>) {
         self.time += 1.0 / 60.0;
         let mut raw = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, self.size)),
             time: Some(self.time),
             focused: true,
+            events,
             ..Default::default()
         };
         self.app.raw_input_hook(&mut raw);
@@ -229,6 +240,7 @@ impl Harness {
         // Nothing is painted: drop the frame's texture changes.
         out.textures_delta.clear();
         self.output = out.platform_output;
+        self.shapes = out.shapes;
     }
 
     pub fn frames(&mut self, n: usize) {
@@ -274,9 +286,10 @@ impl Harness {
             }
             self.frame();
         }
-        // A file opening, recovering or saving in the background: wait for it (as a person would).
+        // A file opening, recovering or saving in the background, or a window checking what its
+        // material does: wait for it (as a person would).
         let began = std::time::Instant::now();
-        while (!self.app.file_load.idle() || self.app.saving.is_some() || crate::open_meshing::active(&self.app))
+        while (!self.app.file_load.idle() || self.app.saving.is_some() || crate::open_meshing::active(&self.app) || self.app.op_check.busy())
             && began.elapsed() < std::time::Duration::from_secs(120)
         {
             self.frame();
@@ -340,6 +353,34 @@ impl Harness {
             let d = |p: &[f64; 2]| (p[1] - ly).abs() * 4.0 + (p[0] - lx).abs();
             d(a).total_cmp(&d(b))
         })
+    }
+
+    /// Accessibility bounds include scrolled-out page content. Reveal that content with
+    /// wheel input before using its coordinates; window actions and navigation stay put.
+    fn reveal_widget(&mut self, text: &str, near: Option<&str>) -> Result<[f64; 2], String> {
+        let find = |h: &Self| match near {
+            Some(label) => h.widget_near(text, label),
+            None => h.widget(text),
+        };
+        for _ in 0..32 {
+            let point = find(self).ok_or_else(|| format!("no widget `{text}` on screen"))?;
+            let at = egui::pos2(point[0] as f32, point[1] as f32);
+            let page = self.app.prefs_window.open.then(|| rect_of("prefs:page_body")).flatten();
+            let chrome = ["prefs:ok", "prefs:apply", "prefs:cancel", "prefs:search"].iter().any(|key| handle_at(key) == Some(at));
+            let Some(page) = page.filter(|page| !chrome && page.x_range().contains(at.x)) else { return Ok(point) };
+            if page.contains(at) {
+                return Ok(point);
+            }
+            self.call("ui.scroll", json!({"x":page.center().x,"y":page.center().y,"delta":if at.y < page.top() {100} else {-100}}));
+            // Follow the wheel's actual smoothing, rather than clicking its moving content.
+            for _ in 0..120 {
+                if self.ctx.input(|input| !input.is_scrolling()) {
+                    break;
+                }
+                self.frame();
+            }
+        }
+        Err(format!("widget `{text}` could not be revealed in its page"))
     }
 
     /// Centres of the visible widgets whose label or value is `text`, last drawn first.
@@ -415,7 +456,22 @@ impl Harness {
             if let Some(id) = s.get("start").and_then(Value::as_str) {
                 self.call("ui.start", json!({ "command": id }))
             } else if let Some(k) = s.get("key").and_then(Value::as_str) {
-                self.call("ui.key", json!({"key": k, "shift": flag("shift"), "cmd": flag("cmd")}))
+                {
+                    let mut params = json!({"key": k, "shift": flag("shift"), "cmd": flag("cmd"), "alt": flag("alt")});
+                    if let Some(ctrl) = s.get("ctrl") {
+                        params["ctrl"] = ctrl.clone();
+                    }
+                    if let Some(pressed) = s.get("pressed") {
+                        params["pressed"] = pressed.clone();
+                    }
+                    self.call("ui.key", params)
+                }
+            } else if let Some(n) = s.get("frames").and_then(Value::as_u64) {
+                if n > 600 {
+                    return Err("frames must be at most 600".into());
+                }
+                self.frames(n as usize);
+                return Ok(());
             } else if let Some(t) = s.get("text").and_then(Value::as_str) {
                 self.call("ui.text", json!({ "text": t }))
             } else if let Some(at) = s.get("click") {
@@ -429,12 +485,10 @@ impl Harness {
                 self.call("ui.click", p)
             } else if let Some(text) = s.get("widget").and_then(Value::as_str) {
                 // A dialog field, choice or button, found by its text.
-                let found = match s.get("near").and_then(Value::as_str) {
-                    Some(near) => self.widget_near(text, near),
-                    None => self.widget(text),
-                };
-                let [x, y] = found.ok_or_else(|| format!("no widget `{text}` on screen"))?;
+                let near = s.get("near").and_then(Value::as_str);
+                let [x, y] = self.reveal_widget(text, near)?;
                 self.call("ui.move", json!({"x": x, "y": y}));
+                let [x, y] = self.reveal_widget(text, near)?;
                 self.call("ui.click", json!({"x": x, "y": y}))
             } else if let Some(at) = s.get("hold") {
                 // Press and hold still (Select Other): `frames` with the button down (default 40,
@@ -818,7 +872,12 @@ pub fn check(h: &mut Harness, e: &Value) -> Result<(), String> {
                         .filter_map(|l| m.area_rect(l.id).map(|r| (l.id, r)))
                         .collect()
                 });
+                // Workspace panels (docks and strips) are laid out against the viewport, not sized like dialogs.
+                let panels: Vec<egui::Rect> = h.app.shell.workspace_panels.values().map(|(rect, _)| *rect).collect();
                 for (id, r) in rects {
+                    if panels.iter().any(|p| (p.min - r.min).abs().max_elem() < 1.0 && (p.max - r.max).abs().max_elem() < 1.0) {
+                        continue;
+                    }
                     if r.width() > max_w || !screen.expand(1.0).contains_rect(r) {
                         return Err(format!("window {id:?} at {r:?} (width {:.0}) does not fit {screen:?} at ≤{max_w}", r.width()));
                     }
@@ -1039,6 +1098,16 @@ pub fn check(h: &mut Harness, e: &Value) -> Result<(), String> {
                     }
                 }
             }
+            "theme_colors" => {
+                // Read the applied tokens after the scenario frame, not the source theme file.
+                let tokens = crate::theme::Tokens::get();
+                let resolved = crate::theme_files::export("Scenario", crate::theme_files::Base::Dark, &tokens);
+                for (key, want) in v.as_object().into_iter().flatten() {
+                    if resolved["colors"][key] != *want {
+                        return Err(format!("theme colour {key}: got {}, want {want}", resolved["colors"][key]));
+                    }
+                }
+            }
             "file_busy" | "quit_requested" | "quitting" => {
                 if ui[k] != *v {
                     return Err(format!("{k}: got {}, want {v}", ui[k]));
@@ -1073,6 +1142,14 @@ pub fn check(h: &mut Harness, e: &Value) -> Result<(), String> {
                     && r["result"]["picked_components"].as_array().is_none_or(|a| a.is_empty());
                 if none == v.as_bool().unwrap_or(false) {
                     return Err(format!("browser selection: {}", r["result"]));
+                }
+            }
+            "shortcuts" => {
+                for (id, want) in v.as_object().ok_or("shortcuts takes a command-to-key object")? {
+                    let got = h.call("ui.shortcut", json!({"command": id}));
+                    if got["result"]["key"] != *want {
+                        return Err(format!("shortcut {id}: got {}, want {want}", got["result"]["key"]));
+                    }
                 }
             }
             "query" => {

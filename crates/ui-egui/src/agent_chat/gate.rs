@@ -7,11 +7,14 @@
 
 use serde_json::Value;
 
-/// Changes the agent may make in one turn (requests that run commands; reads don't count). The
-/// user can continue with another message.
-pub const DEFAULT_TURN_LIMIT: u32 = 24;
-/// Requests of any kind in one turn, so an agent stuck reading the design in a loop stops too.
-pub const MAX_REQUESTS_PER_TURN: u32 = 400;
+/// Changes the agent may make in one turn (requests that run commands; reads don't count); 0 is
+/// no limit, the default. The user can always press Stop.
+pub const DEFAULT_TURN_LIMIT: u32 = 0;
+/// What the limit field shows when the user turns the limit on.
+pub const SEEDED_TURN_LIMIT: u32 = 24;
+/// The default before the limit became optional; saved preferences still carry it, so it reads
+/// as no limit.
+pub const OLD_DEFAULT_TURN_LIMIT: u32 = 24;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Verdict {
@@ -27,7 +30,8 @@ pub enum Verdict {
 /// itself) is the agent's.
 /// `ui.camera` moves the view as `ui.view` does: a screenshot of several views reads the camera
 /// first and puts it back after.
-const METHODS: &[&str] = &["engine.commands", "document.inspect", "engine.execute", "engine.batch", "ui.view", "ui.camera", "ui.render", "ui.screenshot"];
+const METHODS: &[&str] =
+    &["engine.commands", "document.inspect", "engine.execute", "engine.batch", "ui.view", "ui.camera", "ui.render", "ui.screenshot"];
 
 /// Parameter names that hold a file or folder and nothing else.
 const FILE_KEYS: &[&str] = &["file", "files", "dir", "folder", "out", "output", "filename", "target_path"];
@@ -129,11 +133,22 @@ pub fn command(id: &str, params: &Value, undo_left: usize) -> Verdict {
     }
     // Files, and commands that replace or reload the whole design.
     let file_command = id.starts_with("file.") || id.starts_with("doc.") || matches!(id, "render.export" | "render.start");
+    // The question says which program a send to a slicer would start.
+    let with_slicer =
+        |question: String| match params.get("slicer").and_then(Value::as_str).filter(|_| id.ends_with("save_mesh") || id.ends_with("send_to_slicer"))
+        {
+            Some(slicer) => format!("{question}, send to {}", slicer.chars().take(200).collect::<String>()),
+            None => question,
+        };
+    // The model leaves the machine: the user is asked, whatever the agent says about consent.
+    if id == "file.open_in_easyprint" {
+        return Verdict::Ask(format!("{id}, upload the model to Printables' servers (EasyPrint)"));
+    }
     if let Some(p) = names_a_file(id, params) {
-        return Verdict::Ask(format!("{id}: {p}"));
+        return Verdict::Ask(with_slicer(format!("{id}: {p}")));
     }
     if file_command && !reads_only(id) {
-        return Verdict::Ask(id.to_string());
+        return Verdict::Ask(with_slicer(id.to_string()));
     }
     // Undo past this turn's first change takes back the user's own work.
     if id == "edit.undo" && undo_left == 0 {
@@ -268,6 +283,21 @@ mod tests {
         assert!(matches!(exec("sketch.import", json!({"file": "a.dxf"})), Verdict::Ask(_)));
         let batch = json!({"commands": [{"command": "solid.box", "params": {}}, {"command": "file.save", "params": {"path": "/etc/x"}}]});
         assert!(matches!(request("engine.batch", &batch, 0), Verdict::Ask(a) if a.contains("/etc/x")));
+    }
+
+    /// Saving a mesh or opening it in a slicer asks, and the question names the slicer.
+    #[test]
+    fn starting_a_slicer_asks_and_names_it() {
+        assert!(
+            matches!(exec("file.save_mesh", json!({"path": "a.stl", "slicer": "orca"})), Verdict::Ask(a) if a.contains("a.stl") && a.contains("send to orca"))
+        );
+        assert!(
+            matches!(exec("file.send_to_slicer", json!({"slicer": "prusa", "bodies": ["Part"]})), Verdict::Ask(a) if a.ends_with("send to prusa"))
+        );
+        assert!(
+            matches!(exec("file.open_in_easyprint", json!({"bodies": ["Part"], "consent": true})), Verdict::Ask(a) if a.contains("upload the model"))
+        );
+        assert!(matches!(exec("file.send_to_slicer", json!({})), Verdict::Ask(_)));
     }
 
     /// `path`, `source` and friends are also geometry (curve ids, edges, occurrence ids): those

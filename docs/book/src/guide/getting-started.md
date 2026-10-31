@@ -23,6 +23,15 @@ cargo run --release -p solidcraft -- --sample   # opens with a sample part
 
 Open the release `.dmg` and drag `NØDE CAD.app` onto Applications.
 
+NØDE CAD is signed ad hoc and not notarized, so macOS blocks its first launch with "NØDE CAD
+can't be opened, because Apple can't verify if the app is vulnerable". Open **System Settings ›
+Privacy & Security**, scroll down to the message about NØDE CAD, click **Open Anyway** and
+confirm: the app opens normally from then on. From a terminal, remove the quarantine flag instead:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/NØDE CAD.app"
+```
+
 ### Linux AppImage
 
 The first time you open the AppImage it adds a menu entry and icons under `~/.local/share`
@@ -32,6 +41,11 @@ already made an entry for the file, or if a launcher such as Gear Lever or AppIm
 started it (and removes the entry NØDE CAD added before). To
 turn it off for good, create an empty file `~/.local/share/solidcraft/no-desktop-integration`, or
 start the AppImage with `SOLIDCRAFT_NO_DESKTOP_INTEGRATION=1`.
+
+If the AppImage doesn't start and prints a FUSE message followed by `execv error: No such file
+or directory`, AppImageLauncher 2.x is intercepting it: it can't start AppImages built on the
+static runtime, as NØDE CAD's is. Update AppImageLauncher to 3.0 (so far only published as
+betas; 3.0.0-beta-3 or newer works), or remove it.
 
 ### Linux Flatpak
 
@@ -96,6 +110,37 @@ cd apps/solidcraft-web && trunk serve --release --no-autoreload
 
 Offline use needs `--no-autoreload`: Trunk's live reload changes the page as it serves it, so it
 no longer matches the build the browser would keep. Debug builds (`trunk serve`) never keep a copy.
+
+### Design links and embeds
+
+Use `?open=<encoded HTTPS URL>` to open a hosted `.nodecad` design as an unsaved
+copy, including its history, constraints, and joints. Encode the URL with
+`encodeURIComponent` when it contains query parameters. The host must allow CORS
+requests from the app's origin. Downloads, including redirected URLs, must use HTTPS
+or stay on the app's own origin, and fit within the File > Open design size limit.
+Failed downloads and invalid designs show an error and leave the empty design.
+
+For self-hosting, `?open=/dutchman/jobs/abc/part.nodecad` resolves against the
+page's origin, using its scheme and port, including plain HTTP on a LAN. A full URL
+on that same origin is also accepted; other absolute URLs still require HTTPS.
+For example, expose a reverse-proxy service in Compose, routing `/` to
+`solidcraft:8080` and `/dutchman/` to a converter service. The converter can link to
+`/?open=/dutchman/jobs/abc/part.nodecad` without a separate origin or CORS setup.
+Paths must start with one `/`; protocol-relative paths (`//`), backslashes, control
+characters, and decoded `..` segments are refused. Redirects must end at HTTPS or
+the page's own origin. Embed mode and **Open in NØDE CAD** preserve the path.
+
+Add `embed` to show the viewport, timeline, browser tree, and joint controls without
+the ribbon, file menus, or start page:
+
+```html
+<iframe src="https://docs.solidcraft.io/app/?embed&open=https://example.org/arm.nodecad"
+        width="960" height="540" title="Arm design"></iframe>
+```
+
+Embedded designs do not save designs, preferences, or recovery copies to browser
+storage and do not ask before unloading. **Open in NØDE CAD** opens the same link
+in the full app in a new tab. `?embed` without `open` keeps the normal app layout.
 
 ### Self-hosting with Docker
 
@@ -240,6 +285,13 @@ A command that fails stops the script. A feature can also fail later, when a par
 rebuilds it; `run` then exits with status 1, lists the failing features and writes none of
 its `--out` and `--save` files, because the bodies lack what those features should have made.
 `--allow-errors` writes them anyway.
+
+`--param-check warn|strict` checks each step against its command's parameter contract, for the
+commands that have one (`describe_command` in the MCP server shows them); the default, `off`,
+checks nothing. A misspelt optional key, such as `operaton` for `solid.box`'s `operation`, is
+otherwise ignored, and the step builds without it. `warn` runs the step and prints
+``script.json: step 1: unknown key `operaton`; did you mean `operation`?`` on stderr; `strict`
+stops the run at that step, and nothing is written.
 
 `run` prints each command's result with `--results` (otherwise the measurement), and `eval`
 prints the measurement, as JSON on stdout. `--json-out FILE` writes that JSON to a file

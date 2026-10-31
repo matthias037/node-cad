@@ -69,7 +69,16 @@ pub static COMMANDS: &[CommandSpec] = &[
         .noundo()
         .params("study; samples? (default steps + 1); path? (.json or .csv) → occurrence positions per step (the design is not changed)"),
     CommandSpec::new("motion.export_animation", "Export Motion Animation", animation::export).icon("export").noundo().params(
-        "study: id|name, or joint: id|name with from and to (degrees for angles, mm for distances, or expressions) and index?;          path: a .gif file, or a folder for PNG frames (frame-0001.png, frame-0002.png, …); samples? (frames, 2…1000; default the          study's steps + 1, or 100); width?, height? (16…4096 pixels, default 800 × 500); camera?: {target, yaw, pitch, roll?,          distance, fov?, up?} (ui.camera's reply; fields left out keep the default view: view.apply's camera, or the home view          framing the model); fps? (1…50, default 20); grid?, axes? (default true: the ground grid and the origin's axes) - draws the study as it plays, or the joint as it is driven, with the headless          renderer → path, format, frames, width, height, fps (GIF), bytes, renderer, stopped_at, stopped_by_loop,          stopped_by_contact (the design is not changed)",
+        "study: id|name, or joint: id|name with from and to (degrees for angles, mm for distances, or expressions) and index?, or \
+         view: id|name (an exploded view, coming apart from the assembled placement) with back? (default false; true: back together \
+         too, exploded at the middle frame of an odd count); path: a .gif file, or a folder for PNG frames (frame-0001.png, \
+         frame-0002.png, …); samples? (frames, 2…1000; default the study's steps + 1, 100 for a joint, 41 for a view or 81 with \
+         back); width?, height? (16…4096 pixels, default 800 × 500); camera?: {target, yaw, pitch, roll?, distance, fov?, up?} \
+         (ui.camera's reply; fields left out keep the default view: view.apply's camera, or the home view framing the model, for a \
+         view both assembled and exploded); fps? (1…50, default 20); grid?, axes? (default true: the ground grid and the origin's \
+         axes) - draws the study as it plays, the joint as it is driven or the view as it explodes, with the headless renderer → \
+         path, format, frames, width, height, fps (GIF), bytes, renderer, stopped_at, stopped_by_loop, stopped_by_contact (the \
+         design is not changed, nor its placements)",
     ),
     CommandSpec::new("motion.trace", "Motion Trace", trace).at("SOLID", "ASSEMBLE").icon("trace").noundo().params(concat!(
         trace_doc!(),
@@ -87,11 +96,14 @@ pub static COMMANDS: &[CommandSpec] = &[
          Edits a saved associative trace's driving conditions in one undo step",
     ),
     CommandSpec::new("motion.plot", "Plot Motion Study", analysis::plot).icon("graph").noundo().params(analysis::PLOT_DOC),
-    CommandSpec::new("motion.interference", "Motion Interference", analysis::interference).icon("interference").noundo().params(analysis::INTERFERENCE_DOC),
+    CommandSpec::new("motion.interference", "Motion Interference", analysis::interference)
+        .icon("interference")
+        .noundo()
+        .params(analysis::INTERFERENCE_DOC),
     CommandSpec::new("joint.sweep", "Sweep Joint", sweep::sweep).icon("interference").params(sweep::SWEEP_DOC),
     CommandSpec::new("motion.list", "List Motion Studies", list_studies).icon("list").noundo(),
     CommandSpec::new("motion.delete", "Delete Motion Study", delete_study).icon("delete").params("study"),
-    CommandSpec::new("explode.create", "Exploded View", explode_create).at("SOLID", "ASSEMBLE").icon("explode").params(
+    CommandSpec::new("explode.create", "Exploded View", explode_create).at("SOLID", "ASSEMBLE").icon("explode").enabled(has_parts_to_explode).params(
         "name?; scale? (automatic: each occurrence pushed away from the assembly's centre by scale × its offset, default 1); \
          moves?: [{occurrence, translate: [x,y,z]}] (instead of automatic)",
     ),
@@ -104,6 +116,14 @@ pub static COMMANDS: &[CommandSpec] = &[
 ];
 
 const MAX_ITEMS: usize = 10_000;
+
+/// `prefix` and the first number from 1 that no name in `taken` has: a default name never repeats
+/// one in use, after a delete either, as joints' and the app's dialogs' default names (#9738).
+fn free_name<'a>(prefix: &str, taken: impl Iterator<Item = &'a str>) -> String {
+    let taken: BTreeSet<&str> = taken.collect();
+    let n = (1..=taken.len() + 1).find(|n| !taken.contains(format!("{prefix}{n}").as_str())).unwrap_or(1);
+    format!("{prefix}{n}")
+}
 
 fn occurrences(s: &Session, p: &Value, cmd: &str) -> Result<Vec<u64>> {
     let list = p.get("occurrences").and_then(Value::as_array).ok_or_else(|| bad(cmd, "`occurrences` must list occurrences"))?;
@@ -449,6 +469,11 @@ pub fn drive_joint(s: &mut Session, id: u64, q: Vec<f64>, given: usize) -> Resul
     Ok(drive_with_contact(s, &[(id, q)], &given)?.0)
 }
 
+/// Drive exactly one coordinate, letting the other values follow loops and preserving expressions.
+pub fn drive_joint_index(s: &mut Session, id: u64, q: Vec<f64>, index: usize) -> Result<Value> {
+    Ok(drive_with_contact(s, &[(id, q)], &[(id, index)].into_iter().collect())?.0)
+}
+
 fn enable_sets(s: &mut Session, p: &Value) -> Result<Value> {
     let on = bool_(p, "enabled").unwrap_or(true);
     s.doc_mut().assembly.contact_enabled = on;
@@ -479,7 +504,8 @@ fn new_set(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(cmd, "too many contact sets"));
     }
     let id = s.doc_mut().allocate_id()?;
-    let name = str_(p, "name").map(str::to_string).unwrap_or_else(|| format!("Contact Set{}", s.doc.assembly.contact_sets.len() + 1));
+    let name =
+        str_(p, "name").map(str::to_string).unwrap_or_else(|| free_name("Contact Set", s.doc.assembly.contact_sets.iter().map(|c| c.name.as_str())));
     let a = &mut s.doc_mut().assembly;
     a.contact_sets.push(ContactSet { id, name: name.clone(), occurrences: occ, suppressed: false });
     a.contact_enabled = true;
@@ -612,7 +638,7 @@ fn study(s: &mut Session, p: &Value) -> Result<Value> {
             }
             let m = MotionStudy {
                 id,
-                name: str_(p, "name").map(str::to_string).unwrap_or_else(|| format!("Motion Study{}", count + 1)),
+                name: str_(p, "name").map(str::to_string).unwrap_or_else(|| free_name("Motion Study", a.studies.iter().map(|m| m.name.as_str()))),
                 steps: steps.unwrap_or(100),
                 keys,
             };
@@ -962,7 +988,30 @@ fn keep_sampled_trace(
 }
 
 fn list_studies(s: &mut Session, _p: &Value) -> Result<Value> {
-    Ok(json!({"studies": s.doc.assembly.studies, "traces": associative::list(s)}))
+    let studies: Vec<Value> = s.doc.assembly.studies.iter().map(|m| study_json(s, m)).collect();
+    Ok(json!({"studies": studies, "traces": associative::list(s)}))
+}
+
+/// A study as `motion.list` gives it: key values in the units `motion.study` takes — degrees
+/// for angles, mm for distances, like `joint.list`'s values — each key with its joint's name,
+/// so a listed study can be fed back to `motion.study` unchanged.
+fn study_json(s: &Session, m: &MotionStudy) -> Value {
+    let keys: Vec<Value> = m
+        .keys
+        .iter()
+        .map(|k| {
+            let joint = s.doc.assembly.joints.iter().find(|j| j.id == k.joint);
+            let angle = joint.is_some_and(|j| j.kind.is_angle(k.index));
+            json!({
+                "joint": k.joint,
+                "joint_name": joint.map(|j| j.name.clone()).unwrap_or_else(|| k.joint.to_string()),
+                "index": k.index,
+                "unit": if angle { "deg" } else { "mm" },
+                "points": k.points.iter().map(|(step, v)| json!([step, if angle { v.to_degrees() } else { *v }])).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    json!({"id": m.id, "name": m.name, "steps": m.steps, "keys": keys})
 }
 
 fn delete_study(s: &mut Session, p: &Value) -> Result<Value> {
@@ -972,6 +1021,16 @@ fn delete_study(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 // ---- Exploded views ----
+
+/// Why Exploded View is greyed out: it pulls components apart, so a design of plain bodies, or
+/// with a single component, has nothing to separate (#9142).
+const EXPLODE_NEEDS_COMPONENTS: &str =
+    "Exploded View pulls components apart, so the design needs two or more of them (New Component, Insert Design or Create Components from Bodies)";
+
+/// Exploded View is offered once the design has two or more occurrences to move apart (#9142).
+fn has_parts_to_explode(s: &Session) -> std::result::Result<(), String> {
+    if s.doc.occurrences.len() >= 2 { Ok(()) } else { Err(EXPLODE_NEEDS_COMPONENTS.into()) }
+}
 
 fn view_index(s: &Session, p: &Value, cmd: &str) -> Result<usize> {
     let key = match p.get("view") {
@@ -1037,7 +1096,8 @@ fn explode_create(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(cmd, "too many exploded views"));
     }
     let id = s.doc_mut().allocate_id()?;
-    let name = str_(p, "name").map(str::to_string).unwrap_or_else(|| format!("Exploded View{}", s.doc.assembly.exploded.len() + 1));
+    let name =
+        str_(p, "name").map(str::to_string).unwrap_or_else(|| free_name("Exploded View", s.doc.assembly.exploded.iter().map(|v| v.name.as_str())));
     s.doc_mut().assembly.exploded.push(ExplodedView { id, name: name.clone(), moves: moves.clone() });
     Ok(json!({"view": id, "name": name, "moves": moves.iter().map(|(o, t)| json!({"occurrence": o, "translate": t})).collect::<Vec<_>>()}))
 }
@@ -1051,19 +1111,32 @@ fn explode_show(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let i = view_index(s, p, cmd)?;
     let v = s.doc.assembly.exploded.get(i).cloned().ok_or_else(|| bad(cmd, "view"))?;
-    s.pending_moves.clear();
-    for (o, t) in &v.moves {
-        let Some(occ) = s.doc.occurrences.iter().find(|x| x.id == *o) else { continue };
-        let mut m = occ.transform;
-        if let Some(r) = m.get_mut(3) {
-            r[0] += t.x;
-            r[1] += t.y;
-            r[2] += t.z;
-        }
-        s.pending_moves.insert(*o, m);
-    }
+    s.pending_moves = exploded_at(&explode_moves(s, &v), 1.0);
     s.revision += 1;
     Ok(json!({"view": v.id, "name": v.name}))
+}
+
+/// What exploded view `v` moves: (occurrence, its placement, the translation the view adds). Moves
+/// of occurrences no longer in the design, or not finite (a hostile design file), are left out;
+/// a later move of one occurrence replaces an earlier one.
+fn explode_moves(s: &Session, v: &ExplodedView) -> Vec<(u64, Mat, Vec3)> {
+    let placed: std::collections::BTreeMap<u64, Mat> = s.doc.occurrences.iter().map(|o| (o.id, o.transform)).collect();
+    v.moves.iter().filter(|(_, t)| t.len() < 1e7).filter_map(|(o, t)| Some((*o, *placed.get(o)?, *t))).collect()
+}
+
+/// The pending moves that show `moves` `amount` of the way out: 0 assembled, 1 exploded.
+fn exploded_at(moves: &[(u64, Mat, Vec3)], amount: f64) -> std::collections::BTreeMap<u64, Mat> {
+    let mut out = std::collections::BTreeMap::new();
+    for (o, m, t) in moves {
+        let mut m = *m;
+        if let Some(r) = m.get_mut(3) {
+            r[0] += t.x * amount;
+            r[1] += t.y * amount;
+            r[2] += t.z * amount;
+        }
+        out.insert(*o, m);
+    }
+    out
 }
 
 fn explode_list(s: &mut Session, _p: &Value) -> Result<Value> {

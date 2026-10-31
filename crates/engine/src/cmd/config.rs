@@ -2,6 +2,7 @@
 //! suppressions) and switching between its rows.
 
 use serde_json::{Value, json};
+use solidcraft_doc::DEFAULT_MATERIAL;
 use solidcraft_doc::config::{Column, ConfigRow, MAX_COLUMNS, MAX_ROWS};
 
 use super::CommandSpec;
@@ -23,7 +24,9 @@ pub static COMMANDS: &[CommandSpec] = &[
     ),
     CommandSpec::new("config.activate", "Activate Configuration", activate).icon("activate").params("row: name — sets its parameter values and suppressions"),
     CommandSpec::new("config.preview", "Preview Configuration", preview).icon("eye").noundo().params("row: name — validates a rebuild without changing the design or history"),
-    CommandSpec::new("config.rule", "Configuration Rule", rule).icon("configuration_table").params("rule?: {id,name,enabled,condition,effect}; id? + delete?; id? + index? (ordered move)"),
+    CommandSpec::new("config.rule", "Configuration Rule", rule).icon("configuration_table").params(
+        "rule?: {id,name,enabled,condition,effect}; rules?: [rule…] (added or replaced together, then the rows checked once); id? + delete?; id? + index? (ordered move)",
+    ),
     CommandSpec::new("config.rules", "Configuration Rules", show).icon("list").noundo().params("ordered typed rules, rows and active state"),
 ];
 
@@ -96,7 +99,7 @@ fn column_of(s: &Session, p: &Value, cmd: &str) -> Result<Column> {
     }
     if let Some(n) = str_(p, "param") {
         let names: Vec<String> = s.doc.all_param_exprs().iter().map(|(m, _, _)| m.to_string()).collect();
-        if names.iter().any(|m| m == n) {
+        if names.iter().any(|m| m == n) || s.doc.text_param(n).is_some() {
             return Ok(Column::Param(n.to_string()));
         }
         // The same name written with or without its accents (« alésage », « alesage »).
@@ -144,22 +147,22 @@ fn add_column(s: &mut Session, c: Column, cmd: &str) -> Result<()> {
 
 /// A list of names, also given as one text with commas (`"D, epaisseur"`, as agents write it):
 /// names never hold a comma.
-fn names(p: &Value, k: &str) -> Vec<String> {
-    string_list(p, k).iter().flat_map(|n| n.split(',')).map(str::trim).filter(|n| !n.is_empty()).map(str::to_string).collect()
+fn names(cmd: &str, p: &Value, k: &str) -> Result<Vec<String>> {
+    Ok(string_list(cmd, p, k)?.iter().flat_map(|n| n.split(',')).map(str::trim).filter(|n| !n.is_empty()).map(str::to_string).collect())
 }
 
 fn configure(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "config.configure";
-    for n in names(p, "params") {
+    for n in names(cmd, p, "params")? {
         let c = column_of(s, &json!({ "param": n }), cmd)?;
         add_column(s, c, cmd)?;
     }
-    for n in names(p, "features") {
+    for n in names(cmd, p, "features")? {
         let c = column_of(s, &json!({ "feature": n }), cmd)?;
         add_column(s, c, cmd)?;
     }
     for key in ["materials", "appearances"] {
-        for n in names(p, key) {
+        for n in names(cmd, p, key)? {
             let field = if key == "materials" { "material" } else { "appearance" };
             let c = column_of(s, &json!({ field: n }), cmd)?;
             add_column(s, c, cmd)?;
@@ -203,7 +206,11 @@ fn show(s: &mut Session, _p: &Value) -> Result<Value> {
                     format!("Component: {}", s.doc.components.iter().find(|c| c.id == *id).map(|c| c.name.clone()).unwrap_or_else(|| id.to_string()))
                 }
                 Column::FaceAppearance(target) => {
-                    format!("Face: {} / {}", target.body, target.name.split_once(':').map(|(_, role)| role).unwrap_or(&target.name))
+                    format!(
+                        "Face: {} / {}",
+                        target.body,
+                        solidcraft_doc::persistent_name::split_feature(&target.name).map(|(_, role)| role).unwrap_or(&target.name)
+                    )
                 }
                 _ => s.doc.config_key(column),
             };
@@ -289,7 +296,7 @@ fn row(s: &mut Session, p: &Value) -> Result<Value> {
                 .ok_or_else(|| bad(cmd, format!("`{k}` is not a column (config.column adds one)")))?;
             match s.doc.configs.columns.get(col) {
                 Some(Column::Material(_)) => {
-                    text = s.doc.material_cell(&text).map_err(|e| bad(cmd, e.to_string()))?.unwrap_or_else(|| "Default".into());
+                    text = s.doc.material_cell(&text).map_err(|e| bad(cmd, e.to_string()))?.unwrap_or_else(|| DEFAULT_MATERIAL.into());
                 }
                 Some(Column::Appearance(_) | Column::ComponentAppearance(_) | Column::FaceAppearance(_)) => {
                     text = match solidcraft_doc::config::appearance_cell(&text).map_err(|e| bad(cmd, e.to_string()))? {
@@ -310,6 +317,22 @@ fn row(s: &mut Session, p: &Value) -> Result<Value> {
     }
     if rename.as_ref().is_some_and(|n| n != &name && s.doc.configs.rows.iter().any(|r| &r.name == n)) {
         return Err(bad(cmd, "configuration name already exists"));
+    }
+    let changes: Vec<_> = s
+        .doc
+        .configs
+        .columns
+        .iter()
+        .zip(&cells)
+        .filter_map(|(column, value)| match column {
+            Column::Param(name) => Some((name.clone(), value.clone())),
+            _ => None,
+        })
+        .collect();
+    if !changes.is_empty() {
+        // Check the final parameter graph without activating the row or rebuilding geometry.
+        let mut trial = s.doc.as_ref().clone();
+        trial.change_params_atomic(&changes).map_err(|e| bad(cmd, e.to_string()))?;
     }
     let t = &mut s.doc_mut().configs;
     let validated_name = rename.clone().unwrap_or_else(|| name.clone());
@@ -350,32 +373,49 @@ fn validate_rows(s: &Session, cmd: &str) -> Result<()> {
     Ok(())
 }
 
+/// Adds `value` as a rule, or replaces the rule with its id.
+fn put_rule(s: &mut Session, value: &Value, cmd: &str) -> Result<()> {
+    solidcraft_doc::config::validate_rules_json(&json!({"configs":{"rules":[value]}})).map_err(|e| bad(cmd, e.to_string()))?;
+    let mut rule: solidcraft_doc::config::ConfigRule = serde_json::from_value(value.clone()).map_err(|e| bad(cmd, e.to_string()))?;
+    if rule.length_unit.is_none() {
+        rule.length_unit = s
+            .doc
+            .configs
+            .rules
+            .iter()
+            .find(|existing| existing.id == rule.id)
+            .and_then(|existing| existing.length_unit.clone())
+            .or_else(|| Some(s.doc.units.clone()));
+    }
+    let rules = &mut s.doc_mut().configs.rules;
+    if let Some(index) = rules.iter().position(|r| r.id == rule.id) {
+        rules[index] = rule;
+    } else {
+        if rules.len() >= solidcraft_doc::config::MAX_RULES {
+            return Err(bad(cmd, "too many rules"));
+        }
+        rules.push(rule);
+    }
+    Ok(())
+}
+
 fn rule(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "config.rule";
     if let Some(value) = p.get("rule") {
-        solidcraft_doc::config::validate_rules_json(&json!({"configs":{"rules":[value]}})).map_err(|e| bad(cmd, e.to_string()))?;
-        let mut rule: solidcraft_doc::config::ConfigRule = serde_json::from_value(value.clone()).map_err(|e| bad(cmd, e.to_string()))?;
-        if rule.length_unit.is_none() {
-            rule.length_unit = s
-                .doc
-                .configs
-                .rules
-                .iter()
-                .find(|existing| existing.id == rule.id)
-                .and_then(|existing| existing.length_unit.clone())
-                .or_else(|| Some(s.doc.units.clone()));
+        put_rule(s, value, cmd)?;
+    } else if let Some(values) = p.get("rules") {
+        // Several rules in one step: each row is checked once, with all of them in place (one
+        // rebuild per row instead of one per row and rule, and rules that only hold together,
+        // such as a body's and its cut's, can be added).
+        let values = values.as_array().ok_or_else(|| bad(cmd, "`rules` is a list of rules"))?;
+        if values.len() > solidcraft_doc::config::MAX_RULES {
+            return Err(bad(cmd, "too many rules"));
         }
-        let rules = &mut s.doc_mut().configs.rules;
-        if let Some(index) = rules.iter().position(|r| r.id == rule.id) {
-            rules[index] = rule;
-        } else {
-            if rules.len() >= solidcraft_doc::config::MAX_RULES {
-                return Err(bad(cmd, "too many rules"));
-            }
-            rules.push(rule);
+        for value in values {
+            put_rule(s, value, cmd)?;
         }
     } else {
-        let id = str_(p, "id").ok_or_else(|| bad(cmd, "give rule or id"))?;
+        let id = str_(p, "id").ok_or_else(|| bad(cmd, "give rule, rules or id"))?;
         let rules = &mut s.doc_mut().configs.rules;
         let index = rules.iter().position(|r| r.id == id).ok_or_else(|| bad(cmd, "unknown rule"))?;
         if bool_(p, "delete").unwrap_or(false) {
@@ -460,6 +500,43 @@ mod tests {
 
     fn volume(s: &mut Session) -> f64 {
         run(s, "inspect.measure", json!({}))["total"]["volume_mm3"].as_f64().unwrap_or(f64::NAN)
+    }
+
+    #[test]
+    fn a_switch_parameter_alone_switches_the_features_its_rules_suppress() {
+        // A 10 mm cube with a 4 mm hole cut through it; `Enable` and the hole's suppression are
+        // configured, with one rule each way. A plain parameter edit runs them: no activation.
+        let mut s = Session::default();
+        run(&mut s, "parameters.add", json!({"name": "Enable", "expression": "1", "unit": ""}));
+        run(&mut s, "parameters.add", json!({"name": "W", "expression": "10 mm"}));
+        run(&mut s, "solid.box", json!({"length": "W", "width": 10, "height": 10, "body_name": "A"}));
+        run(&mut s, "solid.hole", json!({"position": [5, 5, 10], "diameter": 4, "name": "Hole"}));
+        let hole = s.doc.features.last().map_or(0, |f| f.id);
+        run(&mut s, "config.configure", json!({"params": ["Enable"], "features": ["Hole"]}));
+        let rule = |id: &str, when: &str, off: bool| {
+            json!({"rule": {"id": id, "name": id, "enabled": true,
+                "condition": {"type": "parameter", "parameter": "Enable", "operator": "eq", "expression": when},
+                "effect": {"type": "drive_suppression", "feature": hole, "value": off}}})
+        };
+        run(&mut s, "config.rule", rule("off", "0", true));
+        run(&mut s, "config.rule", rule("on", "1", false));
+        let full = 1000.0;
+        let drilled = full - std::f64::consts::PI * 4.0 * 10.0;
+        assert!((volume(&mut s) - drilled).abs() < 0.5, "{}", volume(&mut s));
+        let r = run(&mut s, "parameters.change", json!({"name": "Enable", "expression": "0"}));
+        assert_eq!(r["switched"], json!([{"feature": hole, "name": "Hole", "suppressed": true}]), "{r}");
+        assert!((volume(&mut s) - full).abs() < 1e-6, "the hole is off: {}", volume(&mut s));
+        // Back on, through the `changes` form; one undo takes the edit and its switch back.
+        let r = run(&mut s, "parameters.change", json!({"changes": {"Enable": "1"}}));
+        assert_eq!(r["switched"][0]["suppressed"], json!(false), "{r}");
+        assert!((volume(&mut s) - drilled).abs() < 0.5);
+        run(&mut s, "edit.undo", json!({}));
+        assert!(s.doc.features.iter().any(|f| f.id == hole && f.suppressed), "undo restores the switch with the value");
+        run(&mut s, "edit.redo", json!({}));
+        // The hole switched off by hand stays off through an edit its rules do not read.
+        run(&mut s, "timeline.suppress", json!({"feature": hole, "suppressed": true}));
+        let r = run(&mut s, "parameters.change", json!({"name": "W", "expression": "12 mm"}));
+        assert!(r.get("switched").is_none() && s.doc.features.iter().any(|f| f.id == hole && f.suppressed), "{r}");
     }
 
     #[test]
@@ -570,6 +647,42 @@ mod tests {
     }
 
     #[test]
+    fn configuration_rules_given_together_are_checked_with_all_of_them_in_place() {
+        // A cut on a box: suppressing the box alone leaves the cut without a body, so a row that
+        // switches both off fails while only the box's rule is in; the two rules together pass.
+        let mut s = Session::default();
+        run(&mut s, "parameters.add", json!({"name":"on","expression":"1","unit":""}));
+        run(&mut s, "solid.box", json!({"length":10,"width":10,"height":10}));
+        run(&mut s, "solid.cylinder", json!({"radius":2,"height":20,"base":[5,5,-5],"axis":"Z","operation":"cut"}));
+        let (body, cut) = (s.doc.features[0].id, s.doc.features[1].id);
+        let names = [s.doc.features[0].name.clone(), s.doc.features[1].name.clone()];
+        run(&mut s, "config.configure", json!({"params":["on"],"features":names}));
+        run(&mut s, "config.row", json!({"name":"Off","values":{"param:on":"0"}}));
+        let off = |id: u64| {
+            json!({"id":format!("off_{id}"),"name":format!("off_{id}"),"enabled":true,
+            "condition":{"type":"parameter","parameter":"on","operator":"eq","expression":"0"},
+            "effect":{"type":"drive_suppression","feature":id,"value":true}})
+        };
+        let before = s.doc.clone();
+        assert!(s.execute("config.rule", &json!({"rule":off(body)})).is_err(), "the box off alone leaves its cut nothing to cut");
+        assert_eq!(s.doc, before);
+        run(&mut s, "config.rule", json!({"rules":[off(body), off(cut)]}));
+        assert_eq!(s.doc.configs.rules.len(), 2);
+        run(&mut s, "config.activate", json!({"row":"Off"}));
+        assert!(s.doc.features.iter().all(|f| f.suppressed));
+        assert!(s.model.results.iter().all(|r| r.error.is_none()));
+        run(&mut s, "edit.undo", json!({}));
+        run(&mut s, "edit.undo", json!({}));
+        assert!(s.doc.configs.rules.is_empty(), "one undo step for the rules given together");
+        // A bad rule among them adds none of them.
+        let mut bad = off(cut);
+        bad["effect"]["feature"] = json!("nothing");
+        assert!(s.execute("config.rule", &json!({"rules":[off(body), bad]})).is_err());
+        assert!(s.execute("config.rule", &json!({"rules":{"id":"x"}})).is_err());
+        assert!(s.doc.configs.rules.is_empty());
+    }
+
+    #[test]
     fn configuration_preview_and_failed_geometry_leave_design_unchanged() {
         let mut s = Session::default();
         run(&mut s, "parameters.change", json!({"name":"length", "expression":"10 mm"}));
@@ -589,6 +702,52 @@ mod tests {
         assert!((volume(&mut s) - 1000.0).abs() < 1e-6);
         run(&mut s, "config.activate", json!({"row":"Large"}));
         assert!((volume(&mut s) - 2000.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn configuration_rows_reject_invalid_parameter_expressions_without_changes() {
+        let mut s = Session::default();
+        run(&mut s, "parameters.add", json!({"name":"L", "expression":"10 mm"}));
+        run(&mut s, "config.configure", json!({"params":["L"]}));
+        let before = s.doc.clone();
+        let undo_len = s.undo.len();
+        for expression in ["abc", "1/", "1/0"] {
+            for params in [
+                json!({"name":"Bad", "values":{"param:L":expression}}),
+                json!({"name":"Copy", "from":"Default", "values":{"L":expression}}),
+                json!({"name":"Default", "rename":"Renamed", "values":{"L":expression}}),
+            ] {
+                let error = s.execute("config.row", &params).expect_err("invalid expressions must be rejected when saving a row");
+                assert!(error.to_string().contains("parameter `L`"), "{params}: {error}");
+                assert_eq!(s.doc, before, "{params}");
+                assert_eq!(s.undo.len(), undo_len, "{params}");
+            }
+        }
+    }
+
+    #[test]
+    fn configuration_rows_validate_the_final_parameter_graph_without_activating_it() {
+        let mut s = Session::default();
+        run(&mut s, "parameters.add", json!({"name":"L", "expression":"10 mm"}));
+        run(&mut s, "parameters.add", json!({"name":"W", "expression":"L + 2 mm"}));
+        run(&mut s, "config.configure", json!({"params":["L", "W"]}));
+        let before = s.doc.clone();
+        // Changing L first would make a cycle with W's current expression. The final row is valid.
+        run(&mut s, "config.row", json!({"name":"Reordered", "values":{"L":"W + 2 mm", "W":"20 mm"}}));
+        assert_eq!(s.doc.params, before.params);
+        assert_eq!(s.doc.configs.active, before.configs.active);
+        let saved = s.doc.clone();
+        let undo_len = s.undo.len();
+        assert!(s.execute("config.row", &json!({"name":"Cycle", "from":"Reordered", "values":{"W":"L"}})).is_err());
+        assert_eq!(s.doc, saved);
+        assert_eq!(s.undo.len(), undo_len);
+        run(&mut s, "config.activate", json!({"row":"Reordered"}));
+        let (values, errors) = s.doc.param_values();
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(values["L"].v, 22.0);
+        assert_eq!(values["W"].v, 20.0);
+        run(&mut s, "edit.undo", json!({}));
+        assert_eq!(s.doc, saved);
     }
 
     #[test]
@@ -673,9 +832,7 @@ mod tests {
         // Bad input.
         assert!(s.execute("config.row", &json!({"name": "X", "values": {"nope": 1}})).is_err());
         assert!(s.execute("config.activate", &json!({"row": "Missing"})).is_err());
-        run(&mut s, "config.row", json!({"name": "Broken", "values": {"length": "1/"}}));
-        assert!(s.execute("config.activate", &json!({"row": "Broken"})).is_err());
-        run(&mut s, "config.row", json!({"name": "Broken", "delete": true}));
+        assert!(s.execute("config.row", &json!({"name": "Broken", "values": {"length": "1/"}})).is_err());
         run(&mut s, "config.column", json!({"feature": fillet, "delete": true}));
         assert_eq!(run(&mut s, "config.table", json!({}))["columns"].as_array().map(Vec::len), Some(1));
     }

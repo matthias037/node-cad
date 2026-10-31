@@ -73,6 +73,9 @@ pub fn entry(app: &crate::SolveApp) -> Entry {
         base_url: base_url(),
         model: app.preferences.agent_models.get(ID).cloned().filter(|m| !m.is_empty()).unwrap_or_else(|| DEFAULT_MODEL.to_string()),
         key: signed_in(app),
+        request_timeout_s: super::agents::DEFAULT_REQUEST_TIMEOUT_S,
+        problem: None,
+        install: "",
     }
 }
 

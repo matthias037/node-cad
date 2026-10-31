@@ -33,6 +33,10 @@ pub struct Deferred {
     command: (String, Value),
     /// The design's revision it was computed for: a design changed meanwhile computes it again.
     revision: u64,
+    /// Every result the evaluation ahead computed, whatever the evaluation cache dropped since,
+    /// for the run here (a parameter change evaluates twice: the first evaluation is not the
+    /// one `evaluated` holds).
+    kept: Option<std::sync::Arc<solidcraft_engine::doc::KeptResults>>,
 }
 
 impl Deferred {
@@ -53,7 +57,7 @@ enum Start {
     /// It computes off the window thread.
     Later(Deferred),
     /// It runs now, with what was evaluated for it ahead (if anything).
-    Now(Option<solidcraft_engine::Evaluated>),
+    Now(Option<solidcraft_engine::Evaluated>, Option<std::sync::Arc<solidcraft_engine::doc::KeptResults>>),
 }
 
 /// A delete's check computing off the window thread: each check command's reply, in order.
@@ -69,8 +73,9 @@ pub struct DeleteCheck {
 /// What a delete does once its check is in.
 #[derive(Clone, Debug)]
 pub(crate) enum AfterCheck {
-    /// The timeline's Delete of these features (a `timeline.dependents` report for each).
-    Timeline(Vec<u64>),
+    /// The timeline's Delete of these features (a `timeline.dependents` report for each), and
+    /// of the timeline folders that go with them.
+    Timeline { features: Vec<u64>, groups: Vec<u64> },
     /// Delete with these `selection.delete` parameters (the report of its dry run).
     Selection(Value),
 }
@@ -79,9 +84,12 @@ impl AfterCheck {
     /// Check again, for the design as it is now.
     fn restart(self, app: &mut SolveApp) {
         match self {
-            AfterCheck::Timeline(ids) => {
-                let ids: Vec<u64> = ids.into_iter().filter(|id| app.session.doc.feature(*id).is_some()).collect();
-                if !ids.is_empty() {
+            AfterCheck::Timeline { features, groups } => {
+                let ids: Vec<u64> = features.into_iter().filter(|id| app.session.doc.feature(*id).is_some()).collect();
+                let groups: Vec<u64> = groups.into_iter().filter(|id| app.session.doc.timeline_groups.iter().any(|g| g.id == *id)).collect();
+                if !groups.is_empty() {
+                    crate::timeline::delete_folders(app, groups, ids);
+                } else if !ids.is_empty() {
                     crate::timeline::delete_features(app, ids);
                 }
             }
@@ -92,9 +100,9 @@ impl AfterCheck {
     /// Carry on with the check's replies.
     fn finish(self, app: &mut SolveApp, replies: Vec<Result<Value, String>>) {
         match self {
-            AfterCheck::Timeline(ids) => {
+            AfterCheck::Timeline { features, groups } => {
                 let reports: Vec<Value> = replies.into_iter().map(Result::unwrap_or_default).collect();
-                crate::timeline::delete_checked_features(app, ids, &reports);
+                crate::timeline::delete_checked_features(app, features, groups, &reports);
             }
             AfterCheck::Selection(params) => {
                 let report = replies.into_iter().next().unwrap_or_else(|| Err("the delete was not checked".into()));
@@ -115,6 +123,12 @@ impl SolveApp {
     /// a while (see the module notes). `Ok(Null)` when it is left computing or waiting its turn:
     /// its outcome then shows as any command's does (an error in the status line).
     pub fn run_heavy(&mut self, id: &str, params: Value) -> Result<Value, String> {
+        if id == "timeline.play" {
+            return self.run(id, params);
+        }
+        // A manual history action takes over from playback. Playback takes its state out
+        // while submitting its own next step, then puts it back to wait for that step.
+        crate::timeline::stop_playback(self);
         if self.deferred.is_some() {
             if replaced_by_a_later_one(id) && self.deferred_queue.last().is_some_and(|(q, _)| q == id) {
                 self.deferred_queue.pop();
@@ -127,16 +141,23 @@ impl SolveApp {
                 self.deferred = Some(job);
                 Ok(Value::Null)
             }
-            Start::Now(evaluated) => self.run_evaluated(id, params, evaluated.as_ref()),
+            Start::Now(evaluated, kept) => self.run_evaluated(id, params, evaluated.as_ref(), kept),
         }
     }
 
-    /// Run a command for real, taking the features `evaluated` computed for it ahead.
-    fn run_evaluated(&mut self, id: &str, params: Value, evaluated: Option<&solidcraft_engine::Evaluated>) -> Result<Value, String> {
+    /// Run a command for real, taking the features `evaluated` computed for it ahead, and any
+    /// other result that evaluation `kept`, so the window thread computes none of them again.
+    fn run_evaluated(
+        &mut self,
+        id: &str,
+        params: Value,
+        evaluated: Option<&solidcraft_engine::Evaluated>,
+        kept: Option<std::sync::Arc<solidcraft_engine::doc::KeptResults>>,
+    ) -> Result<Value, String> {
         if let Some(evaluated) = evaluated {
             self.session.prime(evaluated);
         }
-        let r = self.run(id, params);
+        let r = self.run_with_kept(kept, |app| app.run(id, params));
         self.session.unprime();
         r
     }
@@ -144,7 +165,11 @@ impl SolveApp {
     /// Since when a command, or a delete's check, has been computing off the window thread (ms),
     /// if one is.
     pub fn computing_since(&self) -> Option<f64> {
-        let started = [self.deferred.as_ref().map(|d| d.started), self.delete_check.as_ref().map(|c| c.started)];
+        let started = [
+            self.deferred.as_ref().map(|d| d.started),
+            self.delete_check.as_ref().map(|c| c.started),
+            self.pending_feature_edit.as_ref().map(|edit| edit.started),
+        ];
         started.into_iter().flatten().reduce(f64::min)
     }
 
@@ -215,13 +240,24 @@ impl SolveApp {
                     // The design changed meanwhile: computed again for the design as it is now.
                     let _ = self.run_heavy(&id, params);
                 } else if !superseded {
-                    let _ = self.run_evaluated(&id, params, job.evaluated.flatten().as_ref());
+                    // This is playback's own completed step, not a manual history edit.
+                    let playback = self.timeline_playback.take();
+                    let _ = self.run_evaluated(&id, params, job.evaluated.flatten().as_ref(), job.kept);
+                    self.timeline_playback = playback;
                 }
             }
         }
         if self.deferred.is_none() && !self.deferred_queue.is_empty() {
             let (id, params) = self.deferred_queue.remove(0);
             let _ = self.run_heavy(&id, params);
+        }
+        if self.deferred.is_none()
+            && self.deferred_queue.is_empty()
+            && let Some((id, sketch)) = self.start_after_roll.take()
+            && self.dialog.is_none()
+            && self.tool.is_none()
+        {
+            self.start_interactive(&id, Some(sketch));
         }
     }
 
@@ -230,11 +266,12 @@ impl SolveApp {
     /// done within the wait.
     #[cfg(not(target_arch = "wasm32"))]
     fn begin_deferred(&self, id: &str, params: &Value) -> Start {
-        let Some(wait) = self.apply_off_thread else { return Start::Now(None) };
+        let Some(wait) = self.apply_off_thread else { return Start::Now(None, None) };
         if self.file_load.busy() || self.file_picker.is_some() {
-            return Start::Now(None);
+            return Start::Now(None, None);
         }
         let ahead = self.session.ahead();
+        let kept = ahead.kept();
         let command = (id.to_string(), params.clone());
         let commands = vec![command.clone()];
         let (tx, rx) = std::sync::mpsc::channel();
@@ -242,22 +279,22 @@ impl SolveApp {
             let _ = tx.send(ahead.evaluate(&commands).ok());
         });
         if spawned.is_err() {
-            return Start::Now(None);
+            return Start::Now(None, None);
         }
         // Zero explicitly requests off-thread application, even if a fast worker
         // finishes before this thread is scheduled again. Apply on the next frame.
         if !wait.is_zero() {
             match rx.recv_timeout(wait) {
-                Ok(evaluated) => return Start::Now(evaluated),
-                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Start::Now(None),
+                Ok(evaluated) => return Start::Now(evaluated, Some(kept)),
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Start::Now(None, Some(kept)),
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
             }
         }
-        Start::Later(Deferred { done: rx, evaluated: None, started: crate::now_ms(), command, revision: self.session.revision })
+        Start::Later(Deferred { done: rx, evaluated: None, started: crate::now_ms(), command, revision: self.session.revision, kept: Some(kept) })
     }
 
     #[cfg(target_arch = "wasm32")]
     fn begin_deferred(&self, _id: &str, _params: &Value) -> Start {
-        Start::Now(None)
+        Start::Now(None, None)
     }
 }

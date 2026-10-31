@@ -95,7 +95,7 @@ impl Protocol {
 }
 
 /// An agent the user added.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AgentConfig {
     pub id: String,
@@ -106,8 +106,46 @@ pub struct AgentConfig {
     /// API: the endpoint (`…/v1`) and model.
     pub base_url: String,
     pub model: String,
+    /// Added with the Ollama preset (even if its display name changes).
+    pub ollama: bool,
     /// API: a key is stored for it in the system keychain.
     pub key: bool,
+    /// API: how long one model request may take, in seconds (clamped to
+    /// [`MIN_REQUEST_TIMEOUT_S`]..=[`MAX_REQUEST_TIMEOUT_S`] where it is used).
+    pub request_timeout_s: u64,
+}
+
+impl Default for AgentConfig {
+    fn default() -> AgentConfig {
+        AgentConfig {
+            id: String::new(),
+            name: String::new(),
+            kind: Kind::default(),
+            command: String::new(),
+            base_url: String::new(),
+            model: String::new(),
+            ollama: false,
+            key: false,
+            request_timeout_s: DEFAULT_REQUEST_TIMEOUT_S,
+        }
+    }
+}
+
+/// How long one model request to an endpoint may take by default, in seconds.
+pub const DEFAULT_REQUEST_TIMEOUT_S: u64 = 300;
+/// The shortest request timeout an endpoint can have.
+pub const MIN_REQUEST_TIMEOUT_S: u64 = 30;
+/// The longest request timeout an endpoint can have (an hour).
+pub const MAX_REQUEST_TIMEOUT_S: u64 = 3600;
+
+/// A request timeout in range: seconds from a preferences file, the dialog or the control
+/// channel, rounded and clamped; anything not a finite number is the default.
+pub fn request_timeout_s(secs: f64) -> u64 {
+    if !secs.is_finite() {
+        return DEFAULT_REQUEST_TIMEOUT_S;
+    }
+    // Clamped first, so the cast is exact.
+    secs.round().clamp(MIN_REQUEST_TIMEOUT_S as f64, MAX_REQUEST_TIMEOUT_S as f64) as u64
 }
 
 /// An agent as the picker and the switcher show it.
@@ -119,13 +157,20 @@ pub struct Entry {
     /// ACP: what to start.
     pub argv: Vec<String>,
     pub version: Option<String>,
-    /// `signed_in`, `key`, `signed_out`, `unknown` (found agents), or empty.
+    /// `login_found`, `key`, `signed_out`, `unknown` from discovery, `signed_in` after a
+    /// successful connection, or empty for an untested custom agent.
     pub login: &'static str,
     /// Found installed (not added by the user).
     pub found: bool,
     pub base_url: String,
     pub model: String,
     pub key: bool,
+    /// API: seconds one model request may take (in range).
+    pub request_timeout_s: u64,
+    /// Found installed, but its program didn't start when asked its version: why (#9034).
+    pub problem: Option<String>,
+    /// Found installed: the command that installs it again.
+    pub install: &'static str,
 }
 
 impl Entry {
@@ -141,17 +186,31 @@ impl Entry {
             base_url: c.base_url.clone(),
             model: c.model.clone(),
             key: c.key,
+            request_timeout_s: c.request_timeout_s.clamp(MIN_REQUEST_TIMEOUT_S, MAX_REQUEST_TIMEOUT_S),
+            problem: None,
+            install: "",
         }
     }
-    /// A short line under the name: the version, the model, or the command.
+    /// A short line under the name: the version, the model, the command, or why it can't start.
     pub fn detail(&self) -> String {
         match self.kind {
             Kind::Api | Kind::Anthropic => format!("{} · {}", self.model, self.base_url),
-            Kind::Acp => match &self.version {
-                Some(v) => v.clone(),
-                None => super::panel::short_command(&self.argv.join(" ")),
+            Kind::Acp => match (&self.problem, &self.version) {
+                (Some(p), _) => crate::i18n::format("ui.agent_chat_cannot_start", &[("error", p)]),
+                (None, Some(v)) => v.clone(),
+                (None, None) => super::panel::short_command(&self.argv.join(" ")),
             },
         }
+    }
+    /// What to tell someone starting an agent that was found but didn't start (#9034): the reason,
+    /// and how to install it again. `None` when nothing was seen wrong.
+    pub fn problem_hint(&self) -> Option<String> {
+        let problem = self.problem.as_deref()?;
+        let program = self.argv.first().map(String::as_str).unwrap_or_default();
+        Some(crate::i18n::format(
+            "ui.agent_chat_reinstall",
+            &[("agent", &self.name), ("program", program), ("error", problem), ("install", self.install)],
+        ))
     }
 }
 
@@ -174,9 +233,19 @@ pub fn entries(app: &crate::SolveApp) -> Vec<Entry> {
             base_url: String::new(),
             model: String::new(),
             key: false,
+            request_timeout_s: DEFAULT_REQUEST_TIMEOUT_S,
+            problem: f.problem.clone(),
+            install: f.install,
         }));
     }
     out.extend(app.preferences.agents.iter().map(Entry::from_config));
+    for entry in &mut out {
+        if entry.kind == Kind::Acp
+            && let Some(signed_in) = app.agent_chat.login_results.get(&entry.id)
+        {
+            entry.login = if *signed_in { "signed_in" } else { "signed_out" };
+        }
+    }
     out
 }
 
@@ -225,6 +294,8 @@ pub const OPENAI_PRESETS: &[ApiPreset] = &[
     ApiPreset { name: "Ollama", base_url: "http://localhost:11434/v1", model: "" },
     ApiPreset { name: "LM Studio", base_url: "http://localhost:1234/v1", model: "" },
     ApiPreset { name: "OpenAI", base_url: "https://api.openai.com/v1", model: "" },
+    ApiPreset { name: "Mammouth AI", base_url: "https://api.mammouth.ai/v1", model: "" },
+    ApiPreset { name: "OpenCode Go", base_url: "https://opencode.ai/zen/go/v1", model: "" },
 ];
 
 /// Anthropic-compatible endpoints people use. The base URL is the one their documentation calls
@@ -281,6 +352,7 @@ mod tests {
     #[test]
     fn keys_go_only_over_https_or_to_this_computer() {
         assert!(key_safe_for("https://api.openai.com/v1"));
+        assert!(key_safe_for("https://api.mammouth.ai/v1"));
         assert!(key_safe_for("http://localhost:11434/v1"));
         assert!(key_safe_for("http://127.0.0.1:1234/v1"));
         assert!(key_safe_for("http://[::1]:8080/v1"));
@@ -332,6 +404,26 @@ mod tests {
         assert_eq!(Kind::Api.id(), "api");
         assert_eq!(Kind::Anthropic.id(), "anthropic");
         assert!(presets(Protocol::OpenAi).iter().all(|p| !p.name.is_empty() && p.base_url.starts_with("http")));
+        assert!(presets(Protocol::OpenAi).iter().any(|p| p.name == "Mammouth AI" && key_safe_for(p.base_url)));
         assert!(presets(Protocol::Anthropic).iter().any(|p| p.base_url == "https://api.anthropic.com/v1"));
+    }
+
+    #[test]
+    fn request_timeouts_default_to_300_s_and_stay_between_30_s_and_an_hour() {
+        assert_eq!(AgentConfig::default().request_timeout_s, 300);
+        assert_eq!(request_timeout_s(600.4), 600);
+        assert_eq!(request_timeout_s(1.0), 30);
+        assert_eq!(request_timeout_s(-5.0), 30);
+        assert_eq!(request_timeout_s(1e300), 3600);
+        assert_eq!(request_timeout_s(f64::NAN), 300);
+        assert_eq!(request_timeout_s(f64::INFINITY), 300);
+        // An older preferences file has no timeout: the default; a hand-edited one is clamped where used.
+        let old: AgentConfig = serde_json::from_str(r#"{"id":"api-1","kind":"api","base_url":"http://localhost:11434/v1","model":"m"}"#).unwrap();
+        assert_eq!(old.request_timeout_s, 300);
+        let wild: AgentConfig = serde_json::from_str(r#"{"id":"api-2","kind":"api","request_timeout_s":99999}"#).unwrap();
+        assert_eq!(Entry::from_config(&wild).request_timeout_s, 3600);
+        let saved = AgentConfig { id: "api-3".into(), kind: Kind::Api, request_timeout_s: 1200, ..Default::default() };
+        let back: AgentConfig = serde_json::from_value(serde_json::to_value(&saved).unwrap()).unwrap();
+        assert_eq!(back, saved);
     }
 }

@@ -128,6 +128,205 @@ fn panel_keeps_actions_and_body_geometry_in_both_layouts() {
     }
 }
 
+/// One frame of a feature panel with `rows` body rows, the given `placement` published.
+fn feature_frame_with(
+    ctx: &egui::Context,
+    placement: DialogButtons,
+    rows: usize,
+    valid: bool,
+    collapsed: Option<&mut bool>,
+    events: Vec<egui::Event>,
+) -> (bool, Action) {
+    let vp = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(640.0, 480.0));
+    scenario::clear_handles();
+    let mut result = (false, Action::None);
+    let mut collapsed = collapsed;
+    crate::test_support::frame(ctx, egui::RawInput { screen_rect: Some(vp), events, focused: true, ..Default::default() }, |_| {
+        placement.publish(ctx);
+        let side = crate::frame::Side::Right;
+        let frame = Panel::feature_frame(ctx, crate::shell::LayoutMode::Floating, side);
+        let anchor = egui::pos2(vp.right() - crate::shell::SHELL_GAP, vp.top());
+        let panel = Panel::new("Fillet", egui::Id::new("top_actions"), anchor, vp, side, frame);
+        panel.window(ctx).show(ctx, |ui| {
+            let heading = FeatureOptions {
+                icon: "fillet",
+                title: "Fillet",
+                drag_key: "top_actions",
+                moved: egui::Vec2::ZERO,
+                docked: anchor,
+                apply_label: Some("Apply"),
+            };
+            let body = |ui: &mut Ui| {
+                for row_index in 0..rows {
+                    text(ui, &format!("Input {row_index}"), Text::Note("row"));
+                }
+                ComputeStatus { text: None, busy: false, applying: false }
+            };
+            result = match collapsed.as_deref_mut() {
+                Some(collapsed) => panel.feature_collapsible(ui, heading, false, valid, collapsed, body),
+                None => panel.feature(ui, heading, false, valid, body),
+            };
+        });
+    });
+    result
+}
+
+#[test]
+fn top_placement_puts_the_actions_in_the_header_row_where_they_stay() {
+    let ctx = crate::fonts::test_context();
+    for _ in 0..3 {
+        feature_frame_with(&ctx, DialogButtons::Top, 2, true, None, Vec::new());
+    }
+    let header = scenario::rect_of("dialog:header").unwrap();
+    assert_eq!(header.height(), Tokens::get().form_header_height);
+    assert!(scenario::rect_of("dialog:footer").is_none(), "the footer row is gone");
+    let (ok, apply, cancel) =
+        (scenario::rect_of("dialog:ok").unwrap(), scenario::rect_of("dialog:apply").unwrap(), scenario::rect_of("dialog:cancel").unwrap());
+    for (name, rect) in [("ok", ok), ("apply", apply), ("cancel", cancel)] {
+        assert!(header.contains_rect(rect), "{name} {rect:?} sits in the header {header:?}");
+        assert_eq!(rect.height(), Tokens::get().form_button_height, "{name}");
+    }
+    assert!(cancel.right() < apply.left() && apply.right() < ok.left(), "the footer's order: Cancel, Apply, then OK at the right");
+    assert_eq!(scenario::handle_at("dialog:close"), Some(cancel.center()), "Cancel stands in for the close button");
+    assert!(scenario::handle_at("dialog:OK").is_some() && scenario::handle_at("dialog:Cancel").is_some());
+    assert!(scenario::handle_at("dialog:title").is_some_and(|at| at.x < cancel.left()), "the title drags clear of the buttons");
+    assert_eq!(scenario::count_of("dialog:ok:enabled"), Some(1.0));
+
+    // More inputs, a longer card: the buttons stay where they were.
+    for _ in 0..2 {
+        feature_frame_with(&ctx, DialogButtons::Top, 24, true, None, Vec::new());
+    }
+    assert_eq!(scenario::rect_of("dialog:ok"), Some(ok));
+    assert_eq!(scenario::rect_of("dialog:cancel"), Some(cancel));
+
+    // OK greys out exactly as it does in the footer, and a click on it then does nothing.
+    feature_frame_with(&ctx, DialogButtons::Top, 2, false, None, Vec::new());
+    assert_eq!(scenario::count_of("dialog:ok:enabled"), Some(0.0));
+    let at = ok.center();
+    feature_frame_with(&ctx, DialogButtons::Top, 2, false, None, crate::test_support::pointer(at, true));
+    assert_eq!(feature_frame_with(&ctx, DialogButtons::Top, 2, false, None, crate::test_support::pointer(at, false)).1, Action::None);
+    feature_frame_with(&ctx, DialogButtons::Bottom, 2, false, None, Vec::new());
+    assert_eq!(scenario::count_of("dialog:ok:enabled"), Some(0.0), "the same state at the bottom");
+
+    // The buttons and the keys answer as the footer's do.
+    for (target, expected) in [(ok, Action::Ok), (apply, Action::Apply), (cancel, Action::Cancel)] {
+        feature_frame_with(&ctx, DialogButtons::Top, 2, true, None, Vec::new());
+        feature_frame_with(&ctx, DialogButtons::Top, 2, true, None, crate::test_support::pointer(target.center(), true));
+        let clicked = feature_frame_with(&ctx, DialogButtons::Top, 2, true, None, crate::test_support::pointer(target.center(), false));
+        assert_eq!(clicked, (false, expected));
+    }
+    for (key, expected) in [(egui::Key::Escape, Action::Cancel), (egui::Key::Enter, Action::Ok)] {
+        feature_frame_with(&ctx, DialogButtons::Top, 2, true, None, Vec::new());
+        assert_eq!(feature_frame_with(&ctx, DialogButtons::Top, 2, true, None, crate::test_support::key(key)).1, expected, "{key:?}");
+    }
+}
+
+/// With no footer to show it, the compute status takes the title's place and the spinner the
+/// icon's, until the feature is in; OK stays grey meanwhile, as in the footer.
+#[test]
+fn top_placement_shows_the_compute_status_in_the_title_row() {
+    let ctx = crate::fonts::test_context();
+    let vp = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(640.0, 480.0));
+    let mut output = None;
+    for _ in 0..3 {
+        scenario::clear_handles();
+        output = Some(crate::test_support::frame(&ctx, egui::RawInput { screen_rect: Some(vp), ..Default::default() }, |_| {
+            DialogButtons::Top.publish(&ctx);
+            let side = crate::frame::Side::Right;
+            let anchor = egui::pos2(vp.right() - crate::shell::SHELL_GAP, vp.top());
+            let panel = Panel::new(
+                "Fillet",
+                egui::Id::new("top_status"),
+                anchor,
+                vp,
+                side,
+                Panel::feature_frame(&ctx, crate::shell::LayoutMode::Floating, side),
+            );
+            panel.window(&ctx).show(&ctx, |ui| {
+                let heading = FeatureOptions {
+                    icon: "fillet",
+                    title: "Fillet",
+                    drag_key: "top_status",
+                    moved: egui::Vec2::ZERO,
+                    docked: anchor,
+                    apply_label: None,
+                };
+                panel.feature(ui, heading, true, true, |ui| {
+                    text(ui, "Input", Text::Note("row"));
+                    ComputeStatus { text: Some("Computing… 3 s".into()), busy: true, applying: true }
+                });
+            });
+        }));
+    }
+    let texts: Vec<String> = output.iter().flat_map(crate::test_support::text_shapes).map(|shape| shape.galley.job.text.clone()).collect();
+    assert!(texts.iter().any(|text| text == "Computing… 3 s"), "{texts:?}");
+    assert!(!texts.iter().any(|text| text == "Fillet"), "the status stands in for the title: {texts:?}");
+    assert_eq!(scenario::count_of("dialog:ok:enabled"), Some(0.0), "OK waits for the feature");
+    assert!(scenario::rect_of("dialog:header").unwrap().contains_rect(scenario::rect_of("dialog:cancel").unwrap()));
+}
+
+/// With the buttons in the footer, the busy spinner sits in the footer's row: at its side inset
+/// and on the buttons' centre line, not against the card's edge (it used to hang there).
+#[test]
+fn bottom_placement_puts_the_busy_spinner_in_the_footer_row() {
+    let ctx = crate::fonts::test_context();
+    let vp = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(640.0, 480.0));
+    for _ in 0..3 {
+        scenario::clear_handles();
+        crate::test_support::frame(&ctx, egui::RawInput { screen_rect: Some(vp), ..Default::default() }, |_| {
+            DialogButtons::Bottom.publish(&ctx);
+            let side = crate::frame::Side::Right;
+            let anchor = egui::pos2(vp.right() - crate::shell::SHELL_GAP, vp.top());
+            let panel = Panel::new(
+                "Fillet",
+                egui::Id::new("bottom_status"),
+                anchor,
+                vp,
+                side,
+                Panel::feature_frame(&ctx, crate::shell::LayoutMode::Floating, side),
+            );
+            panel.window(&ctx).show(&ctx, |ui| {
+                let heading = FeatureOptions {
+                    icon: "fillet",
+                    title: "Fillet",
+                    drag_key: "bottom_status",
+                    moved: egui::Vec2::ZERO,
+                    docked: anchor,
+                    apply_label: None,
+                };
+                panel.feature(ui, heading, true, true, |ui| {
+                    text(ui, "Input", Text::Note("row"));
+                    ComputeStatus { text: Some("Computing… 3 s".into()), busy: true, applying: true }
+                });
+            });
+        });
+    }
+    let spinner = scenario::rect_of("dialog:footer:spinner").expect("the spinner shows while busy");
+    let actions = scenario::rect_of("dialog:footer:actions").unwrap();
+    let ok = scenario::rect_of("dialog:ok").unwrap();
+    assert!(actions.contains_rect(spinner), "{spinner:?} inside the footer row {actions:?}");
+    assert!((spinner.left() - actions.left()).abs() < 0.5, "at the footer's inset: {spinner:?} {actions:?}");
+    assert!((spinner.center().y - ok.center().y).abs() < 0.5, "on the buttons' line: {spinner:?} {ok:?}");
+}
+
+#[test]
+fn top_placement_keeps_a_managers_fold_beside_the_actions() {
+    let ctx = crate::fonts::test_context();
+    let mut collapsed = false;
+    for _ in 0..3 {
+        feature_frame_with(&ctx, DialogButtons::Top, 4, true, Some(&mut collapsed), Vec::new());
+    }
+    let header = scenario::rect_of("dialog:header").unwrap();
+    let fold = scenario::handle_at("dialog:collapse").unwrap();
+    let cancel = scenario::rect_of("dialog:cancel").unwrap();
+    assert!(header.contains(fold) && fold.x < cancel.left(), "{fold:?} left of {cancel:?}");
+    assert!(scenario::handle_at("dialog:title").is_some_and(|at| at.x < fold.x));
+    feature_frame_with(&ctx, DialogButtons::Top, 4, true, Some(&mut collapsed), crate::test_support::pointer(fold, true));
+    feature_frame_with(&ctx, DialogButtons::Top, 4, true, Some(&mut collapsed), crate::test_support::pointer(fold, false));
+    assert!(collapsed);
+    assert_eq!(scenario::rect_of("dialog:cancel"), Some(cancel), "folding leaves the buttons in place");
+}
+
 #[test]
 fn palette_scrolls_short_views_and_retains_its_status_and_action_handles() {
     for layout in [crate::shell::LayoutMode::Docked, crate::shell::LayoutMode::Floating] {
@@ -394,6 +593,74 @@ fn window_pages_have_shared_metrics_callbacks_and_a_pinned_left_footer_action() 
 }
 
 #[test]
+fn page_window_is_as_opaque_as_every_other_window_in_both_themes() {
+    // #9078: the Preferences window let the ribbon's labels show through its title bar and search field.
+    fn window_fill(pages: bool) -> egui::Color32 {
+        let ctx = crate::fonts::test_context();
+        let list = [WindowPage {
+            group: None,
+            icon: "settings",
+            label: "ui.general",
+            handle: "test:page:general",
+            scroll: true,
+            draw: |ui, _: &mut ()| {
+                text(ui, "General", Text::Inline);
+            },
+        }];
+        let mut selected = 0;
+        let mut output = None;
+        for _ in 0..3 {
+            scenario::clear_handles();
+            output = Some(crate::test_support::frame(
+                &ctx,
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 800.0))),
+                    focused: true,
+                    ..Default::default()
+                },
+                |ui| {
+                    let window = Window::new(ui.id().with("opaque"), "settings", "Preferences");
+                    if pages {
+                        window.cards(3.0).show_pages(ui.ctx(), &mut selected, &list, &mut (), |_| {});
+                    } else {
+                        window.show(ui.ctx(), true, |ui| {
+                            text(ui, "Body", Text::Inline);
+                        });
+                    }
+                },
+            ));
+        }
+        let window = scenario::rect_of("dialog:window").expect("window rect published");
+        let mut fill = None;
+        for clipped in output.iter().flat_map(|o| &o.shapes) {
+            crate::test_support::each_shape(&clipped.shape, &mut |shape| {
+                if let egui::Shape::Rect(r) = shape
+                    && fill.is_none()
+                    && r.blur_width == 0.0
+                    && (r.rect.min - window.min).abs().max_elem() <= 0.5
+                    && (r.rect.max - window.max).abs().max_elem() <= 0.5
+                {
+                    fill = Some(r.fill);
+                }
+            });
+        }
+        fill.expect("the window frame is painted at the window's rect")
+    }
+    let previous = crate::theme::is_dark();
+    for dark in [false, true] {
+        crate::theme::set_dark(dark);
+        let t = Tokens::get();
+        assert_eq!(t.dialog_body.a(), 255, "{dark}: the window token itself is opaque");
+        let plain = window_fill(false);
+        assert_eq!(plain, t.dialog_body, "{dark}: a plain window is the opaque dialog body");
+        let page = window_fill(true);
+        assert_eq!(page.a(), 255, "{dark}: the Preferences page window lets nothing show through");
+        assert_eq!(page, plain, "{dark}: the page window has the same fill as every other window");
+    }
+    crate::theme::set_dark(previous);
+}
+
+#[test]
 fn confirm_routes_enter_escape_selected_answers_and_blocks_background_clicks() {
     for (key, valid, selected, expected) in [
         (egui::Key::Enter, true, Action::Ok, Action::Ok),
@@ -428,6 +695,7 @@ fn confirm_routes_enter_escape_selected_answers_and_blocks_background_clicks() {
                     action = Confirm::new(ui.id().with("modal"), "status_warning", "Save changes?")
                         .tone(Tone::Warning)
                         .actions("Save", "Cancel", Some("Don't Save"))
+                        .secondary_left()
                         .selected(selected)
                         .detail("Sample Plate")
                         .show(ui.ctx(), valid, |ui| {
@@ -444,6 +712,76 @@ fn confirm_routes_enter_escape_selected_answers_and_blocks_background_clicks() {
             (scenario::rect_of("dialog:apply").unwrap(), scenario::rect_of("dialog:cancel").unwrap(), scenario::rect_of("dialog:ok").unwrap());
         assert!(ghost.right() < cancel.left() && cancel.right() < primary.left());
         assert!(scenario::rect_of("dialog:note:confirm_detail").is_some());
+    }
+}
+
+#[test]
+fn save_prompt_frames_dont_save_and_clicking_it_discards_for_close_and_quit() {
+    for quit in [false, true] {
+        let mut h = crate::scenario::Harness::new();
+        h.app.home.open = false;
+        h.app.run("solid.box", serde_json::json!({"length": 10, "width": 10, "height": 10})).unwrap();
+        if quit {
+            crate::documents::request_quit(&mut h.app);
+        } else {
+            let active = h.app.docs.active;
+            crate::documents::close(&mut h.app, active, false);
+        }
+        h.ctx = crate::fonts::test_context();
+        h.ctx.enable_accesskit();
+        let mut textures = std::collections::HashMap::new();
+        let mut output = egui::FullOutput::default();
+        for _ in 0..3 {
+            output = h.ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1000.0))),
+                    focused: true,
+                    ..Default::default()
+                },
+                |ui| {
+                    h.app.logic(ui.ctx());
+                    h.app.ui(ui);
+                },
+            );
+            super::super::checks::tests::textures_update(&mut textures, &output.textures_delta);
+            output.textures_delta.clear();
+        }
+        h.output = output.platform_output.clone();
+        let discard = scenario::rect_of("dialog:apply").unwrap();
+        assert!(discard.contains(scenario::handle_at("dialog:Don't Save").unwrap()));
+        assert!(
+            h.output
+                .accesskit_update
+                .as_ref()
+                .unwrap()
+                .nodes
+                .iter()
+                .any(|(_, node)| { node.label() == Some("Don't Save") && node.role() == egui::accesskit::Role::Button }),
+            "discard remains an accessible button"
+        );
+        let t = crate::theme::Tokens::get();
+        let mut framed = false;
+        for shape in &output.shapes {
+            crate::test_support::each_shape(&shape.shape, &mut |s| {
+                framed |= matches!(s, egui::Shape::Rect(r) if r.rect == discard
+                    && r.fill == t.control_fill && r.stroke.width > 0.0 && r.stroke.color == t.control_border);
+            });
+        }
+        assert!(framed, "Don't Save needs a visible secondary button frame before hover or selection");
+        if let Ok(dir) = std::env::var("SOLIDCRAFT_SAVE_PROMPT_EVIDENCE") {
+            let bounds = scenario::rect_of("dialog:header").unwrap().union(scenario::rect_of("dialog:footer").unwrap()).expand(t.space_24);
+            let image = super::super::checks::tests::raster(&h.ctx, output.shapes, output.pixels_per_point, bounds, &textures);
+            std::fs::create_dir_all(&dir).unwrap();
+            image.save(std::path::Path::new(&dir).join(if quit { "save-quit.png" } else { "save-close.png" })).unwrap();
+        }
+        h.step(&serde_json::json!({"click": {"handle": "dialog:Don't Save"}})).unwrap();
+        h.frames(2);
+        assert!(h.app.docs.closing.is_none());
+        assert!(!h.app.session.is_dirty(), "the changes were discarded");
+        assert_eq!(h.app.quit_requested, quit, "continue the requested close or quit");
+        if !quit {
+            assert!(h.app.session.doc.features.is_empty(), "closing the last tab leaves a blank design");
+        }
     }
 }
 
@@ -583,6 +921,7 @@ fn universal_containers_follow_one_layout_without_changing_transient_surfaces() 
             Surface::Canvas,
             Surface::Toast,
             Surface::Navigation,
+            Surface::ViewportStatus,
             Surface::Viewport,
             Surface::InputShield,
         ] {
@@ -611,6 +950,58 @@ fn required_platform_window_keeps_recovery_pending_until_an_explicit_choice() {
     assert!(scenario::handle_at("dialog:close").is_none(), "recovery cannot be dismissed through the header");
     assert!(scenario::rect_of("dialog:header").is_some());
     assert!(scenario::rect_of("dialog:footer").is_none());
+}
+
+/// #9472: a card first laid out while the page is still tiny (a browser canvas not sized yet)
+/// grows its body once the page has its size, so the choice stays visible on every page size and
+/// scale. The browser's recovery card and the desktop one (with a footer) share this body.
+#[test]
+fn window_body_buttons_stay_visible_after_the_page_grows_from_nothing() {
+    for desktop in [false, true] {
+        for ppp in [1.0, 1.5, 2.0] {
+            for size in [egui::vec2(2992.0, 1692.0), egui::vec2(1496.0, 846.0), egui::vec2(800.0, 600.0), egui::vec2(320.0, 200.0)] {
+                let ctx = crate::fonts::test_context();
+                let mut buttons = Vec::new();
+                for page in [egui::Vec2::ZERO, egui::vec2(1.0, 1.0), egui::vec2(300.0, 150.0), size, size, size, size] {
+                    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, page);
+                    let viewport = egui::ViewportInfo { native_pixels_per_point: Some(ppp), ..Default::default() };
+                    let input = egui::RawInput {
+                        screen_rect: Some(screen),
+                        focused: true,
+                        viewports: std::iter::once((egui::ViewportId::ROOT, viewport)).collect(),
+                        ..Default::default()
+                    };
+                    buttons.clear();
+                    crate::test_support::frame(&ctx, input, |ui| {
+                        let window = Window::new(egui::Id::new("sc_browser_recovery"), "restore", "Recover unsaved work?");
+                        let body = |ui: &mut Ui| {
+                            ui.label("“Bracket” had unsaved changes when this page last closed.");
+                            ui.horizontal(|ui| {
+                                for label in ["Recover", "Discard"] {
+                                    let rect = button(ui, label, Button::Normal).rect;
+                                    buttons.push((label, rect, ui.clip_rect()));
+                                }
+                            });
+                        };
+                        if desktop {
+                            window.actions("", "Later", None).show_with_left(ui.ctx(), true, body, |_| {});
+                        } else {
+                            window.required().show_body(ui.ctx(), body);
+                        }
+                    });
+                }
+                let screen = ctx.content_rect();
+                assert_eq!(buttons.len(), 2, "desktop {desktop}, {size:?} at {ppp}");
+                for (label, rect, clip) in &buttons {
+                    assert!(rect.height() > 0.0 && rect.width() > 0.0, "{label}: desktop {desktop}, {size:?} at {ppp}: {rect:?}");
+                    assert!(
+                        clip.contains_rect(*rect) && screen.contains_rect(*rect),
+                        "{label} hidden: desktop {desktop}, {size:?} at {ppp}: {rect:?} clipped to {clip:?} on {screen:?}"
+                    );
+                }
+            }
+        }
+    }
 }
 
 #[test]
@@ -644,4 +1035,249 @@ fn compact_tool_sheet_corners_follow_its_right_edge_contact() {
     let frame = container.frame(&ctx, t.dialog_body, crate::frame::Side::Right);
     assert_eq!(container.tool_frame(frame, false).corner_radius, egui::CornerRadius::same(t.radius_lg));
     assert_eq!(container.tool_frame(frame, true).corner_radius, egui::CornerRadius { nw: t.radius_lg, ne: 0, sw: t.radius_lg, se: 0 });
+}
+
+#[test]
+fn theme_shape_changes_preserve_panel_geometry_and_dock_contacts() {
+    use crate::{frame::Side, shell::LayoutMode};
+    let ctx = crate::fonts::test_context();
+    let mut results = Vec::new();
+    for name in ["solidcraft-95", "blueprint", "cupertino"] {
+        let t = crate::theme_files::resolve(crate::theme_files::find(name, &[]).unwrap());
+        let _theme = crate::theme::scoped_tokens(t);
+        for surface in [Surface::Panel, Surface::Feature, Surface::Window, Surface::Popup, Surface::Navigation, Surface::Toast] {
+            crate::theme::apply(&ctx);
+            let floating = Container::for_layout(LayoutMode::Floating, surface).frame(&ctx, t.panel, Side::Left);
+            let bounds = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(240.0, 180.0));
+            results.push((name, surface, floating.corner_radius, floating.outer_rect(bounds), t));
+        }
+        let docked = Container::for_layout(LayoutMode::Docked, Surface::Panel)
+            .joined(DockEdges { left: true, top: true, ..Default::default() })
+            .frame(&ctx, t.panel, Side::Left);
+        assert_eq!(docked.corner_radius, egui::CornerRadius { nw: 0, ne: 0, sw: 0, se: t.radius_lg });
+    }
+    for (name, surface, radius, bounds, t) in &results {
+        let expected = match surface {
+            Surface::Panel => t.radius_lg,
+            Surface::Feature | Surface::Window => t.radius_xl,
+            _ => t.radius_md,
+        };
+        assert_eq!(*radius, egui::CornerRadius::same(expected), "{name}: {surface:?}");
+        assert_eq!(*bounds, results.iter().find(|row| row.1 == *surface).unwrap().3, "shape must not change layout");
+    }
+}
+
+#[test]
+fn border_hierarchy_reaches_hosts_sections_controls_and_inset_without_new_targets() {
+    use crate::theme::{Borders, InsetBorder};
+    use egui::{Color32, Stroke};
+    for dark in [false, true] {
+        let mut t = if dark { Tokens::dark() } else { Tokens::light() };
+        t.borders = Borders {
+            primary: Some(Stroke::new(4.0, Color32::WHITE)),
+            secondary: Some(Stroke::new(2.0, Color32::RED)),
+            secondary_dotted: false,
+            tertiary: Some(Stroke::new(0.5, Color32::GREEN)),
+            container: None,
+            bevel: None,
+            control: Some(Stroke::new(1.5, Color32::BLUE)),
+            primary_inset: Some(InsetBorder { stroke: Stroke::new(0.75, Color32::YELLOW), gap: 3.0 }),
+        };
+        let _restore = crate::theme::scoped_tokens(t);
+        let ctx = crate::fonts::test_context();
+        let mut value = "12 mm".to_string();
+        let output = crate::test_support::frame(&ctx, egui::RawInput::default(), |ui| {
+            let container = Container::for_layout(crate::shell::LayoutMode::Floating, Surface::Panel);
+            let frame = container.frame(ui.ctx(), t.panel, crate::frame::Side::Left).inner_margin(12);
+            let bounds = ui.max_rect();
+            container.show_frame(ui, frame, bounds, |ui| {
+                ui.set_width(280.0);
+                scope(ui, |ui| {
+                    header(ui, "box", "Box", || {});
+                    row(ui, "Width", |ui| {
+                        field(ui, &mut value);
+                    });
+                    ui.separator();
+                });
+            });
+        });
+        let mut found = [false; 5];
+        for shape in &output.shapes {
+            crate::test_support::each_shape(&shape.shape, &mut |shape| {
+                let stroke = match shape {
+                    egui::Shape::Rect(rect) => Some(rect.stroke),
+                    egui::Shape::LineSegment { stroke, .. } => Some(*stroke),
+                    _ => None,
+                };
+                if let Some(stroke) = stroke {
+                    for (index, expected) in [
+                        t.borders.primary.unwrap(),
+                        t.borders.secondary.unwrap(),
+                        t.borders.tertiary.unwrap(),
+                        t.borders.control.unwrap(),
+                        t.borders.primary_inset.unwrap().stroke,
+                    ]
+                    .iter()
+                    .enumerate()
+                    {
+                        found[index] |= stroke == *expected;
+                    }
+                }
+            });
+        }
+        assert!(found.into_iter().all(|v| v), "missing role: {found:?}");
+        for layout in [crate::shell::LayoutMode::Floating, crate::shell::LayoutMode::Docked] {
+            for surface in [
+                Surface::Panel,
+                Surface::Chrome,
+                Surface::Feature,
+                Surface::Palette,
+                Surface::Window,
+                Surface::Popup,
+                Surface::Toast,
+                Surface::Navigation,
+            ] {
+                let frame = Container::for_layout(layout, surface).frame(&ctx, t.panel, crate::frame::Side::Left);
+                assert_eq!(frame.stroke, t.borders.primary.unwrap(), "{layout:?} {surface:?}");
+                assert!(frame.total_margin().sum().is_finite());
+            }
+        }
+    }
+}
+
+#[test]
+fn inset_border_skips_tiny_or_invalid_surfaces_and_keeps_dock_contacts_square() {
+    let mut t = Tokens::dark();
+    t.borders.primary = Some(egui::Stroke::new(4.0, egui::Color32::WHITE));
+    t.borders.primary_inset = Some(crate::theme::InsetBorder { stroke: egui::Stroke::new(4.0, egui::Color32::YELLOW), gap: 12.0 });
+    let _restore = crate::theme::scoped_tokens(t);
+    let ctx = crate::fonts::test_context();
+    let output = crate::test_support::frame(&ctx, egui::RawInput::default(), |ui| {
+        let frame = Container::for_layout(crate::shell::LayoutMode::Docked, Surface::Panel).joined(DockEdges::ALL).frame(
+            &ctx,
+            t.panel,
+            crate::frame::Side::Left,
+        );
+        assert_eq!(frame.corner_radius, egui::CornerRadius::ZERO);
+        assert_eq!(frame.outer_margin.left, -4);
+        for rect in [egui::Rect::from_min_size(egui::pos2(20.0, 20.0), egui::vec2(20.0, 20.0)), egui::Rect::NOTHING] {
+            Container::paint_inset(ui.painter(), rect, frame);
+        }
+    });
+    for shape in &output.shapes {
+        crate::test_support::each_shape(&shape.shape, &mut |s| {
+            if let egui::Shape::Rect(rect) = s {
+                assert_ne!(rect.stroke.color, egui::Color32::YELLOW);
+            }
+        });
+    }
+}
+
+#[test]
+fn menu_companion_is_visible_in_frame_padding_and_bounded_by_its_surface() {
+    let mut t = Tokens::dark();
+    t.borders.primary = Some(egui::Stroke::new(2.0, egui::Color32::WHITE));
+    t.borders.primary_inset = Some(crate::theme::InsetBorder { stroke: egui::Stroke::new(0.75, egui::Color32::YELLOW), gap: 3.0 });
+    let _restore = crate::theme::scoped_tokens(t);
+    let ctx = crate::fonts::test_context();
+    let mut surface = egui::Rect::NOTHING;
+    let output = crate::test_support::frame(&ctx, egui::RawInput::default(), |ui| {
+        surface = Menu::show_frame(ui, Menu::frame(), |ui| {
+            ui.set_width(200.0);
+            ui.label("New Design");
+            Menu::separator(ui);
+            ui.label("Open");
+        })
+        .response
+        .rect;
+    });
+    let mut found = false;
+    for clipped in &output.shapes {
+        crate::test_support::each_shape(&clipped.shape, &mut |shape| {
+            if let egui::Shape::Rect(rect) = shape
+                && rect.stroke.color == egui::Color32::YELLOW
+            {
+                found = true;
+                assert!(surface.contains_rect(rect.rect));
+                assert!(clipped.clip_rect.contains_rect(rect.rect));
+                assert!((rect.rect.left() - surface.left() - 5.0).abs() < 0.01);
+            }
+        });
+    }
+    assert!(found, "the companion must be painted outside the menu content clip");
+}
+
+#[test]
+fn bevel_lighting_reverses_for_fields_and_pressed_buttons_without_changing_geometry() {
+    use egui::{Color32, Pos2, Rect};
+    let mut t = Tokens::light();
+    let bevel =
+        crate::theme::Bevel { width: 1.0, highlight: Color32::WHITE, light: Color32::LIGHT_GRAY, shadow: Color32::GRAY, dark_shadow: Color32::BLACK };
+    t.borders.bevel = Some(bevel);
+    t.control_radius = 0;
+    let _restore = crate::theme::scoped_tokens(t);
+    let ctx = crate::fonts::test_context();
+    let mut button_rect = Rect::NOTHING;
+    let mut field_rect = Rect::NOTHING;
+    let mut text = "12 mm".to_string();
+    let mut draw = |ui: &mut Ui| {
+        ui.set_width(240.0);
+        scope(ui, |ui| {
+            button_rect = button(ui, "Review", Button::Normal).rect;
+            field_rect = cell_editor(ui, egui::Id::new("bevel-field"), &mut text, "", false).rect;
+        });
+    };
+    fn top_color(output: &egui::FullOutput, rect: Rect, inset: f32) -> Color32 {
+        output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::LineSegment { points: [a, b], stroke }
+                    if (a.y - rect.top() - inset).abs() < 0.01 && (b.y - a.y).abs() < 0.01 && a.x >= rect.left() && b.x <= rect.right() =>
+                {
+                    Some(stroke.color)
+                }
+                _ => None,
+            })
+            .expect("horizontal bevel edge")
+    }
+    let raised = crate::test_support::frame(&ctx, egui::RawInput::default(), &mut draw);
+    assert_eq!(top_color(&raised, button_rect, 0.5), bevel.highlight);
+    assert_eq!(top_color(&raised, field_rect, 1.5), bevel.shadow);
+    let original_rect = button_rect;
+    let mut draw = |ui: &mut Ui| {
+        ui.set_width(240.0);
+        scope(ui, |ui| {
+            button_rect = button(ui, "Review", Button::Normal).rect;
+            cell_editor(ui, egui::Id::new("bevel-field"), &mut text, "", false);
+        });
+    };
+    let down = crate::test_support::frame(
+        &ctx,
+        egui::RawInput { events: crate::test_support::pointer(original_rect.center(), true), ..Default::default() },
+        &mut draw,
+    );
+    assert_eq!(button_rect, original_rect);
+    assert_eq!(top_color(&down, button_rect, 0.5), bevel.shadow);
+    let tiny = Rect::from_min_size(Pos2::ZERO, egui::vec2(2.0, 2.0));
+    let output = crate::test_support::frame(&ctx, egui::RawInput::default(), |ui| bevel.paint(ui.painter(), tiny, 0, false, true));
+    assert!(!output.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::LineSegment { .. })));
+}
+
+/// A left-anchored panel in a view that came out inside out keeps an anchor instead of
+/// panicking in `f32::clamp`, as the layout beside it did in #9492.
+#[test]
+fn a_left_panel_in_an_inside_out_view_keeps_an_anchor() {
+    let ctx = crate::fonts::test_context();
+    let inside_out = egui::Rect::from_min_max(egui::pos2(264.1875, 40.0), egui::pos2(159.0, 600.0));
+    let panel = super::Panel::new(
+        "Panel",
+        egui::Id::new("inside_out_panel"),
+        egui::pos2(200.0, 80.0),
+        inside_out,
+        crate::frame::Side::Left,
+        egui::Frame::NONE,
+    );
+    let anchor = panel.bounded_anchor(&ctx);
+    assert!(anchor.x.is_finite() && anchor.y.is_finite(), "{anchor:?}");
 }

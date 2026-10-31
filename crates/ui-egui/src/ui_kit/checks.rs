@@ -23,16 +23,27 @@ pub(super) fn paint_box(ui: &Ui, square: Rect, response: &Response, on: bool, mi
     let t = Tokens::get();
     let selected = on || mixed;
     let border = if selected || response.hovered() || response.has_focus() { t.form_primary } else { t.control_border };
-    let fill = if selected {
-        t.form_primary
+    let fill = if t.borders.bevel.is_some() {
+        t.input_fill()
+    } else if selected {
+        t.form_primary_fill
     } else if response.hovered() {
         t.hover
     } else {
         t.control_fill
     };
-    ui.painter().rect(square, t.radius_sm, fill, egui::Stroke::new(1.0, border), egui::StrokeKind::Inside);
+    ui.painter().rect(
+        square,
+        t.radius_sm,
+        fill,
+        if selected || response.hovered() || response.has_focus() { egui::Stroke::new(1.0, border) } else { t.control_border_stroke(border) },
+        egui::StrokeKind::Inside,
+    );
+    if let Some(bevel) = t.borders.bevel {
+        bevel.paint(ui.painter(), square, t.radius_sm, true, response.enabled());
+    }
     if selected {
-        paint_check_glyph(ui.painter(), square, mixed, t.on_accent);
+        paint_check_glyph(ui.painter(), square, mixed, if t.borders.bevel.is_some() { t.form_ink } else { t.on_accent });
     }
     if response.has_focus() {
         ui.painter().rect_stroke(square.expand(t.space_2), t.radius_sm, egui::Stroke::new(1.0, t.form_primary), egui::StrokeKind::Outside);
@@ -47,6 +58,10 @@ pub(crate) fn checkbox(ui: &mut Ui, label: &str, value: &mut bool) -> Response {
 /// Mixed values become checked when activated; the caller owns whether selection is mixed.
 /// Tokens: space_14/3/2/6, radius_sm, control_fill/border, form_primary/ink, hover, on_accent.
 pub(crate) fn checkbox_indeterminate(ui: &mut Ui, label: &str, value: &mut bool, mixed: bool) -> Response {
+    crate::prefs_search::note_unlabelled(ui, &[label]);
+    if crate::prefs_search::querying(ui) && !crate::prefs_search::visible(ui, &[label]) {
+        return crate::prefs_search::hidden_response(ui);
+    }
     let t = Tokens::get();
     let font = egui::FontId::proportional(t.font_label);
     let galley = ui.painter().layout_no_wrap(label.to_owned(), font.clone(), t.form_ink);
@@ -54,6 +69,8 @@ pub(crate) fn checkbox_indeterminate(ui: &mut Ui, label: &str, value: &mut bool,
     let width = (t.space_14 + gap + galley.size().x).max(ui.spacing().interact_size.y).min(super::metrics::dimension(ui.available_width()));
     let height = ui.spacing().interact_size.y.max(t.space_14).max(galley.size().y);
     let (rect, mut response) = ui.allocate_exact_size(vec2(width, height), egui::Sense::click());
+    crate::prefs_search::remember(ui, label, rect);
+    crate::prefs_search::follow(ui, label, rect);
     if response.clicked() {
         *value = mixed || !*value;
         response.mark_changed();
