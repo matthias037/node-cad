@@ -77,7 +77,10 @@ pub(crate) fn icon_of(k: &FeatureKind) -> &'static str {
         FeatureKind::Sphere { .. } => "sphere",
         FeatureKind::Torus { .. } => "torus",
         FeatureKind::Combine { .. } => "combine",
-        FeatureKind::Pattern { pattern: solidcraft_engine::doc::PatternKind::Rectangular { .. }, .. } => "pattern_rect",
+        FeatureKind::Pattern {
+            pattern: solidcraft_engine::doc::PatternKind::Rectangular { .. } | solidcraft_engine::doc::PatternKind::Faces { .. },
+            ..
+        } => "pattern_rect",
         FeatureKind::Pattern { pattern: solidcraft_engine::doc::PatternKind::Path { .. }, .. } => "pattern_path",
         FeatureKind::Pattern { .. } => "pattern_circ",
         FeatureKind::Mirror { .. } => "mirror",
@@ -268,8 +271,22 @@ pub(crate) fn status_text(name: &str, ty: &str, error: Option<&str>, warning: Op
     }
     if let Some(warning) = warning {
         text.push_str(&format!("\nWarning: {warning}"));
+        text.push_str(&format!("\n{}", crate::i18n::tr_label(warning_hint(warning))));
     }
     text
+}
+
+/// What a feature's warning (its yellow mark) means and what to do about it, in plain words.
+fn warning_hint(warning: &str) -> &'static str {
+    if warning.contains("Boolean retry") {
+        "The yellow mark: the bodies meet on faces that coincide exactly or almost, so the result was found by a tiny shift and may differ slightly from the exact shape. Move one sketch or body by 0.01 mm, or extend it into the other body."
+    } else if warning.contains("radius is reduced") || warning.contains("radius tapers") {
+        "The yellow mark: the radius did not fit everywhere and was made smaller. Check the rounded edges, or edit the feature to change the radius."
+    } else if warning.contains("no longer exists") || warning.contains("no longer on face") || warning.contains("any more") {
+        "The yellow mark: something this feature was built on has changed, and the closest match was used. Edit the feature (double-click) and pick it again."
+    } else {
+        "The yellow mark: the feature was built, but check it. Edit it (double-click) to see what it used; right-click › Copy Warning Message to share the message."
+    }
 }
 
 /// What a feature's error or warning mark says, as its tooltip shows it (name and type, then

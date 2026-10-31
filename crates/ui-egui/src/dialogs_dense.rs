@@ -48,6 +48,7 @@ pub(super) fn command(kind: &Kind) -> Option<&'static str> {
         Kind::Align { .. } => Some("solid.align"),
         Kind::Remove => Some("solid.remove"),
         Kind::PathPattern { .. } => Some("solid.pattern.path"),
+        Kind::FacePattern { .. } => Some("solid.pattern.faces"),
         Kind::Combine { .. } => Some("solid.combine"),
         Kind::Rib { web, .. } => Some(if *web { "solid.web" } else { "solid.rib" }),
         Kind::Primitive { cmd, .. } => Some(cmd),
@@ -704,6 +705,7 @@ fn additional_rows(app: &mut SolveApp, d: &mut Dialog, ui: &mut egui::Ui) -> boo
                 enter |= expr_row(ui, l, v);
             }
         }
+        Kind::FacePattern { angle } => enter |= expr_row(ui, "Angle", angle),
         Kind::Pipe { diameter, wall } => {
             enter |= expr_row(ui, "Diameter", diameter);
             enter |= hint_row(ui, "Wall", wall, tr("solid"));

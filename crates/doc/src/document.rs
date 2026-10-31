@@ -2055,6 +2055,16 @@ pub enum PatternKind {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         orient: bool,
     },
+    /// Copies onto other flat faces: what sits on face `from` is carried onto each face of
+    /// `faces`, centre to centre, turned the least that brings one face onto the other (as a
+    /// cube rolls), then turned by `angle` about that face's normal.
+    Faces {
+        from: FacePick,
+        faces: Vec<FacePick>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[walk(angle = "Angle")]
+        angle: Option<Expr>,
+    },
 }
 
 fn default_pattern_alignment(alignment: &solidcraft_sketch::PatternAlignment) -> bool {
@@ -2156,6 +2166,7 @@ impl FeatureKind {
             FeatureKind::Combine { .. } => "CombineFeature",
             FeatureKind::Pattern { pattern: PatternKind::Rectangular { .. }, .. } => "RectangularPatternFeature",
             FeatureKind::Pattern { pattern: PatternKind::Path { .. }, .. } => "PathPatternFeature",
+            FeatureKind::Pattern { pattern: PatternKind::Faces { .. }, .. } => "FacePatternFeature",
             FeatureKind::Pattern { .. } => "CircularPatternFeature",
             FeatureKind::Mirror { .. } => "MirrorFeature",
             FeatureKind::ConstructionPlane { .. } => "ConstructionPlane",
@@ -2236,6 +2247,7 @@ impl FeatureKind {
             FeatureKind::Combine { .. } => "Combine",
             FeatureKind::Pattern { pattern: PatternKind::Rectangular { .. }, .. } => "RectangularPattern",
             FeatureKind::Pattern { pattern: PatternKind::Path { .. }, .. } => "PathPattern",
+            FeatureKind::Pattern { pattern: PatternKind::Faces { .. }, .. } => "FacePattern",
             FeatureKind::Pattern { .. } => "CircularPattern",
             FeatureKind::Mirror { .. } => "Mirror",
             FeatureKind::ConstructionPlane { .. } => "Plane",

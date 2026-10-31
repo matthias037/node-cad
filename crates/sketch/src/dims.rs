@@ -10,7 +10,7 @@
 
 use solidcraft_geom::Vec2;
 
-use crate::model::{ConstraintKind, CurveKind, Sketch};
+use crate::model::{ConstraintKind, CurveKind, RoundEnd, Sketch};
 use crate::union_find::{find, union};
 
 /// What a dimension measures, in a form that can be drawn.
@@ -93,16 +93,29 @@ pub fn dim_frame(sk: &Sketch, k: &ConstraintKind) -> Option<DimFrame> {
             let p0 = if matches!(k, LinearDiameter { .. }) { foot * 2.0 - q } else { foot };
             DimFrame::Linear { p0, p1: q, dir: unit(q - foot, d.perp()) }
         }
-        LineCircleDistance { l, c, .. } => {
+        LineCircleDistance { l, c, far, .. } => {
             // From the line to the circle's edge point nearest it (beyond it when the line cuts
-            // the circle), along the line's normal.
+            // the circle), or with `far` farthest from it, along the line's normal.
             let (a, b) = line_ends(sk, l)?;
             let (centre, r) = (sk.center(c)?, sk.radius(c)?);
             let d = unit(b - a, Vec2::X);
             let normal = unit(centre - (a + d * (centre - a).dot(d)), d.perp());
-            let p1 = centre - normal * r;
+            let p1 = if far { centre + normal * r } else { centre - normal * r };
             let p0 = a + d * (p1 - a).dot(d);
             DimFrame::Linear { p0, p1, dir: unit(p1 - p0, normal) }
+        }
+        RoundDistance { a, b, .. } => {
+            // Along the line through the two centres, from edge to edge as each end is measured.
+            let end = |e: RoundEnd| -> Option<(Vec2, f64)> {
+                Some(match e {
+                    RoundEnd::Point(p) => (sk.point(p)?, 0.0),
+                    RoundEnd::Near(c) => (sk.center(c)?, sk.radius(c)?),
+                    RoundEnd::Far(c) => (sk.center(c)?, -sk.radius(c)?),
+                })
+            };
+            let ((ca, ra), (cb, rb)) = (end(a)?, end(b)?);
+            let dir = unit(cb - ca, Vec2::X);
+            DimFrame::Linear { p0: ca + dir * ra, p1: cb - dir * rb, dir }
         }
         Radius { c, .. } | Diameter { c, .. } => {
             let (radius, arc) = match sk.curves.get(c)?.kind {

@@ -63,6 +63,10 @@ pub static COMMANDS: &[CommandSpec] = &[
         .at("SOLID", "CREATE")
         .icon("pattern_path")
         .params("features: [names] | bodies: [names]; path_sketch: sketch; path: [curve ids in order]; count; spacing (between instances) | distance (first to last); orientation?: identical|path; flip?: bool"),
+    CommandSpec::new("solid.pattern.faces", "Pattern on Faces", pattern_faces)
+        .at("SOLID", "CREATE")
+        .icon("pattern_rect")
+        .params("features: [names] | bodies: [names]; faces: [[x,y,z] on flat faces]: a copy goes on each, where the originals sit on their own face (centre to centre), turned the least that brings that face onto it, as a cube rolls (a die's dots on its other faces, no 3D sketch); from?: [x,y,z] on the face the originals sit on (default: the face of the first feature's sketch, or of a hole); angle?: turn of each copy about its face's normal (default 0 deg)"),
     CommandSpec::new("solid.mirror", "Mirror", mirror).at("SOLID", "CREATE").icon("mirror").params("features: [names] | bodies: [names] (combine?: join with the original); plane: XY|XZ|YZ|construction plane name or id|{origin, normal}|{origin, x_dir, y_dir} (origin coordinates may be length expressions; the mirror follows them, or a construction plane)"),
     CommandSpec::new("solid.hole", "Hole", hole)
         .at("SOLID", "CREATE")
@@ -1638,6 +1642,63 @@ fn pattern_path(s: &mut Session, p: &Value) -> Result<Value> {
     let flip = bool_(p, "flip").unwrap_or(false);
     let pattern = solidcraft_doc::PatternKind::Path { path_sketch: SketchId(path_sketch), path, count, spacing, extent, flip, orient };
     finish_pattern(s, p, features, pattern, bodies)
+}
+
+fn pattern_faces(s: &mut Session, p: &Value) -> Result<Value> {
+    let cmd = "solid.pattern.faces";
+    let (features, bodies) = pattern_sources(s, p, cmd)?;
+    let faces: Vec<Vec3> = match p.get("faces") {
+        Some(Value::Array(a)) if !a.is_empty() && a.len() <= 1000 => {
+            a.iter().map(|v| vec3(v).ok_or_else(|| bad(cmd, "`faces` must list [x, y, z] points on faces"))).collect::<Result<_>>()?
+        }
+        _ => return Err(bad(cmd, "`faces` must list 1…1000 [x, y, z] points on the faces to copy onto")),
+    };
+    let from = match p.get("from") {
+        Some(v) => vec3(v).ok_or_else(|| bad(cmd, "`from` must be [x, y, z] on the face the originals sit on"))?,
+        None => source_face_point(s, &features).ok_or_else(|| {
+            bad(cmd, "give `from`: a point on the face the originals sit on (found by itself only for a sketch's or a hole's face)")
+        })?,
+    };
+    let angle = expr(p, "angle");
+    if let Some(a) = &angle {
+        check_expr(s, a, Kind::Angle, cmd, "angle")?;
+    }
+    let pattern = solidcraft_doc::PatternKind::Faces { from: FacePick(from), faces: faces.into_iter().map(FacePick).collect(), angle };
+    // Each face must be found and flat before the feature is made.
+    solidcraft_doc::pattern_matrices(&s.doc, &s.model.state(), &pattern).map_err(|e| bad(cmd, e.to_string()))?;
+    finish_pattern(s, p, features, pattern, bodies)
+}
+
+/// A point on the flat face the first of `features` was made on: the face its sketch lies on,
+/// or the face a hole starts from. The point is on the face's material (a triangle's centre),
+/// not where the feature took it away.
+fn source_face_point(s: &Session, features: &[String]) -> Option<Vec3> {
+    let st = s.model.state();
+    let f = s.doc.find_feature(features.first()?)?;
+    let (at, normal) = match &f.kind {
+        FeatureKind::Hole { position, direction, .. } => (position.0, direction.0),
+        kind => {
+            let sketch = kind.profile_sels().first().map(|(sketch, _)| *sketch)?;
+            let plane = st.sketch(sketch)?.plane;
+            (plane.origin, plane.normal())
+        }
+    };
+    let n = normal.normalized()?;
+    // The flat face in that plane with the most area, on any body.
+    let mut best: Option<(f64, usize, usize)> = None;
+    for (bi, b) in st.bodies.iter().enumerate().filter(|(_, b)| !b.body.is_mesh()) {
+        let tol = (b.body.size() * 1e-3).max(1e-3);
+        for face in b.body.faces(tol).ok()? {
+            let Some(fnrm) = face.plane_normal else { continue };
+            if fnrm.cross(n).len() < 1e-6 && (face.centroid - at).dot(n).abs() < tol * 10.0 && best.is_none_or(|(area, ..)| face.area > area) {
+                best = Some((face.area, bi, face.index));
+            }
+        }
+    }
+    let (_, bi, fi) = best?;
+    let mesh = st.bodies.get(bi)?.mesh();
+    let tri = mesh.triangles.iter().zip(&mesh.tri_face).find(|(_, f)| **f as usize == fi).and_then(|(t, _)| mesh.tri(t))?;
+    Some((tri[0] + tri[1] + tri[2]) / 3.0)
 }
 
 fn mirror(s: &mut Session, p: &Value) -> Result<Value> {

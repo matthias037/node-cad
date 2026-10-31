@@ -604,3 +604,69 @@ fn copies_of_a_join_that_merged_its_targets_join_the_merged_body() {
         assert!(rel(volume(&mut s), v0 + n * (v1 - v0)) < 1e-3, "{id}: {} vs {}", volume(&mut s), v0 + n * (v1 - v0));
     }
 }
+
+/// The other five faces of a 20 mm cube (points on them, away from their centres).
+const OTHER_FACES: [[f64; 3]; 5] = [[0.0, 3.0, 3.0], [20.0, 3.0, 3.0], [3.0, 0.0, 3.0], [3.0, 20.0, 3.0], [3.0, 3.0, 0.0]];
+
+/// A die: a dot made on the top face goes onto the five other faces, without a 3D sketch.
+#[test]
+fn a_dot_goes_onto_the_other_faces_of_a_cube() {
+    // A hole: its face is found by itself.
+    let mut s = Session::default();
+    run(&mut s, "solid.box", json!({"length": 20, "width": 20, "height": 20}));
+    let cube = volume(&mut s);
+    run(&mut s, "solid.hole", json!({"position": [10, 10, 20], "diameter": 4, "depth": 2, "name": "Dot"}));
+    let dot = cube - volume(&mut s);
+    assert!(dot > 1.0, "{dot}");
+    let r = run(&mut s, "solid.pattern.faces", json!({"features": ["Dot"], "faces": OTHER_FACES}));
+    assert_eq!(r["name"], "FacePattern1", "{r}");
+    assert!(rel(cube - volume(&mut s), 6.0 * dot) < 1e-3, "each face has its dot, into the material: {}", cube - volume(&mut s));
+    // A dot cut from a sketch on the top face, off its centre: the face comes from the sketch,
+    // and each copy sits at the same place on its face, turned as the cube rolls.
+    let mut s = Session::default();
+    run(&mut s, "solid.box", json!({"length": 20, "width": 20, "height": 20}));
+    run(&mut s, "sketch.create", json!({"plane": "XY", "offset": 20, "name": "DotSketch"}));
+    run(&mut s, "sketch.circle.center", json!({"center": [15, 15], "radius": 2}));
+    run(&mut s, "sketch.finish", json!({}));
+    run(&mut s, "solid.extrude", json!({"sketch": "DotSketch", "distance": 2, "direction": "reverse", "operation": "cut", "name": "Dot"}));
+    let dot = cube - volume(&mut s);
+    assert!(rel(dot, PI * 4.0 * 2.0) < 1e-3, "{dot}");
+    run(&mut s, "solid.pattern.faces", json!({"features": ["Dot"], "faces": OTHER_FACES}));
+    assert!(rel(cube - volume(&mut s), 6.0 * dot) < 1e-3, "{}", cube - volume(&mut s));
+    // Onto +X the top rolls about Y: (15, 15, 20) is 5, 5 off the top's centre, so the copy is
+    // at (20, 15, 5).
+    let pattern = s.doc.features.last().map(|f| f.kind.clone()).unwrap();
+    let solidcraft_doc::FeatureKind::Pattern { pattern, .. } = pattern else { panic!("{pattern:?}") };
+    let mats = solidcraft_doc::pattern_matrices(&s.doc, &s.model.state(), &pattern).unwrap();
+    let on_x = mats[1];
+    let at = |m: [[f64; 4]; 4], p: [f64; 3]| [0, 1, 2].map(|r| m[0][r] * p[0] + m[1][r] * p[1] + m[2][r] * p[2] + m[3][r]);
+    let q = at(on_x, [15.0, 15.0, 20.0]);
+    assert!((q[0] - 20.0).abs() < 1e-6 && (q[1] - 15.0).abs() < 1e-6 && (q[2] - 5.0).abs() < 1e-6, "{q:?}");
+    // The face of the originals gets no copy, and a missing face says so.
+    let err = s.execute("solid.pattern.faces", &json!({"features": ["Dot"], "faces": [[5, 5, 20]], "from": [5, 5, 20]})).unwrap_err().to_string();
+    assert!(err.contains("other than"), "{err}");
+    let err = s.execute("solid.pattern.faces", &json!({"features": ["Dot"], "faces": [[50, 50, 50]]})).unwrap_err().to_string();
+    assert!(err.contains("no face"), "{err}");
+}
+
+/// The copies follow their faces: the cube grows, the dots stay at the faces' centres.
+#[test]
+fn the_dots_follow_their_faces_when_the_cube_changes() {
+    let mut s = Session::default();
+    run(&mut s, "solid.box", json!({"length": 20, "width": 20, "height": 20, "name": "Cube"}));
+    run(&mut s, "solid.hole", json!({"position": [10, 10, 20], "diameter": 4, "depth": 2, "name": "Dot"}));
+    run(&mut s, "solid.pattern.faces", json!({"features": ["Dot"], "faces": OTHER_FACES}));
+    let height = s.doc.find_feature("Cube").unwrap().param_names[2].clone();
+    run(&mut s, "parameters.change", json!({"name": height, "expression": "30 mm"}));
+    let cube = 20.0 * 20.0 * 30.0;
+    let removed = cube - volume(&mut s);
+    // The hole on top moved with the top face; all six dots still cut.
+    let one = {
+        let mut t = Session::default();
+        run(&mut t, "solid.box", json!({"length": 20, "width": 20, "height": 30}));
+        let before = volume(&mut t);
+        run(&mut t, "solid.hole", json!({"position": [10, 10, 30], "diameter": 4, "depth": 2}));
+        before - volume(&mut t)
+    };
+    assert!(rel(removed, 6.0 * one) < 1e-3, "{removed} vs {}", 6.0 * one);
+}

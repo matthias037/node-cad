@@ -21,7 +21,9 @@ pub static COMMANDS: &[CommandSpec] = &[
         "format?: A4|A3|A2|A1|A0 (default: the smallest that fits at 1:1, A3 at most unless asked); orientation?: landscape|portrait \
          (default landscape); projection?: first_angle|third_angle (default first_angle, ISO E); views?: [front, top, left|right, iso] \
          (default all four); scale?: \"1:2\" (default: the largest standard scale that fits); hidden?: dashed|omit (default dashed); \
-         dimensions?: true (overall sizes and hole callouts); title?: {titre, numero, matiere, masse, auteur, date, tolerance} \
+         dimensions?: true (overall sizes and hole callouts); sketch_dimensions?: true (the driving dimensions of the sketches the \
+         features are made from, in the view that sees each sketch face-on, placed as in the sketch; an overall size or a hole \
+         callout they repeat is not drawn twice); title?: {titre, numero, matiere, masse, auteur, date, tolerance} \
          (the title block; tolerance default \"ISO 2768-m\"). Projects the visible bodies, keeps the drawing in the session \
          (drawing.export writes it) and returns the sheet: format, scale, views with their line counts, dimensions and warnings",
     ),
@@ -262,6 +264,99 @@ fn linear(a: [f64; 2], b: [f64; 2], vertical: bool, at: f64, value: f64) -> Dim 
     }
 }
 
+/// The driving dimensions of the sketches the features are made from, for a view that sees them
+/// face-on (`back`, the way the view looks): a length placed as in the sketch (on the side and
+/// at the distance its value was put, at least 7 mm off the geometry on paper), a radius or a
+/// diameter by a leader. Each sketch goes in the first view that sees it (`done`); angles and arc
+/// lengths are counted in `left`. With each dimension, the value it gives and, for a length, the
+/// model direction it measures along.
+fn sketch_dims(
+    s: &Session,
+    back: Vec3,
+    scale: f64,
+    flat: &dyn Fn(Vec3) -> [f64; 2],
+    done: &mut Vec<u64>,
+    left: &mut usize,
+) -> Vec<(Dim, f64, Option<Vec3>)> {
+    use solidcraft_sketch::DimFrame;
+    let st = s.world_state();
+    let used: std::collections::BTreeSet<u64> =
+        s.doc.features.iter().flat_map(|f| f.kind.profile_sels().into_iter().map(|(sketch, _)| sketch)).collect();
+    let mut out = Vec::new();
+    for ss in st.sketches.iter().filter(|ss| used.contains(&ss.feature)) {
+        if done.contains(&ss.feature) || ss.plane.normal().dot(back).abs() < 0.999 {
+            continue;
+        }
+        done.push(ss.feature);
+        let sk = &ss.sketch;
+        let on_sheet = |q: Vec2| flat(ss.plane.to_world(q));
+        // A dimension whose value was never moved goes away from the middle of the sketch.
+        let points: Vec<Vec2> = sk.points.iter().map(|q| q.pos).collect();
+        let middle = points.iter().fold(Vec2::ZERO, |a, q| a + *q) * (1.0 / points.len().max(1) as f64);
+        for c in sk.constraints.iter().filter(|c| !c.driven && c.kind.is_dimension()).take(2_000) {
+            let (Some(frame), Some(value)) = (solidcraft_sketch::dim_frame(sk, &c.kind), solidcraft_sketch::measure_dimension(sk, &c.kind)) else {
+                continue;
+            };
+            match frame {
+                DimFrame::Linear { p0, p1, dir } => {
+                    let n = dir.perp();
+                    let m = (p0 + p1) * 0.5;
+                    let placed = c.text.or_else(|| solidcraft_sketch::default_text(&frame, middle, 1.0)).unwrap_or(Vec2::new(0.0, 1.0));
+                    let h = if placed.y < 0.0 { -1.0 } else { 1.0 } * placed.y.abs().max(7.0 / scale);
+                    let (q0, q1) = (p0 + n * (h - (p0 - m).dot(n)), p1 + n * (h - (p1 - m).dot(n)));
+                    let (a, b, qa, qb) = (on_sheet(p0), on_sheet(p1), on_sheet(q0), on_sheet(q1));
+                    // Extension lines from the geometry to 2 mm past the dimension line.
+                    let ext = |p: [f64; 2], q: [f64; 2]| {
+                        let (dx, dy) = (q[0] - p[0], q[1] - p[1]);
+                        let l = dx.hypot(dy);
+                        (l > 1e-9).then(|| line(p, [q[0] + dx / l * 2.0, q[1] + dy / l * 2.0]))
+                    };
+                    let mut angle = (qb[1] - qa[1]).atan2(qb[0] - qa[0]).to_degrees();
+                    if angle > 90.0 + 1e-6 {
+                        angle -= 180.0;
+                    } else if angle <= -90.0 + 1e-6 {
+                        angle += 180.0;
+                    }
+                    // The text sits over the line, as the overall sizes have it.
+                    let up = [-angle.to_radians().sin(), angle.to_radians().cos()];
+                    let mid = [(qa[0] + qb[0]) / 2.0, (qa[1] + qb[1]) / 2.0];
+                    let d = Dim {
+                        kind: "linear".into(),
+                        line: line(qa, qb),
+                        ext: [ext(a, qa), ext(b, qb)].into_iter().flatten().collect(),
+                        arrows: 2,
+                        text: mm(value),
+                        text_at: [mid[0] + up[0] * 1.5, mid[1] + up[1] * 1.5],
+                        text_angle: angle,
+                    };
+                    out.push((d, value, ss.plane.dir_to_world(dir).normalized()));
+                }
+                DimFrame::Radial { center, radius, diameter, .. } => {
+                    // A leader from the edge, up and to the right, as the hole callouts.
+                    let c = on_sheet(center);
+                    let r = radius * scale;
+                    let a = [c[0] + r * std::f64::consts::FRAC_1_SQRT_2, c[1] + r * std::f64::consts::FRAC_1_SQRT_2];
+                    let knee = [a[0] + 6.0, a[1] + 6.0];
+                    let text = if diameter { format!("Ø{}", mm(value)) } else { format!("R{}", mm(value)) };
+                    let end = [knee[0] + text.chars().count() as f64 * TEXT * 0.62, knee[1]];
+                    let d = Dim {
+                        kind: if diameter { "diameter" } else { "radius" }.into(),
+                        line: line(a, knee),
+                        ext: vec![line(knee, end)],
+                        arrows: 1,
+                        text,
+                        text_at: [(knee[0] + end[0]) / 2.0, knee[1] + 1.0],
+                        text_angle: 0.0,
+                    };
+                    out.push((d, value, None));
+                }
+                DimFrame::Angular { .. } | DimFrame::ArcLength { .. } => *left += 1,
+            }
+        }
+    }
+    out
+}
+
 /// A library material as a French title block writes it (a design's own names as they are).
 fn french_material(name: &str) -> String {
     match name {
@@ -399,6 +494,11 @@ fn create(s: &mut Session, p: &Value) -> Result<Value> {
     let mut dims = Vec::new();
     let all_holes = if p.get("dimensions").and_then(Value::as_bool).unwrap_or(true) { holes(s) } else { Vec::new() };
     let show_dims = p.get("dimensions").and_then(Value::as_bool).unwrap_or(true);
+    let with_sketch_dims = p.get("sketch_dimensions").and_then(Value::as_bool).unwrap_or(true);
+    let (mut sketches_done, mut angles_left) = (Vec::new(), 0usize);
+    // The overall sizes (with the model direction they measure) and the sketches' dimensions,
+    // put on the sheet once every view is made: a size a sketch dimension gives is not repeated.
+    let (mut overall, mut imported): (Vec<(Dim, f64, Vec3)>, Vec<(Dim, f64, Option<Vec3>)>) = (Vec::new(), Vec::new());
     let mut called: Vec<usize> = Vec::new();
     for v in &proj {
         let Some(at) = place(v.name) else { continue };
@@ -468,6 +568,12 @@ fn create(s: &mut Session, p: &Value) -> Result<Value> {
                 }
             }
             if show_dims {
+                // The sketches' own dimensions, but a diameter a hole callout gives with its count.
+                if with_sketch_dims {
+                    let mut these = sketch_dims(s, back, scale, &flat, &mut sketches_done, &mut angles_left);
+                    these.retain(|(d, value, _)| !(d.kind == "diameter" && groups.iter().any(|g| (g.0 - value).abs() < 1e-3)));
+                    imported.extend(these);
+                }
                 // Hole callouts: a leader from the first hole of each size, up and to the right.
                 for (diameter, centres, _) in &groups {
                     let c = centres[0];
@@ -490,15 +596,22 @@ fn create(s: &mut Session, p: &Value) -> Result<Value> {
                 let model = [v.hi[0] - v.lo[0], v.hi[1] - v.lo[1]];
                 match v.name {
                     "front" => {
-                        dims.push(linear([lo[0], lo[1]], [hi[0], lo[1]], false, lo[1] - 9.0, model[0]));
-                        dims.push(linear([lo[0], lo[1]], [lo[0], hi[1]], true, lo[0] - 9.0, model[1]));
+                        overall.push((linear([lo[0], lo[1]], [hi[0], lo[1]], false, lo[1] - 9.0, model[0]), model[0], right));
+                        overall.push((linear([lo[0], lo[1]], [lo[0], hi[1]], true, lo[0] - 9.0, model[1]), model[1], up));
                     }
-                    "top" => dims.push(linear([lo[0], lo[1]], [lo[0], hi[1]], true, lo[0] - 9.0, model[1])),
+                    "top" => overall.push((linear([lo[0], lo[1]], [lo[0], hi[1]], true, lo[0] - 9.0, model[1]), model[1], up)),
                     _ => {}
                 }
             }
         }
         views.push(out);
+    }
+    let repeated =
+        |value: f64, along: Vec3| imported.iter().any(|(_, v, dir)| dir.is_some_and(|d| d.dot(along).abs() > 0.999) && (v - value).abs() < 0.005);
+    dims.extend(overall.into_iter().filter(|(_, value, along)| !repeated(*value, *along)).map(|(d, ..)| d));
+    dims.extend(imported.into_iter().map(|(d, ..)| d));
+    if angles_left > 0 {
+        warnings.push(format!("{angles_left} angle or arc length dimension(s) of the sketches are not drawn"));
     }
     let t = p.get("title").cloned().unwrap_or(Value::Null);
     let field = |k: &str, d: &str| t.get(k).and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| d.to_string());

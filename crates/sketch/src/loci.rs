@@ -34,7 +34,7 @@
 
 use solidcraft_geom::Vec2;
 
-use crate::model::{ConstraintKind, CurveKind, MAX_COORD, Sketch, in_range, radius_in_range};
+use crate::model::{ConstraintKind, CurveKind, MAX_COORD, RoundEnd, Sketch, in_range, radius_in_range};
 use crate::union_find::{find, union};
 
 /// Two intersections closer than this (relative to the size of the loci: radii, centre
@@ -888,9 +888,15 @@ pub(crate) fn read(sk: &Sketch, before: &dyn Fn(usize) -> Option<Vec2>, on_curve
                 }
             }
             // The centre lies radius ± the gap from the line, on its side in the reference.
-            LineCircleDistance { l, c, value, inside } if line(l).is_some() => {
+            LineCircleDistance { l, c, value, inside, far } if line(l).is_some() => {
                 if let (Some(rd), Some(r)) = (round(c), r_of(c))
-                    && let Some(d) = dim(if inside { r - value } else { r + value })
+                    && let Some(d) = dim(if far {
+                        value - r
+                    } else if inside {
+                        r - value
+                    } else {
+                        r + value
+                    })
                 {
                     ties.push(Tie::Offset { p: rd.c, l, len: Len::Value(d) });
                 }
@@ -931,6 +937,19 @@ pub(crate) fn read(sk: &Sketch, before: &dyn Fn(usize) -> Option<Vec2>, on_curve
                     && let Some(d) = dim(value - r1 - r2)
                 {
                     rel(k1.c, k2.c, Rel::Dist(d));
+                }
+            }
+            // The centres lie the value apart, less the far radii, plus the near ones.
+            RoundDistance { a, b, value, inside } => {
+                let end = |e: RoundEnd| match e {
+                    RoundEnd::Point(p) => Some((p, 0.0)),
+                    RoundEnd::Near(c) => Some((round(c)?.c, -r_of(c)?)),
+                    RoundEnd::Far(c) => Some((round(c)?.c, r_of(c)?)),
+                };
+                if let (Some((p, ra)), Some((q, rb))) = (end(a), end(b))
+                    && let Some(d) = dim(if inside { -value } else { value } - ra - rb)
+                {
+                    rel(p, q, Rel::Dist(d));
                 }
             }
             Midpoint { p, l } if p < n => {

@@ -306,10 +306,24 @@ pub enum ConstraintKind {
     /// Distance from line `l` to the edge of circle or arc `c`, along the line's normal: the
     /// gap `|distance from the centre to the line| − radius` while the line misses the circle,
     /// or, `inside`, how far the edge reaches past the line, `radius − |distance|`, while the
-    /// line cuts it. Zero is tangency either way. An arc is measured to its whole circle.
+    /// line cuts it. Zero is tangency either way. With `far`, to the edge on the other side of
+    /// the centre, `|distance| + radius`. An arc is measured to its whole circle.
     LineCircleDistance {
         l: usize,
         c: usize,
+        value: f64,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        inside: bool,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        far: bool,
+    },
+    /// Distance between two ends, points or circles and arcs, measured along the line through
+    /// their centres: centre to centre, less each radius measured to its near edge, plus each
+    /// radius measured to its far edge (the arc conditions min and max). `inside` measures it
+    /// the other way, for edges that reach past each other.
+    RoundDistance {
+        a: RoundEnd,
+        b: RoundEnd,
         value: f64,
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         inside: bool,
@@ -392,6 +406,7 @@ impl ConstraintKind {
             | DistanceY { value, .. }
             | PointLineDistance { value, .. }
             | LineCircleDistance { value, .. }
+            | RoundDistance { value, .. }
             | Length { value, .. }
             | LineAngle { value, .. }
             | ArcSweep { value, .. }
@@ -413,6 +428,7 @@ impl ConstraintKind {
             | DistanceY { value, .. }
             | PointLineDistance { value, .. }
             | LineCircleDistance { value, .. }
+            | RoundDistance { value, .. }
             | Length { value, .. }
             | LineAngle { value, .. }
             | ArcSweep { value, .. }
@@ -446,9 +462,13 @@ impl ConstraintKind {
             Midpoint { .. } => "MidPoint",
             Symmetric { .. } => "Symmetry",
             Fix { .. } => "Fix",
-            Distance { .. } | DistanceX { .. } | DistanceY { .. } | PointLineDistance { .. } | LineCircleDistance { .. } | Length { .. } => {
-                "LinearDimension"
-            }
+            Distance { .. }
+            | DistanceX { .. }
+            | DistanceY { .. }
+            | PointLineDistance { .. }
+            | LineCircleDistance { .. }
+            | RoundDistance { .. }
+            | Length { .. } => "LinearDimension",
             Radius { .. } => "RadialDimension",
             Diameter { .. } => "DiameterDimension",
             Angle { .. } | LineAngle { .. } | ArcSweep { .. } => "AngularDimension",
@@ -482,6 +502,16 @@ impl ConstraintKind {
             Angle { a, b, .. } | SlotOverallLength { a, b, .. } => (vec![], vec![a, b]),
             Midpoint { p, l } | PointLineDistance { p, l, .. } => (vec![p], vec![l]),
             LineCircleDistance { l, c, .. } => (vec![], vec![l, c]),
+            RoundDistance { a, b, .. } => {
+                let (mut ps, mut cs) = (vec![], vec![]);
+                for e in [a, b] {
+                    match e {
+                        RoundEnd::Point(p) => ps.push(p),
+                        RoundEnd::Near(c) | RoundEnd::Far(c) => cs.push(c),
+                    }
+                }
+                (ps, cs)
+            }
             Symmetric { p, q, l } => (vec![p, q], vec![l]),
             Fix { p } => (vec![p], vec![]),
             Smooth { a, b } => (vec![], vec![a, b]),
@@ -549,6 +579,14 @@ impl ConstraintKind {
                 fc(l);
                 fc(c);
             }
+            RoundDistance { a, b, .. } => {
+                for e in [a, b] {
+                    match e {
+                        RoundEnd::Point(p) => fp(p),
+                        RoundEnd::Near(c) | RoundEnd::Far(c) => fc(c),
+                    }
+                }
+            }
             Symmetric { p, q, l } => {
                 fp(p);
                 fp(q);
@@ -568,6 +606,16 @@ impl ConstraintKind {
         }
         ok && ok2
     }
+}
+
+/// One end of a [`ConstraintKind::RoundDistance`]: a point (or a circle's centre point), or
+/// circle or arc `c` measured to its edge nearest the other end or farthest from it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RoundEnd {
+    Point(usize),
+    Near(usize),
+    Far(usize),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -992,6 +1040,17 @@ impl Sketch {
             LineCircleDistance { l, c, .. } => {
                 need_line(l)?;
                 need_round(c)?;
+            }
+            RoundDistance { a, b, .. } => {
+                if a == b {
+                    return Err(SketchError::Invalid("a distance needs two different ends".into()));
+                }
+                // Points are in range (checked above).
+                for e in [a, b] {
+                    if let RoundEnd::Near(c) | RoundEnd::Far(c) = e {
+                        need_round(c)?;
+                    }
+                }
             }
             Tangent { a, b } => {
                 let free = |i: usize| self.curves.get(i).is_some_and(|c| c.kind.is_freeform());

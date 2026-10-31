@@ -41,6 +41,7 @@ pub(crate) use face::{FaceRefForm, face_ref_form};
 pub(crate) use features::profiles as feature_profiles;
 pub(crate) use features::{EdgeRefForm, edge_ref_form, sketch_key};
 pub use features::{auto_operation, extrude_reach};
+pub use sketch::arc_conditions_of;
 pub use sketch_modify::trim_piece;
 pub use view_dxf::sketch::exportable as view_dxf_exportable;
 pub use view_dxf::drawing::{Mark as DrawingMark, Sheet as DrawingSheet, dxf as drawing_dxf, marks as drawing_marks, pdf as drawing_pdf, svg as drawing_svg};

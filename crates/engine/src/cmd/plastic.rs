@@ -34,7 +34,7 @@ pub static COMMANDS: &[CommandSpec] = &[
          delete?: bool (a design rule; a library rule goes back to the library values)",
     ),
     CommandSpec::new("plastic.assign_rule", "Assign Plastic Rule", assign_rule).at("PLASTIC", "SETUP").icon("plastic_assign").params(
-        "bodies: [names]; rule: name (empty: no rule) — plastic features on these bodies take its draft and clearance as defaults",
+        "bodies: [names]; rule: name (empty: no rule) — plastic features on these bodies take its draft and clearance as defaults; material?: bool (default true): the bodies also take the rule's physical material (ABS Plastic for an ABS rule) when the library has it. Returns material (what the bodies took, if any), draft_deg and clearance_mm",
     ),
     CommandSpec::new("plastic.rules", "List Plastic Rules", list_rules).icon("plastic_rule").noundo().params("→ rules with their expressions and values, the active rule and the rules assigned to bodies"),
 ];
@@ -131,6 +131,13 @@ fn assign_rule(s: &mut Session, p: &Value) -> Result<Value> {
     if !rule.is_empty() && s.doc.plastic_rule(&rule).is_none() {
         return Err(bad(cmd, format!("no plastic rule `{rule}` (plastic.rules lists them)")));
     }
+    // The rule's material goes on the bodies too, so assigning ABS makes them ABS (their look,
+    // their mass): "Nylon 6" is the library's Nylon.
+    let rule_def = s.doc.plastic_rule(&rule);
+    let material = rule_def.as_ref().filter(|_| bool_(p, "material").unwrap_or(true)).and_then(|r| {
+        let m = r.material.trim();
+        s.doc.material_name(m).or_else(|| m.split_whitespace().next().and_then(|first| s.doc.material_name(first)))
+    });
     let doc = s.doc_mut();
     for b in &bodies {
         if rule.is_empty() {
@@ -138,9 +145,20 @@ fn assign_rule(s: &mut Session, p: &Value) -> Result<Value> {
         } else {
             doc.plastic.assigned.insert(b.clone(), rule.clone());
         }
+        if let Some(m) = &material {
+            doc.materials.insert(b.clone(), m.clone());
+        }
     }
     s.refresh();
-    Ok(json!({"bodies": bodies, "rule": if rule.is_empty() { Value::Null } else { json!(rule) }}))
+    let (vals, _) = s.doc.param_values();
+    let values = rule_def.as_ref().and_then(|r| s.doc.plastic_values(&vals, r).ok());
+    Ok(json!({
+        "bodies": bodies,
+        "rule": if rule.is_empty() { Value::Null } else { json!(rule) },
+        "material": material,
+        "draft_deg": values.as_ref().map(|v| v.draft.to_degrees()),
+        "clearance_mm": values.as_ref().map(|v| v.clearance),
+    }))
 }
 
 fn list_rules(s: &mut Session, _p: &Value) -> Result<Value> {
@@ -541,7 +559,11 @@ mod tests {
         assert!(s.execute("plastic.manage_rules", &json!({"name": "Bad", "draft": "3 mm"})).is_err());
         // Assigned to the plate: a boss without a draft takes the rule's 1.5°.
         let body = run(&mut s, "inspect.measure", json!({}))["bodies"][0]["name"].as_str().unwrap_or_default().to_string();
-        run(&mut s, "plastic.assign_rule", json!({"bodies": [body], "rule": "Thick ABS"}));
+        let r = run(&mut s, "plastic.assign_rule", json!({"bodies": [body], "rule": "Thick ABS"}));
+        // The plate is ABS now, and the reply says what the features take.
+        assert_eq!(r["material"], "ABS Plastic", "{r}");
+        assert_eq!(s.doc.materials.get(&body).map(String::as_str), Some("ABS Plastic"));
+        assert!((r["draft_deg"].as_f64().unwrap() - 1.5).abs() < 1e-9, "{r}");
         run(&mut s, "plastic.boss", json!({"position": [30, 30, 3], "diameter": 10, "height": 12}));
         let rt = 5.0 - 12.0 * 1.5f64.to_radians().tan();
         let want = PI * 12.0 / 3.0 * (25.0 + 5.0 * rt + rt * rt);

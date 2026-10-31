@@ -805,6 +805,18 @@ impl SolveApp {
         let r = self.session.execute(id, &params).map_err(|e| e.to_string());
         self.big_operation |= now_ms() - t0 >= recovery_ui::BIG_OPERATION_MS;
         if let Ok(v) = &r {
+            // A plastic rule changes nothing in view: say what it did.
+            if id == "plastic.assign_rule"
+                && let Some(rule) = v.get("rule").and_then(Value::as_str)
+            {
+                let material = v.get("material").and_then(Value::as_str).map(|m| self.tr_label(m).to_string());
+                let draft = v.get("draft_deg").and_then(Value::as_f64).map(|d| format!("{}°", (d * 100.0).round() / 100.0)).unwrap_or_default();
+                let msg = match material {
+                    Some(m) => i18n::format("status.plastic_rule_material", &[("rule", rule), ("material", &m), ("draft", &draft)]),
+                    None => i18n::format("status.plastic_rule", &[("rule", rule), ("draft", &draft)]),
+                };
+                self.set_status(msg, false);
+            }
             if id == "view.layout" {
                 let layout =
                     if v.get("mode").and_then(Value::as_str) == Some("compact") { shell::LayoutMode::Docked } else { shell::LayoutMode::Floating };

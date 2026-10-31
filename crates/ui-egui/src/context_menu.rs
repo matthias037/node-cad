@@ -880,6 +880,21 @@ fn sketch_entity_items(app: &SolveApp) -> Vec<Item> {
         }
     }
     let mut v = Vec::new();
+    // A distance to a circle or arc: measured from its centre, its near edge or its far edge.
+    let dims: Vec<&String> =
+        app.session.selection.iter().filter_map(|s| if let Sel::SketchConstraint { id } = s { Some(id) } else { None }).collect();
+    if let [id] = dims[..]
+        && curves.is_empty()
+        && points.is_empty()
+        && let Some(now) =
+            ss.sketch.constraints.iter().find(|c| &c.id == id).and_then(|c| solidcraft_engine::cmd::arc_conditions_of(&ss.sketch, &c.kind))
+    {
+        for (cond, label) in [("center", "Dimension to Centre"), ("min", "Dimension Min (Near Edge)"), ("max", "Dimension Max (Far Edge)")] {
+            let current = now.iter().flatten().all(|n| *n == cond);
+            v.push(cmd(app, "sketch.dimension_condition", label).with(json!({ "dimension": id, "arc_condition": cond })).on(!current));
+        }
+        v.push(Item::sep());
+    }
     if curves.is_empty() && points.is_empty() {
         if crate::sketch_text::selected_entity(app).is_some() {
             v.push(cmd(app, "sketch.edit_text", "Edit Text"));
@@ -1507,6 +1522,14 @@ pub fn open(app: &mut SolveApp, at: Pos2) {
         && !matches!(sel, Sel::Plane { .. } | Sel::Axis { .. })
     {
         let _ = app.run("select.set", json!({ "items": [sel] }));
+    } else if app.session.active_sketch.is_some()
+        && let Some(id) = crate::dim_view::hit_text(at).or_else(|| app.viewport.hover.is_none().then(|| crate::dim_view::hit(at)).flatten())
+    {
+        // A dimension's text wins, as for clicks; its lines only off the geometry.
+        let sel = Sel::SketchConstraint { id };
+        if !app.session.selection.contains(&sel) {
+            let _ = app.run("select.set", json!({ "items": [sel] }));
+        }
     } else if app.session.active_sketch.is_some()
         && let Some(h) = app.viewport.hover.clone()
         && let Some((_, sel)) = crate::viewport::candidate(app, &[h])

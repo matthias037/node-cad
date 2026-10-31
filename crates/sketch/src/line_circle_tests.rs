@@ -30,7 +30,7 @@ fn kind_at(sk: &Sketch, k: usize) -> ConstraintKind {
 fn a_line_to_circle_distance_places_the_circle_its_gap_from_the_line() {
     let (mut sk, l, c, ci) = line_and_circle(v(20.0, 15.0), 5.0);
     let k = sk.constraints.len();
-    sk.add_constraint(ConstraintKind::LineCircleDistance { l, c, value: 10.0, inside: false }, None).unwrap();
+    sk.add_constraint(ConstraintKind::LineCircleDistance { l, c, value: 10.0, inside: false, far: false }, None).unwrap();
     // As drawn the gap is 15 − 5 = 10: the sketch already holds it.
     assert!((solver::measure_dimension(&sk, &kind_at(&sk, k)).unwrap() - 10.0).abs() < 1e-9);
     assert!(solve(&mut sk).ok());
@@ -51,7 +51,7 @@ fn a_line_to_circle_distance_places_the_circle_its_gap_from_the_line() {
 fn a_circle_below_the_line_stays_below_it() {
     let (mut sk, l, c, ci) = line_and_circle(v(20.0, -15.0), 5.0);
     let k = sk.constraints.len();
-    sk.add_constraint(ConstraintKind::LineCircleDistance { l, c, value: 10.0, inside: false }, None).unwrap();
+    sk.add_constraint(ConstraintKind::LineCircleDistance { l, c, value: 10.0, inside: false, far: false }, None).unwrap();
     assert!(solve(&mut sk).ok());
     sk.constraints[k].kind.set_value(3.0);
     assert!(solve(&mut sk).ok());
@@ -63,7 +63,7 @@ fn a_line_that_cuts_the_circle_measures_how_far_its_edge_reaches_past_it() {
     // Centre 3 above the line, radius 5: the edge reaches 5 − 3 = 2 below the line.
     let (mut sk, l, c, ci) = line_and_circle(v(20.0, 3.0), 5.0);
     let k = sk.constraints.len();
-    sk.add_constraint(ConstraintKind::LineCircleDistance { l, c, value: 2.0, inside: true }, None).unwrap();
+    sk.add_constraint(ConstraintKind::LineCircleDistance { l, c, value: 2.0, inside: true, far: false }, None).unwrap();
     assert!((solver::measure_dimension(&sk, &kind_at(&sk, k)).unwrap() - 2.0).abs() < 1e-9);
     assert!(solve(&mut sk).ok());
     // Reaching 4 past the line leaves the centre 5 − 4 = 1 above it.
@@ -79,7 +79,7 @@ fn an_arc_is_measured_to_its_circle() {
     let l = sk.add_line(v(0.0, 0.0), v(40.0, 0.0), None, None, None).unwrap();
     let a = sk.add_arc(v(20.0, 20.0), v(26.0, 20.0), v(14.0, 20.0), [None; 3], None).unwrap();
     let k = sk.constraints.len();
-    sk.add_constraint(ConstraintKind::LineCircleDistance { l, c: a, value: 14.0, inside: false }, None).unwrap();
+    sk.add_constraint(ConstraintKind::LineCircleDistance { l, c: a, value: 14.0, inside: false, far: false }, None).unwrap();
     // Centre 20 above the line, radius 6.
     assert!((solver::measure_dimension(&sk, &kind_at(&sk, k)).unwrap() - 14.0).abs() < 1e-9);
 }
@@ -91,17 +91,17 @@ fn the_dimension_needs_a_line_and_a_circle_or_arc() {
     let m = sk.add_line(v(0.0, 10.0), v(40.0, 10.0), None, None, None).unwrap();
     let c = sk.add_circle(v(20.0, 20.0), 5.0, None, None).unwrap();
     for (l, c) in [(m, l), (c, c), (c, l)] {
-        assert!(sk.add_constraint(ConstraintKind::LineCircleDistance { l, c, value: 1.0, inside: false }, None).is_err(), "{l} {c}");
+        assert!(sk.add_constraint(ConstraintKind::LineCircleDistance { l, c, value: 1.0, inside: false, far: false }, None).is_err(), "{l} {c}");
     }
     for value in [-1.0, f64::NAN, f64::INFINITY] {
-        assert!(sk.add_constraint(ConstraintKind::LineCircleDistance { l, c, value, inside: false }, None).is_err(), "{value}");
+        assert!(sk.add_constraint(ConstraintKind::LineCircleDistance { l, c, value, inside: false, far: false }, None).is_err(), "{value}");
     }
 }
 
 #[test]
 fn the_dimension_survives_a_round_trip_and_a_renumbering() {
     let (mut sk, l, c, _) = line_and_circle(v(20.0, 3.0), 5.0);
-    sk.add_constraint(ConstraintKind::LineCircleDistance { l, c, value: 2.0, inside: true }, None).unwrap();
+    sk.add_constraint(ConstraintKind::LineCircleDistance { l, c, value: 2.0, inside: true, far: false }, None).unwrap();
     let json = serde_json::to_value(&sk).unwrap();
     let saved = json["constraints"].as_array().unwrap().last().unwrap().clone();
     assert_eq!(saved["type"], "line_circle_distance", "{saved}");
@@ -109,7 +109,7 @@ fn the_dimension_survives_a_round_trip_and_a_renumbering() {
     let back: Sketch = serde_json::from_value(json).unwrap();
     assert_eq!(back.constraints, sk.constraints);
     // `inside` is left out when false.
-    let outside = ConstraintKind::LineCircleDistance { l, c, value: 2.0, inside: false };
+    let outside = ConstraintKind::LineCircleDistance { l, c, value: 2.0, inside: false, far: false };
     assert!(serde_json::to_value(&outside).unwrap().get("inside").is_none());
     let mut k = outside;
     assert!(k.remap(&|p| Some(p), &|i| Some(i + 10)));
@@ -125,7 +125,7 @@ fn the_seed_places_the_centre_by_construction() {
         let (mut sk, l, c, ci) = line_and_circle(drawn, 5.0);
         let (a, _) = sk.curves[l].kind.ends().unwrap();
         sk.add_constraint(ConstraintKind::DistanceX { p: a, q: ci, value: 20.0 }, None).unwrap();
-        sk.add_constraint(ConstraintKind::LineCircleDistance { l, c, value, inside }, None).unwrap();
+        sk.add_constraint(ConstraintKind::LineCircleDistance { l, c, value, inside, far: false }, None).unwrap();
         let out = crate::tests::seed_of(&sk);
         assert!(out.placed_by[ci].is_some_and(crate::construct::Placement::anchors), "{out:?}");
         assert!(out.pos[ci].unwrap().dist(want) < 1e-9, "{out:?}");

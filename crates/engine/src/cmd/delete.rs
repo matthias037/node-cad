@@ -1,5 +1,6 @@
 //! Delete for everything that can be selected, in one undo step: sketch entities (while
-//! sketching), timeline features and sketches (with the features that depend on them),
+//! sketching), a closed shape of a sketch or another sketch's curve (from that sketch, without
+//! opening it: a converted outline goes as it came), timeline features and sketches (with the features that depend on them),
 //! construction planes, bodies (a Remove feature from here on in the timeline), occurrences and
 //! components, canvases and joints. `dry_run` reports what would go and what would fail without
 //! changing anything, so the UI can ask first.
@@ -78,6 +79,8 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
         }
     };
     let mut entities = Vec::new();
+    // Curves of another sketch than the one being edited, by sketch.
+    let mut elsewhere: Vec<(u64, Vec<String>)> = Vec::new();
     let mut features: Vec<u64> = Vec::new();
     let mut bodies: Vec<String> = Vec::new();
     let mut faces: Vec<(String, Vec<Vec3>)> = Vec::new();
@@ -105,8 +108,20 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
                 None => faces.push((body.clone(), vec![*point])),
             },
             Sel::Edge { .. } | Sel::Vertex { .. } => skip("edges and vertices are deleted with their body or face".into()),
-            Sel::Profile { .. } => skip("a profile goes with its sketch".into()),
-            Sel::ExternalSketchCurve { .. } | Sel::ExternalSketchPoint { .. } => skip("edit the source sketch to delete its geometry".into()),
+            // A closed shape: the curves of its outline that no other shape of the sketch uses.
+            Sel::Profile { sketch, index } => match shape_curves(s, *sketch, *index) {
+                Some(ids) if !ids.is_empty() => match elsewhere.iter_mut().find(|(k, _)| k == sketch) {
+                    Some((_, v)) => v.extend(ids),
+                    None => elsewhere.push((*sketch, ids)),
+                },
+                _ => skip("that shape shares all its outline with others: edit its sketch to delete it".into()),
+            },
+            Sel::ExternalSketchCurve { sketch, id } | Sel::ExternalSketchPoint { sketch, id } => {
+                match elsewhere.iter_mut().find(|(k, _)| k == sketch) {
+                    Some((_, v)) => v.push(id.clone()),
+                    None => elsewhere.push((*sketch, vec![id.clone()])),
+                }
+            }
         }
     }
     features.dedup();
@@ -122,6 +137,14 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
             sub(s, "sketch.delete", json!({ "entities": entities }))?;
             done = true;
         }
+    }
+    // Another sketch's curves go without opening it (`sketch.delete` itself waits for an open sketch).
+    for (sketch, mut ids) in elsewhere {
+        ids.sort();
+        ids.dedup();
+        super::sketch::sketch_delete(s, &json!({ "sketch": sketch, "entities": ids }))?;
+        s.refresh();
+        done = true;
     }
     // Faces of a body that is going anyway are left to it; the rest become Delete Face features.
     for (body, points) in faces.iter().filter(|(b, _)| !bodies.contains(b)) {
@@ -190,6 +213,22 @@ fn apply(s: &mut Session, p: &Value) -> Result<Value> {
         .map(|r| r.name.clone())
         .collect();
     Ok(json!({ "deleted": deleted, "deleted_joints": joints, "bodies": bodies, "would_fail": would_fail, "skipped": skipped }))
+}
+
+/// The curves of shape `index` of sketch `sketch`'s outline that no other of its shapes uses
+/// (deleting them takes that shape away and leaves the others whole).
+fn shape_curves(s: &Session, sketch: u64, index: usize) -> Option<Vec<String>> {
+    let st = s.model.state();
+    let solved = st.sketch(sketch)?;
+    let profile = solved.profiles.get(index)?;
+    let others: std::collections::BTreeSet<&String> = solved
+        .profiles
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i != index)
+        .flat_map(|(_, p)| p.outer_curves.iter().chain(p.hole_curves.iter().flatten()))
+        .collect();
+    Some(profile.outer_curves.iter().filter(|c| !others.contains(c)).cloned().collect())
 }
 
 #[cfg(test)]
@@ -368,5 +407,27 @@ mod tests {
         let id = s.model.state().sketch(sk).unwrap().sketch.curves[0].id.clone();
         run(&mut s, "selection.delete", json!({"items": [{"type": "sketch_curve", "id": id}]}));
         assert!(s.model.state().sketch(sk).unwrap().sketch.curves.is_empty());
+    }
+
+    /// A converted outline is deleted from the 3D view as it was made, without opening its sketch:
+    /// the closed shape it makes is selected, and only that shape goes.
+    #[test]
+    fn a_converted_shape_goes_without_opening_its_sketch() {
+        let mut s = Session::default();
+        run(&mut s, "solid.box", json!({"length": 40, "width": 30, "height": 10}));
+        let sk = run(&mut s, "sketch.create", json!({"plane": "XY", "offset": 10}))["sketch"].as_u64().unwrap();
+        run(&mut s, "sketch.project", json!({"refs": [{"face": [20, 15, 10]}]}));
+        run(&mut s, "sketch.circle.center", json!({"center": [60, 15], "radius": 5}));
+        run(&mut s, "sketch.finish", json!({}));
+        let st = s.model.state();
+        let solved = st.sketch(sk).unwrap();
+        let index = solved.profiles.iter().position(|p| p.outer_curves.len() == 4).expect("the converted rectangle is a shape");
+        let total = solved.sketch.curves.len();
+        assert!(s.active_sketch.is_none());
+        let r = run(&mut s, "selection.delete", json!({"items": [{"type": "profile", "sketch": sk, "index": index}]}));
+        assert!(r["skipped"].as_array().unwrap().is_empty(), "{r}");
+        let left = s.model.state().sketch(sk).unwrap().sketch.curves.len();
+        assert_eq!(left, total - 4, "the four converted edges went, the circle stayed");
+        assert!(s.doc.feature(sk).is_some(), "the sketch stays");
     }
 }

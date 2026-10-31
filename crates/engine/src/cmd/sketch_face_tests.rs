@@ -737,3 +737,30 @@ fn a_sketch_on_a_face_meshes_its_body_once() {
     run(&mut s, "sketch.finish", json!({}));
     assert!(s.model.state().body("Base").unwrap().cached_mesh().is_some(), "the sketch's projection meshed a copy of the body");
 }
+
+/// A face picked by a point alone on a plate with many holes: only the faces whose plane holds
+/// the point are searched, so the pick is found instead of running out of work.
+#[test]
+fn a_point_on_a_plate_with_many_holes_picks_its_face() {
+    let mut s = Session::default();
+    run(&mut s, "solid.box", json!({"length": 60, "width": 60, "height": 10, "body_name": "Plate"}));
+    run(&mut s, "solid.hole", json!({"position": [10, 10, 10], "diameter": 4, "depth": 5}));
+    run(
+        &mut s,
+        "solid.pattern.rectangular",
+        json!({"features": ["Hole1"], "dir1": [1, 0, 0], "count1": 5, "spacing1": 10, "dir2": [0, 1, 0], "count2": 5, "spacing2": 10}),
+    );
+    run(&mut s, "solid.pattern.circular", json!({"features": ["Hole1"], "axis": {"origin": [30, 30, 0], "dir": [0, 0, 1]}, "count": 8}));
+    run(&mut s, "solid.fillet", json!({"edges": [[60, 0, 5]], "radius": 2}));
+    run(&mut s, "solid.pattern.circular", json!({"features": ["Fillet1"], "axis": {"origin": [30, 30, 0], "dir": [0, 0, 1]}, "count": 4}));
+    // The face is found; after these patterns its history can't name it apart, so the sketch
+    // takes its plane as a fixed one, as the dialog offers.
+    let err = s.execute("sketch.create", &json!({"plane": {"face": [35, 35, 10]}})).unwrap_err().to_string();
+    assert!(!err.contains("work limit"), "{err}");
+    let sk = run(&mut s, "sketch.create", json!({"plane": {"face": [35, 35, 10], "fixed": true}}))["sketch"].as_u64().unwrap();
+    run(&mut s, "sketch.circle.center", json!({"center": [5, 5], "radius": 2}));
+    run(&mut s, "sketch.finish", json!({}));
+    let st = s.model.state();
+    let plane = &st.sketch(sk).unwrap().plane;
+    assert!((plane.origin.z - 10.0).abs() < 1e-6 && plane.normal().dot(Vec3::Z) > 0.999, "{plane:?}");
+}

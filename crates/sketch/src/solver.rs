@@ -18,7 +18,7 @@ use solidcraft_geom::{Seg2, Vec2};
 
 use crate::decompose::Budget;
 use crate::linalg::{Mat, determined_vars, solve as lin_solve};
-use crate::model::{ConstraintKind, CurveKind, Sketch};
+use crate::model::{ConstraintKind, CurveKind, RoundEnd, Sketch};
 #[cfg(feature = "solver-profiling")]
 use crate::profiling::{self, Decision, Phase, StopReason};
 use crate::union_find::{find, union};
@@ -351,11 +351,34 @@ impl State<'_> {
     }
     /// What a line-to-circle distance measures: the gap from line `l` to the edge of circle or
     /// arc `c`, or (`inside`) how far the edge reaches past the line.
-    fn line_circle_gap(&self, l: usize, c: usize, inside: bool) -> f64 {
+    fn line_circle_gap(&self, l: usize, c: usize, inside: bool, far: bool) -> f64 {
         let (a, b) = self.line(l);
         let (cc, r) = self.round(c);
         let d = line_dist(cc, a, b).abs();
-        if inside { r - d } else { d - r }
+        if far {
+            d + r
+        } else if inside {
+            r - d
+        } else {
+            d - r
+        }
+    }
+    /// A [`ConstraintKind::RoundDistance`] end: where it is measured from along the centre
+    /// line (the point or the centre) and the radius it adds (less for a near edge).
+    fn round_end(&self, e: RoundEnd) -> (Vec2, f64) {
+        match e {
+            RoundEnd::Point(p) => (self.p(p), 0.0),
+            RoundEnd::Near(c) => {
+                let (cc, r) = self.round(c);
+                (cc, -r)
+            }
+            RoundEnd::Far(c) => self.round(c),
+        }
+    }
+    fn round_gap(&self, a: RoundEnd, b: RoundEnd, inside: bool) -> f64 {
+        let ((pa, ra), (pb, rb)) = (self.round_end(a), self.round_end(b));
+        let gap = pa.dist(pb) + ra + rb;
+        if inside { -gap } else { gap }
     }
     fn slot_length(&self, a: usize, b: usize) -> f64 {
         let (ca, ra) = self.round(a);
@@ -557,7 +580,8 @@ fn residuals(s: &State, k: &ConstraintKind, out: &mut Vec<f64>) {
             let (a, b) = s.line(l);
             out.push(line_dist(s.p(p), a, b).abs() - value);
         }
-        LineCircleDistance { l, c, value, inside } => out.push(s.line_circle_gap(l, c, inside) - value),
+        LineCircleDistance { l, c, value, inside, far } => out.push(s.line_circle_gap(l, c, inside, far) - value),
+        RoundDistance { a, b, value, inside } => out.push(s.round_gap(a, b, inside) - value),
         Length { l, value } => {
             let (a, b) = s.line(l);
             out.push(a.dist(b) - value);
@@ -620,7 +644,8 @@ fn measure(s: &State, k: &ConstraintKind) -> Option<f64> {
             let (a, b) = s.line(l);
             line_dist(s.p(p), a, b).abs()
         }
-        LineCircleDistance { l, c, inside, .. } => s.line_circle_gap(l, c, inside),
+        LineCircleDistance { l, c, inside, far, .. } => s.line_circle_gap(l, c, inside, far),
+        RoundDistance { a, b, inside, .. } => s.round_gap(a, b, inside),
         Length { l, .. } => {
             let (a, b) = s.line(l);
             a.dist(b)
@@ -829,6 +854,13 @@ fn block_refs(sk: &Sketch, b: &Block) -> Vec<Ref> {
             PointOnCurve { p, c } => vec![P(p), C(c)],
             Midpoint { p, l } | PointLineDistance { p, l, .. } | LinearDiameter { p, l, .. } => vec![P(p), L(l)],
             LineCircleDistance { l, c, .. } => vec![L(l), R(c)],
+            RoundDistance { a, b, .. } => [a, b]
+                .into_iter()
+                .map(|e| match e {
+                    RoundEnd::Point(p) => P(p),
+                    RoundEnd::Near(c) | RoundEnd::Far(c) => R(c),
+                })
+                .collect(),
             Horizontal { l } | Vertical { l } | Length { l, .. } | LineAngle { l, .. } => vec![L(l)],
             // Another kind reads a constant value, whatever its points: as good as any.
             ArcSweep { c, .. } | Radius { c, .. } | Diameter { c, .. } | ArcLength { c, .. } => vec![C(c)],
@@ -1829,9 +1861,10 @@ fn orients(s: &State, sub: &[(Block, Vec<usize>)]) -> Vec<(Orient, Vec<usize>)> 
             ConstraintKind::PointLineDistance { p, l, value } => out.push((Orient::OfLine(p, l, value), vec![*ci])),
             ConstraintKind::LinearDiameter { p, l, value } => out.push((Orient::OfLine(p, l, value / 2.0), vec![*ci])),
             // The circle stays on its side of the line: the distance is unsigned.
-            ConstraintKind::LineCircleDistance { l, c, value, .. } => {
+            ConstraintKind::LineCircleDistance { l, c, value, far, .. } => {
                 if let Some(CurveKind::Circle { c: centre, .. } | CurveKind::Arc { c: centre, .. }) = s.sk.curves.get(c).map(|x| &x.kind) {
-                    out.push((Orient::OfLine(*centre, l, value + s.round(c).1), vec![*ci]));
+                    let r = s.round(c).1;
+                    out.push((Orient::OfLine(*centre, l, if far { value - r } else { value + r }), vec![*ci]));
                 }
             }
             _ => {}

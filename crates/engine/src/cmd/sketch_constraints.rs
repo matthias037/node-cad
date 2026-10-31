@@ -450,6 +450,13 @@ fn anchor(sk: &Sketch, k: &ConstraintKind) -> Option<Vec2> {
         Distance { p, q, .. } | DistanceX { p, q, .. } | DistanceY { p, q, .. } => Some((pt(p)? + pt(q)?) * 0.5),
         PointLineDistance { p, .. } | LinearDiameter { p, .. } => pt(p),
         LineCircleDistance { c, .. } => sk.center(c),
+        RoundDistance { a, b, .. } => {
+            let at = |e: solidcraft_sketch::RoundEnd| match e {
+                solidcraft_sketch::RoundEnd::Point(p) => pt(p),
+                solidcraft_sketch::RoundEnd::Near(c) | solidcraft_sketch::RoundEnd::Far(c) => sk.center(c),
+            };
+            Some((at(a)? + at(b)?) * 0.5)
+        }
         Length { l, .. } | LineAngle { l, .. } => mid(l),
         Radius { c, .. } | Diameter { c, .. } | ArcLength { c, .. } | ArcSweep { c, .. } => mid(c),
         SlotOverallLength { a, b, .. } => Some((sk.center(a)? + sk.center(b)?) * 0.5),

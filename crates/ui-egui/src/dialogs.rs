@@ -46,6 +46,7 @@ pub const MODIFIERS: &[ToolModifiers] = &[
     ToolModifiers { tool: "solid.remove", scopes: SELECT_ONLY, bindings: &[], audit: Audit::VerifiedNoOp },
     // Pattern parameters are dialog-only - no viewport modifier chords.
     ToolModifiers { tool: "solid.pattern.path", scopes: SELECT_ONLY, bindings: &[], audit: Audit::VerifiedNoOp },
+    ToolModifiers { tool: "solid.pattern.faces", scopes: SELECT_ONLY, bindings: &[], audit: Audit::VerifiedNoOp },
     ToolModifiers { tool: "solid.pattern.rectangular", scopes: SELECT_ONLY, bindings: &[], audit: Audit::VerifiedNoOp },
     ToolModifiers { tool: "solid.pattern.circular", scopes: SELECT_ONLY, bindings: &[], audit: Audit::VerifiedNoOp },
     ToolModifiers { tool: "solid.pipe", scopes: SELECT_ONLY, bindings: &[], audit: Audit::VerifiedNoOp },
@@ -269,6 +270,10 @@ crate::dialog_descriptor::dialog_descriptors! {
             PathPattern {
                 count: String,
                 spacing: String,
+            },
+            /// Pattern onto other flat faces (a die's dots).
+            FacePattern {
+                angle: String,
             },
             /// Physical material (and with it the appearance) of bodies.
             Material {
@@ -674,6 +679,7 @@ impl Dialog {
                 Kind::PathPattern { count: "4".into(), spacing: "20 mm".into() },
                 vec![SelInput::new("Objects", BODIES, true), SelInput::new("Path", CURVES, true)],
             ),
+            "solid.pattern.faces" => Dialog::new(Kind::FacePattern { angle: "0 deg".into() }, face_pattern_inputs()),
             "mesh.convert" => Dialog::new(Kind::MeshConvert { tolerance: "0.05 mm".into() }, vec![SelInput::new("Mesh body", BODIES, false)]),
             "construct.plane.midplane" => Dialog::new(
                 Kind::Midplane,
@@ -952,6 +958,7 @@ impl Dialog {
                 | Kind::Align { .. }
                 | Kind::Remove
                 | Kind::PathPattern { .. }
+                | Kind::FacePattern { .. }
                 | Kind::Pipe { .. }
                 | Kind::Stock { .. }
                 | Kind::Scale { .. }
@@ -1010,6 +1017,7 @@ impl Dialog {
             Kind::Rib { thickness, .. } => ("Thickness", ValueKind::Length, thickness),
             Kind::Emboss { depth, .. } => ("Depth", ValueKind::Length, depth),
             Kind::PathPattern { spacing, .. } => ("Spacing", ValueKind::Length, spacing),
+            Kind::FacePattern { angle } => ("Angle", ValueKind::Angle, angle),
             Kind::Pipe { diameter, .. } => ("Diameter", ValueKind::Length, diameter),
             Kind::Stock { margin } => ("Margin", ValueKind::Length, margin),
             Kind::AnglePlane { angle } => ("Angle", ValueKind::Angle, angle),
@@ -1670,6 +1678,7 @@ fn title(k: &Kind) -> &'static str {
         Kind::BoundaryFill { .. } => "BOUNDARY FILL",
         Kind::Remove => "REMOVE",
         Kind::PathPattern { .. } => "PATTERN ON PATH",
+        Kind::FacePattern { .. } => "PATTERN ON FACES",
         Kind::Split => "SPLIT BODY",
         Kind::Thread { .. } => "THREAD",
         Kind::Section { .. } => "SECTION ANALYSIS",
@@ -1794,8 +1803,14 @@ fn objects_label(accept: Accept) -> &'static str {
     if accept == selection::FEATURES { "Features" } else { "Objects" }
 }
 
+/// A pattern on faces: what to copy, the faces it goes onto, and the face it sits on (found by
+/// itself for a sketch's or a hole's face).
+fn face_pattern_inputs() -> Vec<SelInput> {
+    vec![SelInput::new("Objects", BODIES, true), SelInput::new("Faces", PLANAR_FACES, true), SelInput::new("From Face", PLANAR_FACES, false)]
+}
+
 fn is_pattern(k: &Kind) -> bool {
-    matches!(k, Kind::PatternRect { .. } | Kind::PatternCirc { .. } | Kind::PathPattern { .. } | Kind::Mirror)
+    matches!(k, Kind::PatternRect { .. } | Kind::PatternCirc { .. } | Kind::PathPattern { .. } | Kind::FacePattern { .. } | Kind::Mirror)
 }
 
 /// The Object Type row of a pattern: bodies (picked in the view) or features (picked in the
@@ -1828,11 +1843,12 @@ fn placement_row(d: &mut Dialog, ui: &mut egui::Ui) {
         Kind::PatternRect { .. } => Some(0),
         Kind::PatternCirc { .. } => Some(1),
         Kind::PathPattern { .. } => Some(2),
+        Kind::FacePattern { .. } => Some(3),
         _ => None,
     };
     if let Some(cur) = current {
         let mut ty = cur;
-        choice_row(ui, "Type", "pat_type", &mut ty, &["Rectangular", "Circular", "Path"]);
+        choice_row(ui, "Type", "pat_type", &mut ty, &["Rectangular", "Circular", "Path", "Faces"]);
         if ty != cur {
             // Same objects, the new pattern's other inputs.
             let objects = d.inputs.first().map(|i| i.items.clone()).unwrap_or_default();
@@ -1849,10 +1865,11 @@ fn placement_row(d: &mut Dialog, ui: &mut egui::Ui) {
                     Kind::PatternCirc { count: "6".into(), angle: "360 deg".into() },
                     vec![SelInput::new("Objects", BODIES, true), SelInput::new("Axis", AXES, false)],
                 ),
-                _ => (
+                2 => (
                     Kind::PathPattern { count: "4".into(), spacing: "20 mm".into() },
                     vec![SelInput::new("Objects", BODIES, true), SelInput::new("Path", CURVES, true)],
                 ),
+                _ => (Kind::FacePattern { angle: "0 deg".into() }, face_pattern_inputs()),
             };
             let accept = d.inputs.first().map(|i| i.accept).unwrap_or(BODIES);
             if let Some(i) = inputs.first_mut() {
@@ -3493,6 +3510,16 @@ fn dialog_commands(app: &SolveApp, d: &Dialog) -> Result<Vec<(String, Value)>, S
             need(0, "bodies")?;
             ("solid.remove", json!({"bodies": sels(d, 0).body_names()}))
         }
+        Kind::FacePattern { angle } => {
+            need(0, "objects")?;
+            need(1, "the faces to copy onto")?;
+            let mut p = json!({"faces": face_points(1), "angle": angle});
+            if let Some(Sel::Face { point, .. }) = sels(d, 2).first() {
+                p["from"] = pt(*point);
+            }
+            pattern_objects(s, sels(d, 0), &mut p);
+            ("solid.pattern.faces", p)
+        }
         Kind::PathPattern { count, spacing } => {
             need(0, "objects")?;
             need(1, "the path")?;
@@ -4591,7 +4618,7 @@ pub fn for_feature(app: &SolveApp, id: u64, marker: Option<usize>) -> Option<Dia
                     d
                 }
                 // No dialog for a path pattern yet: edit it with timeline.redefine.
-                PatternKind::Path { .. } => return None,
+                PatternKind::Path { .. } | PatternKind::Faces { .. } => return None,
             };
             // Replay references stay features, including features that created a body.
             let as_features = !features.is_empty();

@@ -5261,6 +5261,39 @@ fn pattern_transforms(doc: &Document, vals: &BTreeMap<String, Value>, st: &Model
                 out.push(m);
             }
         }
+        crate::PatternKind::Faces { from, faces, angle } => {
+            if faces.is_empty() || faces.len() > MAX_INSTANCES {
+                return Err(DocError::Invalid(format!("a pattern on faces needs 1…{MAX_INSTANCES} faces")));
+            }
+            let turn = match angle {
+                Some(a) => val(vals, a, Kind::Angle)?,
+                None => 0.0,
+            };
+            let (c0, n0) = flat_face_at(st, from.0)?;
+            for face in faces {
+                let (c1, n1) = flat_face_at(st, face.0)?;
+                // The face the originals are on gets no copy.
+                if (c1 - c0).len() < 1e-6 && n1.dot(n0) > 1.0 - 1e-9 {
+                    continue;
+                }
+                // The least turn bringing the first face's normal onto this one's: about their
+                // cross product, or a half turn about a line in the face when they are opposite.
+                let axis = n0.cross(n1);
+                let roll = if axis.len() > 1e-9 {
+                    rotation(c0, axis, n0.dot(n1).clamp(-1.0, 1.0).acos())
+                } else if n0.dot(n1) < 0.0 {
+                    let side = if n0.x.abs() < 0.9 { Vec3::X } else { Vec3::Y };
+                    rotation(c0, n0.cross(side), std::f64::consts::PI)
+                } else {
+                    translation(Vec3::ZERO)
+                };
+                let m = crate::mat_mul(&translation(c1 - c0), &crate::mat_mul(&roll, &rotation(c0, n0, turn)));
+                out.push(m);
+            }
+            if out.is_empty() {
+                return Err(DocError::Invalid("pick faces other than the one the originals are on".into()));
+            }
+        }
         crate::PatternKind::Circular { origin, axis, count: c, angle, alignment, reversed, axis_feature } => {
             let (origin, axis) = match axis_feature {
                 Some(name) => construction_axis_in(Some(doc), st, name, component)?,
@@ -5282,6 +5315,34 @@ fn pattern_transforms(doc: &Document, vals: &BTreeMap<String, Value>, st: &Model
         }
     }
     Ok(out)
+}
+
+/// The flat face a pattern on faces picks at `p`: its centre and its normal (out of the
+/// material). The centre is the middle of the face's extent, so holes in it (the originals
+/// themselves) don't move it.
+fn flat_face_at(st: &ModelState, p: Vec3) -> Result<(Vec3, Vec3)> {
+    let at = || format!("[{:.3}, {:.3}, {:.3}]", p.x, p.y, p.z);
+    let missing = || DocError::Invalid(format!("no face at {}", at()));
+    let (bi, fi) = face_at(st, p, None).ok_or_else(missing)?;
+    let b = st.bodies.get(bi).ok_or_else(missing)?;
+    let tol = (b.body.size() * 1e-3).max(1e-3);
+    let face = b.body.faces(tol)?.into_iter().find(|f| f.index == fi).ok_or_else(missing)?;
+    let n = face.plane_normal.ok_or_else(|| DocError::Invalid(format!("the face at {} is not flat: a pattern on faces needs flat faces", at())))?;
+    let mesh = b.mesh();
+    let (mut lo, mut hi) =
+        (Vec3::new(f64::INFINITY, f64::INFINITY, f64::INFINITY), Vec3::new(f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY));
+    for tri in mesh.triangles.iter().zip(&mesh.tri_face).filter(|(_, f)| **f as usize == fi).filter_map(|(t, _)| mesh.tri(t)) {
+        for v in tri {
+            lo = Vec3::new(lo.x.min(v.x), lo.y.min(v.y), lo.z.min(v.z));
+            hi = Vec3::new(hi.x.max(v.x), hi.y.max(v.y), hi.z.max(v.z));
+        }
+    }
+    if !(lo.is_finite() && hi.is_finite()) {
+        return Ok((face.centroid, n));
+    }
+    // The middle of the extent, brought back into the face's plane.
+    let mid = (lo + hi) * 0.5;
+    Ok((mid - n * (mid - face.centroid).dot(n), n))
 }
 
 fn seg_len(s: &kernel::PathSeg) -> f64 {

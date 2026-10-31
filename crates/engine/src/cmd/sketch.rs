@@ -3,7 +3,7 @@
 use serde_json::{Value, json};
 use solidcraft_doc::{FeatureKind, PlaneRef, expr::Kind};
 use solidcraft_geom::{Plane, Vec2, Vec3};
-use solidcraft_sketch::{Analysis, Budget, ConstraintKind, CurveKind, Hold, PointExprs, Sketch, SolveReport, solve, solve_with};
+use solidcraft_sketch::{Analysis, Budget, ConstraintKind, CurveKind, Hold, PointExprs, RoundEnd, Sketch, SolveReport, solve, solve_with};
 
 use super::{CommandSpec, in_sketch};
 use crate::params::{bad, bool_, expr, num, req_vec2, str_, string_list, vec2, vec3};
@@ -115,7 +115,7 @@ pub static COMMANDS: &[CommandSpec] = &[
         .params(concat!("p0, p1: overall ends, width", connect_doc!(), created_doc!())),
     CommandSpec::new("sketch.point", "Point", draw_point).at("SKETCH", "CREATE").icon("point").enabled(in_sketch).params(concat!("point: [x,y] (each a number or an expression over the design's parameters: the point is then fixed where it comes to and follows them), id?", connect_doc!(), created_doc!())),
     CommandSpec::new("sketch.dimension", "Sketch Dimension", dimension).at("SKETCH", "CREATE").icon("dimension").key("D").enabled(in_sketch).params(
-        "entities: [refs], type?: auto|distance|horizontal|vertical|length|radius|diameter|angle, value?: number or expression (default: current; a bare number is in the design's units, e.g. 2 means 2 in in an inch design; give a unit such as \"50 mm\" to override), or `name = expression` (e.g. \"width = 40\"), which adds the user parameter `name` with that expression and dimensions with `name` (refused when the name is taken or reserved; the reply's `defined` names it); text_at?: [x, y]. Two points or a line off the axes: with auto, text_at across from them is the distance between them, above or below them horizontal, beside them vertical. Two lines: the angle between them (acute, or 180° − it when the value is nearer that) unless text_at picks a sector. A line and a circle or arc: the distance from the line to its edge (the gap, or how far the edge reaches past a line that cuts it; 0 is tangent); dimension the centre point for the distance to the centre. A dimension the sketch already determines is refused (naming what determines it); if_redundant?: \"driven\" places it as a driven (reference) dimension instead. scale_sketch?: bool (the dimension tool sends true): when this is the sketch's first length dimension and nothing in the sketch fixes a size (no other driving length dimension, nothing fixed or projected), the whole sketch scales about its origin to the value instead of distorting. Returns measured in unit (mm or deg), and scaled: the factor when the sketch was scaled",
+        "entities: [refs], type?: auto|distance|horizontal|vertical|length|radius|diameter|angle, value?: number or expression (default: current; a bare number is in the design's units, e.g. 2 means 2 in in an inch design; give a unit such as \"50 mm\" to override), or `name = expression` (e.g. \"width = 40\"), which adds the user parameter `name` with that expression and dimensions with `name` (refused when the name is taken or reserved; the reply's `defined` names it); text_at?: [x, y]. Two points or a line off the axes: with auto, text_at across from them is the distance between them, above or below them horizontal, beside them vertical. Two lines: the angle between them (acute, or 180° − it when the value is nearer that) unless text_at picks a sector. A line and a circle or arc: the distance from the line to its edge (the gap, or how far the edge reaches past a line that cuts it; 0 is tangent). A point or a circle and a circle or arc: the distance between their centres. arc_condition?: center|min|max, or one per entity: where a circle or arc is measured from, its centre, its edge nearest the other entity (min) or its edge farthest from it (max), along the line through the centres (along the normal for a line); `sketch.dimension_condition` changes it afterwards. A dimension the sketch already determines is refused (naming what determines it); if_redundant?: \"driven\" places it as a driven (reference) dimension instead. scale_sketch?: bool (the dimension tool sends true): when this is the sketch's first length dimension and nothing in the sketch fixes a size (no other driving length dimension, nothing fixed or projected), the whole sketch scales about its origin to the value instead of distorting. Returns measured in unit (mm or deg), and scaled: the factor when the sketch was scaled",
     ),
     CommandSpec::new("sketch.constraint.horizontal_vertical", "Horizontal/Vertical", c_horizontal_vertical)
         .at("SKETCH", "CONSTRAINTS")
@@ -191,6 +191,9 @@ pub static COMMANDS: &[CommandSpec] = &[
     CommandSpec::new("sketch.dimension_text", "Move Dimension Text", dimension_text).icon("edit")
         .enabled(in_sketch)
         .params("dimension: constraint id or parameter name; at: [x,y] text centre (sketch coordinates) | reset: true (default place)"),
+    CommandSpec::new("sketch.dimension_condition", "Arc Condition", dimension_condition).icon("dimension")
+        .enabled(in_sketch)
+        .params("dimension: constraint id or parameter name of a distance to a circle or arc; arc_condition: center|min|max, or one per end: measure each circle or arc from its centre, its edge nearest the other end (min) or its edge farthest from it (max). The dimension keeps its parameter: a plain value takes the new measure, so the sketch does not move; a formula keeps its value and the sketch follows it. Returns measured"),
     CommandSpec::new("sketch.options", "Sketch Palette Options", sketch_options).icon("sketch").params(
         "sketch?: id|name (default active); any of show_profile, show_points, show_dimensions, show_constraints, show_projected, show_construction, grid, snap, slice, sketch_3d: bool. Returns them all",
     ),
@@ -2236,6 +2239,7 @@ fn dimension(s: &mut Session, p: &Value) -> Result<Value> {
     let value = expr(p, "value");
     let text_at = p.get("text_at").and_then(vec2);
     let driven = bool_(p, "driven").unwrap_or(false);
+    let conds = arc_conditions(cmd, p)?;
     // `name = expression` defines the user parameter `name` and dimensions with it (#2916).
     let (defines, value) = match value.as_ref().and_then(|v| solidcraft_doc::expr::definition(v.as_str())) {
         Some((name, rhs)) => {
@@ -2273,6 +2277,21 @@ fn dimension(s: &mut Session, p: &Value) -> Result<Value> {
         let is_line = |c: usize| matches!(sk.curves.get(c).map(|c| &c.kind), Some(CurveKind::Line { .. }));
         let is_circle = |c: usize| matches!(sk.curves.get(c).map(|c| &c.kind), Some(CurveKind::Circle { .. }));
         let is_round = |c: usize| matches!(sk.curves.get(c).map(|c| &c.kind), Some(CurveKind::Circle { .. } | CurveKind::Arc { .. }));
+        // A circle or arc measured from its centre is its centre point: by default against a
+        // point or another circle, while a line measures to its edge (#1803).
+        let (e0, e1) = match e1 {
+            Some(e1) if ty != "overall_length" => {
+                let to_line = [e0, e1].iter().any(|e| matches!(e, (None, Some(c)) if is_line(*c)));
+                let centred = |e: (Option<usize>, Option<usize>), cond: Option<ArcCondition>| match (e, cond) {
+                    ((None, Some(c)), Some(ArcCondition::Center)) => round_centre(sk, c).map_or(e, |p| (Some(p), None)),
+                    ((None, Some(c)), None) if !to_line => round_centre(sk, c).map_or(e, |p| (Some(p), None)),
+                    _ => e,
+                };
+                (centred(e0, conds[0]), Some(centred(e1, conds[1])))
+            }
+            e1 => (e0, e1),
+        };
+        let cond_of = |c: usize| if e0 == (None, Some(c)) { conds[0] } else { conds[1] };
         // The other reading of an angle between two lines (see below).
         let mut alt: Option<(ConstraintKind, f64)> = None;
         let (mut k, mut cur): (ConstraintKind, f64) = match (e0, e1) {
@@ -2394,9 +2413,20 @@ fn dimension(s: &mut Session, p: &Value) -> Result<Value> {
                 let (centre, r) = sk.center(c).zip(sk.radius(c)).ok_or_else(|| bad(cmd, "cannot dimension that curve"))?;
                 let d = (b - a).normalized().map(|u| u.cross(centre - a).abs()).ok_or_else(|| bad(cmd, "that line has no length"))?;
                 // A line that cuts the circle measures how far its edge reaches past the line.
-                let inside = d < r;
-                let gap = (d - r).abs();
-                (ConstraintKind::LineCircleDistance { l, c, value: gap, inside }, gap)
+                let far = cond_of(c) == Some(ArcCondition::Max);
+                let inside = !far && d < r;
+                let gap = if far { d + r } else { (d - r).abs() };
+                (ConstraintKind::LineCircleDistance { l, c, value: gap, inside, far }, gap)
+            }
+            // A point or a circle and a circle or arc measured to its edge (the arc conditions
+            // min and max): along the line through their centres.
+            (a, Some(b)) if [a, b].iter().all(|&(p, c)| p.is_some() || c.is_some_and(is_round)) => {
+                let end = |(p, c): (Option<usize>, Option<usize>), cond: Option<ArcCondition>| match (p, c) {
+                    (Some(p), _) => RoundEnd::Point(p),
+                    (None, Some(c)) if cond == Some(ArcCondition::Max) => RoundEnd::Far(c),
+                    (_, c) => RoundEnd::Near(c.unwrap_or_default()),
+                };
+                round_distance(sk, end(a, conds[0]), end(b, conds[1])).ok_or_else(|| bad(cmd, "cannot measure that distance"))?
             }
             _ => return Err(bad(cmd, "cannot dimension that combination of entities")),
         };
@@ -2512,6 +2542,13 @@ fn solved_measure(s: &Session, p: &Value, cmd: &str) -> Option<(f64, &'static st
     Some(measured(k.is_angle(), solidcraft_sketch::measure_dimension(sk, k)?))
 }
 
+/// What dimension `id` measures on the solved sketch.
+fn solved_measure_of(s: &Session, p: &Value, cmd: &str, id: &str) -> Option<(f64, &'static str)> {
+    let sk = s.doc.sketch(target_sketch(s, p, cmd).ok()?).ok()?;
+    let k = &sk.constraints.iter().find(|c| c.id == id)?.kind;
+    Some(measured(k.is_angle(), solidcraft_sketch::measure_dimension(sk, k)?))
+}
+
 /// The type of a dimension between `a` and `b` (two points or a line's ends). `auto` takes it
 /// from where the text is placed: across from the two (between the perpendiculars through
 /// them) the distance between them; past that, above or below them the horizontal distance,
@@ -2562,6 +2599,199 @@ fn dimension_text(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(id)
     })?;
     Ok(json!({"dimension": id, "sketch": info}))
+}
+
+/// Where a dimension measures a circle or arc: from its centre, or its edge nearest the other
+/// end (min) or farthest from it (max), as SolidWorks' arc conditions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ArcCondition {
+    Center,
+    Min,
+    Max,
+}
+
+/// `arc_condition`: one condition for every end, or one per end (`null` keeps an end's default).
+fn arc_conditions(cmd: &str, p: &Value) -> Result<[Option<ArcCondition>; 2]> {
+    let one = |v: &Value| -> Result<Option<ArcCondition>> {
+        match v {
+            Value::Null => Ok(None),
+            Value::String(x) => match x.trim().to_ascii_lowercase().as_str() {
+                "center" | "centre" => Ok(Some(ArcCondition::Center)),
+                "min" | "minimum" | "near" => Ok(Some(ArcCondition::Min)),
+                "max" | "maximum" | "far" => Ok(Some(ArcCondition::Max)),
+                other => Err(bad(cmd, format!("arc_condition: `{other}` is not center, min or max"))),
+            },
+            _ => Err(bad(cmd, "arc_condition: center, min or max, or a list of them")),
+        }
+    };
+    match p.get("arc_condition") {
+        None => Ok([None, None]),
+        Some(Value::Array(list)) if list.len() <= 2 => Ok([one(list.first().unwrap_or(&Value::Null))?, one(list.get(1).unwrap_or(&Value::Null))?]),
+        Some(Value::Array(_)) => Err(bad(cmd, "arc_condition: at most one per end")),
+        Some(v) => one(v).map(|c| [c, c]),
+    }
+}
+
+/// The centre point of circle or arc `c`.
+fn round_centre(sk: &Sketch, c: usize) -> Option<usize> {
+    match sk.curves.get(c).map(|c| &c.kind) {
+        Some(CurveKind::Circle { c, .. } | CurveKind::Arc { c, .. }) => Some(*c),
+        _ => None,
+    }
+}
+
+/// Whether circle `inner` lies inside circle `outer` (a ring's two circles, centred or not).
+fn nested(sk: &Sketch, outer: usize, inner: usize) -> bool {
+    let (Some(co), Some(ro), Some(ci), Some(ri)) = (sk.center(outer), sk.radius(outer), sk.center(inner), sk.radius(inner)) else { return false };
+    co.dist(ci) + ri <= ro + 1e-9 * ro.max(1.0)
+}
+
+/// The distance between ends `a` and `b` along the line through their centres, as the sketch
+/// has it now, with the dimension that holds it.
+fn round_distance(sk: &Sketch, a: RoundEnd, b: RoundEnd) -> Option<(ConstraintKind, f64)> {
+    // Two circles one inside the other are nearest across the gap between them (a ring's wall):
+    // the outer one's edge toward the inner, the inner one's edge on the far side of its centre.
+    let (a, b) = match (a, b) {
+        (RoundEnd::Near(x), RoundEnd::Near(y)) if nested(sk, x, y) => (a, RoundEnd::Far(y)),
+        (RoundEnd::Near(x), RoundEnd::Near(y)) if nested(sk, y, x) => (RoundEnd::Far(x), b),
+        _ => (a, b),
+    };
+    let gap = solidcraft_sketch::measure_dimension(sk, &ConstraintKind::RoundDistance { a, b, value: 0.0, inside: false })?;
+    Some((ConstraintKind::RoundDistance { a, b, value: gap.abs(), inside: gap < 0.0 }, gap.abs()))
+}
+
+/// One end of a distance dimension, for changing its arc condition: a point, a line, or a
+/// circle or arc measured from its centre, its near edge or its far edge.
+#[derive(Clone, Copy)]
+enum DimEnd {
+    Point(usize),
+    Line(usize),
+    Round(usize, ArcCondition),
+}
+
+/// The two ends of a distance dimension that measures to a circle or arc.
+fn dim_ends(sk: &Sketch, kind: &ConstraintKind) -> Option<[DimEnd; 2]> {
+    // A point that is a circle's centre is that circle measured from its centre.
+    let point = |p: usize| match sk.curves.iter().position(|c| matches!(c.kind, CurveKind::Circle { c, .. } | CurveKind::Arc { c, .. } if c == p)) {
+        Some(c) => DimEnd::Round(c, ArcCondition::Center),
+        None => DimEnd::Point(p),
+    };
+    let round = |e: RoundEnd| match e {
+        RoundEnd::Point(p) => point(p),
+        RoundEnd::Near(c) => DimEnd::Round(c, ArcCondition::Min),
+        RoundEnd::Far(c) => DimEnd::Round(c, ArcCondition::Max),
+    };
+    let ends = match *kind {
+        // The gap of a ring (see `round_distance`) is its two circles' nearest edges.
+        ConstraintKind::RoundDistance { a: RoundEnd::Near(x), b: RoundEnd::Far(y), .. } if nested(sk, x, y) => {
+            [DimEnd::Round(x, ArcCondition::Min), DimEnd::Round(y, ArcCondition::Min)]
+        }
+        ConstraintKind::RoundDistance { a: RoundEnd::Far(x), b: RoundEnd::Near(y), .. } if nested(sk, y, x) => {
+            [DimEnd::Round(x, ArcCondition::Min), DimEnd::Round(y, ArcCondition::Min)]
+        }
+        ConstraintKind::Distance { p, q, .. } | ConstraintKind::DistanceX { p, q, .. } | ConstraintKind::DistanceY { p, q, .. } => {
+            [point(p), point(q)]
+        }
+        ConstraintKind::PointLineDistance { p, l, .. } => [point(p), DimEnd::Line(l)],
+        ConstraintKind::LineCircleDistance { l, c, far, .. } => {
+            [DimEnd::Line(l), DimEnd::Round(c, if far { ArcCondition::Max } else { ArcCondition::Min })]
+        }
+        ConstraintKind::RoundDistance { a, b, .. } => [round(a), round(b)],
+        _ => return None,
+    };
+    ends.iter().any(|e| matches!(e, DimEnd::Round(..))).then_some(ends)
+}
+
+/// How a distance dimension measures each end that is a circle or arc: `center`, `min` (its
+/// near edge) or `max` (its far edge), `None` for another end; `None` for a dimension with no
+/// circle or arc to measure.
+pub fn arc_conditions_of(sk: &Sketch, kind: &ConstraintKind) -> Option<[Option<&'static str>; 2]> {
+    Some(dim_ends(sk, kind)?.map(|e| match e {
+        DimEnd::Round(_, ArcCondition::Center) => Some("center"),
+        DimEnd::Round(_, ArcCondition::Min) => Some("min"),
+        DimEnd::Round(_, ArcCondition::Max) => Some("max"),
+        _ => None,
+    }))
+}
+
+/// `kind` measured with each circle or arc at `conds` (one per end, `None` keeps an end as it
+/// is); `None` when it does not measure to a circle or arc.
+fn with_arc_condition(sk: &Sketch, kind: &ConstraintKind, conds: [Option<ArcCondition>; 2]) -> Option<ConstraintKind> {
+    let mut ends = dim_ends(sk, kind)?;
+    for (e, cond) in ends.iter_mut().zip(conds) {
+        if let (DimEnd::Round(_, now), Some(cond)) = (e, cond) {
+            *now = cond;
+        }
+    }
+    let centre = |e: DimEnd| match e {
+        DimEnd::Point(p) => Some(p),
+        DimEnd::Round(c, ArcCondition::Center) => round_centre(sk, c),
+        _ => None,
+    };
+    let edge = |e: DimEnd| match e {
+        DimEnd::Point(p) => Some(RoundEnd::Point(p)),
+        DimEnd::Round(c, ArcCondition::Center) => round_centre(sk, c).map(RoundEnd::Point),
+        DimEnd::Round(c, ArcCondition::Min) => Some(RoundEnd::Near(c)),
+        DimEnd::Round(c, ArcCondition::Max) => Some(RoundEnd::Far(c)),
+        DimEnd::Line(_) => None,
+    };
+    Some(match ends {
+        [a, b] if centre(a).is_some() && centre(b).is_some() => {
+            let (p, q) = (centre(a)?, centre(b)?);
+            match *kind {
+                ConstraintKind::DistanceX { .. } => ConstraintKind::DistanceX { p, q, value: 0.0 },
+                ConstraintKind::DistanceY { .. } => ConstraintKind::DistanceY { p, q, value: 0.0 },
+                _ => ConstraintKind::Distance { p, q, value: 0.0 },
+            }
+        }
+        [DimEnd::Line(l), e] | [e, DimEnd::Line(l)] => match e {
+            DimEnd::Round(c, ArcCondition::Min) => ConstraintKind::LineCircleDistance { l, c, value: 0.0, inside: false, far: false },
+            DimEnd::Round(c, ArcCondition::Max) => ConstraintKind::LineCircleDistance { l, c, value: 0.0, inside: false, far: true },
+            e => ConstraintKind::PointLineDistance { p: centre(e)?, l, value: 0.0 },
+        },
+        [a, b] => round_distance(sk, edge(a)?, edge(b)?)?.0,
+    })
+}
+
+/// `sketch.dimension_condition`: measure a distance to a circle or arc from its centre, its
+/// near edge or its far edge, keeping its parameter.
+fn dimension_condition(s: &mut Session, p: &Value) -> Result<Value> {
+    let cmd = "sketch.dimension_condition";
+    let key = str_(p, "dimension").ok_or_else(|| bad(cmd, "`dimension` must be a dimension id or parameter name"))?.to_string();
+    let conds = arc_conditions(cmd, p)?;
+    if conds.iter().all(Option::is_none) {
+        return Err(bad(cmd, "`arc_condition` must be center, min or max, or one per end"));
+    }
+    let ((id, measure), info) = edit(s, p, cmd, true, |sk, doc| {
+        let i = sk
+            .constraints
+            .iter()
+            .position(|c| c.kind.is_dimension() && (c.id == key || c.param.as_deref() == Some(key.as_str())))
+            .ok_or_else(|| bad(cmd, format!("no dimension `{key}` in this sketch")))?;
+        let mut kind = with_arc_condition(sk, &sk.constraints[i].kind, conds)
+            .ok_or_else(|| bad(cmd, "only a distance to a circle or arc is measured from its centre or its edge"))?;
+        sk.validate(&kind).map_err(|e| bad(cmd, e.to_string()))?;
+        // What it measures now; a line that cuts the circle measures how far its edge reaches.
+        let mut now = solidcraft_sketch::measure_dimension(sk, &kind).ok_or_else(|| bad(cmd, "cannot measure that distance"))?;
+        if let ConstraintKind::LineCircleDistance { inside, far: false, .. } | ConstraintKind::RoundDistance { inside, .. } = &mut kind
+            && now < 0.0
+        {
+            *inside = true;
+            now = -now;
+        }
+        kind.set_value(now);
+        // A plain value takes the new measure, so nothing moves; a formula keeps its value.
+        if let Some(param) = sk.constraints[i].param.clone()
+            && doc.param(&param).is_some_and(|q| solidcraft_doc::expr::is_literal(&q.expr))
+        {
+            doc.set_param(&param, &format!("{} mm", round6(now)), None, None).map_err(|e| bad(cmd, e.to_string()))?;
+        }
+        let c = &mut sk.constraints[i];
+        c.kind = kind;
+        Ok((c.id.clone(), measured(false, now)))
+    })?;
+    let measure = solved_measure_of(s, p, cmd, &id).unwrap_or(measure);
+    Ok(json!({"dimension": id, "measured": measure.0, "unit": measure.1, "sketch": info}))
 }
 
 /// Dimension a point (or a parallel line) to line `l` as a diameter: when `l` is a centerline
@@ -2685,7 +2915,7 @@ fn construction(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"changed": n.0, "construction": n.1, "sketch": info}))
 }
 
-fn sketch_delete(s: &mut Session, p: &Value) -> Result<Value> {
+pub(super) fn sketch_delete(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.delete";
     let ids = string_list(p, "entities");
     if ids.is_empty() {
@@ -2951,6 +3181,9 @@ mod rounded_rect_tests;
 #[path = "sketch_ux_tests.rs"]
 mod ux_tests;
 
+#[cfg(test)]
+#[path = "sketch_arc_condition_tests.rs"]
+mod arc_condition_tests;
 #[cfg(test)]
 #[path = "sketch_axis_ref_tests.rs"]
 mod axis_ref_tests;

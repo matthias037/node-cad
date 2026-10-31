@@ -138,3 +138,30 @@ fn base_view_and_update_follow_the_design() {
     assert!(r["dimensions"].as_array().unwrap().iter().any(|d| d == "150"), "{r}");
     assert_eq!(s.drawing.clone().unwrap()["title"]["numero"], "PL-003");
 }
+
+/// A plate drawn in a sketch: the drawing takes the sketch's dimensions into the top view, the
+/// one that sees the sketch face-on, and does not repeat the overall sizes they give.
+#[test]
+fn the_sketch_dimensions_come_onto_the_drawing() {
+    let mut s = Session::default();
+    run(&mut s, "sketch.create", json!({"plane": "XY", "name": "Base"}));
+    run(&mut s, "sketch.rectangle.two_point", json!({"p0": [0, 0], "p1": [120, 80]}));
+    run(&mut s, "sketch.dimension", json!({"entities": ["l1"], "value": 120}));
+    run(&mut s, "sketch.dimension", json!({"entities": ["l2"], "value": 80}));
+    run(&mut s, "sketch.circle.center", json!({"center": [30, 40], "radius": 12}));
+    let circle = s.model.state().sketch(s.active_sketch.unwrap()).unwrap().sketch.curves.last().map(|c| c.id.clone()).unwrap();
+    run(&mut s, "sketch.dimension", json!({"entities": [circle], "value": 24}));
+    run(&mut s, "sketch.dimension", json!({"entities": [format!("{circle}.center"), "l4"], "value": 30}));
+    run(&mut s, "sketch.finish", json!({}));
+    run(&mut s, "solid.extrude", json!({"sketch": "Base", "distance": 10, "profiles": "all"}));
+    let r = run(&mut s, "drawing.create", json!({}));
+    let dims: Vec<&str> = r["dimensions"].as_array().unwrap().iter().map(|d| d.as_str().unwrap()).collect();
+    for want in ["120", "80", "Ø24", "30", "10"] {
+        assert_eq!(dims.iter().filter(|d| **d == want).count(), 1, "{want} once in {dims:?}");
+    }
+    // Asked not to, the drawing keeps its overall sizes alone.
+    let r = run(&mut s, "drawing.create", json!({"sketch_dimensions": false}));
+    let dims: Vec<&str> = r["dimensions"].as_array().unwrap().iter().map(|d| d.as_str().unwrap()).collect();
+    assert!(!dims.contains(&"30") && !dims.contains(&"Ø24"), "{dims:?}");
+    assert!(dims.contains(&"120") && dims.contains(&"80") && dims.contains(&"10"), "{dims:?}");
+}
