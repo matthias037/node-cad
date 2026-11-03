@@ -152,6 +152,35 @@ fn extrude_a_face_where_another_body_lies_flush_on_it() {
     assert!(e.contains("Nope"), "{e}");
 }
 
+/// `inspect.measure {quick: true}` looks at each body without measuring it: the box of its
+/// coarse tessellation, inside the measured box and within `bbox_tolerance` of it, and its
+/// shells; the bodies of the measure in its order, no totals, an unknown name refused.
+#[test]
+fn a_quick_measure_looks_at_each_body() {
+    let mut s = Session::default();
+    run(&mut s, "solid.box", json!({"length": 20, "width": 10, "height": 5, "body_name": "Plaque"}));
+    run(&mut s, "solid.cylinder", json!({"base": [40, 0, 0], "axis": "Z", "diameter": 8, "height": 12, "body_name": "Axe"}));
+    run(&mut s, "solid.sphere", json!({"radius": 6, "center": [80, 0, 0], "body_name": "Boule"}));
+    let full = run(&mut s, "inspect.measure", json!({}));
+    let quick = run(&mut s, "inspect.measure", json!({"quick": true}));
+    assert!(quick.get("total").is_none(), "{quick}");
+    assert_eq!(quick["body_count"], 3, "{quick}");
+    let (measured, looked) = (full["bodies"].as_array().unwrap(), quick["bodies"].as_array().unwrap());
+    for (m, l) in measured.iter().zip(looked) {
+        assert_eq!((&m["name"], &m["kernel"]["shells"]), (&l["name"], &l["kernel"]["shells"]));
+        assert!(l.get("volume_mm3").is_none(), "{l}");
+        let tol = l["bbox_tolerance"].as_f64().unwrap();
+        for k in 0..3 {
+            let at = |v: &Value, end: &str| v["bbox"][end][k].as_f64().unwrap();
+            assert!(at(m, "min") <= at(l, "min") && at(l, "min") - at(m, "min") <= tol, "{m} {l}");
+            assert!(at(l, "max") <= at(m, "max") && at(m, "max") - at(l, "max") <= tol, "{m} {l}");
+        }
+    }
+    let one = run(&mut s, "inspect.measure", json!({"bodies": ["Axe"], "quick": true}));
+    assert_eq!(one["bodies"][0], looked[1]);
+    assert!(s.execute("inspect.measure", &json!({"bodies": ["Nope"], "quick": true})).is_err());
+}
+
 #[test]
 fn join_bridging_two_bodies_merges_them() {
     let mut s = Session::default();

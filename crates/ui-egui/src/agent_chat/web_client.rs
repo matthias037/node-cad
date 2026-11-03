@@ -217,7 +217,8 @@ impl Measuring {
                 return None;
             }
         }
-        Some(Ok(solidcraft_engine::cmd::measure_reply(std::mem::take(&mut self.done))))
+        let quick = solidcraft_engine::params::bool_(&self.params, "quick").unwrap_or(false);
+        Some(Ok(solidcraft_engine::cmd::measure_reply(std::mem::take(&mut self.done), quick)))
     }
 }
 

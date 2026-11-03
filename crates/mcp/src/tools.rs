@@ -698,41 +698,74 @@ fn design_check(b: &mut dyn Backend, assembly: bool, results: &[Value]) -> Optio
     }
     let mut check = Map::new();
     let mut faults: Vec<&str> = Vec::new();
-    // One measure: every body when the batch made some (a twin may be any of them), else the
-    // bodies it changed.
+    // A first look at the bodies (`quick`: each one's box and shells, a few hundredths of a
+    // measure), then a measure of the few that may be at fault: measuring them all took 2.8 s on
+    // the desktop and 17 s in the browser for a line of 494 bodies. Every body when the batch
+    // made some (a twin may be any of them), else the bodies it changed.
     let created: Vec<&str> = results.iter().flat_map(|r| r["created_bodies"].as_array().into_iter().flatten()).filter_map(Value::as_str).collect();
-    let measured = match (created.is_empty(), touched.is_empty()) {
-        (false, _) => exec(b, "inspect.measure", json!({})).ok(),
-        (true, false) => exec(b, "inspect.measure", json!({ "bodies": touched })).ok(),
+    let looked = match (created.is_empty(), touched.is_empty()) {
+        (false, _) => exec(b, "inspect.measure", json!({"quick": true})).ok(),
+        (true, false) => exec(b, "inspect.measure", json!({"bodies": touched, "quick": true})).ok(),
         (true, true) => None,
     };
-    let bodies = measured.as_ref().and_then(|m| m["bodies"].as_array().cloned()).unwrap_or_default();
+    let bodies = looked.as_ref().and_then(|m| m["bodies"].as_array().cloned()).unwrap_or_default();
+    let corners =
+        |v: &Value| ["min", "max"].iter().flat_map(|k| v["bbox"][*k].as_array().into_iter().flatten()).filter_map(Value::as_f64).collect::<Vec<_>>();
     // A body just made the same size and place as one there already: the batch sent again on
-    // top of itself (banc NØDE IA, 25/10/2026). Each body's volume and corners are read once.
-    let sizes: Vec<(f64, Vec<f64>)> = bodies
+    // top of itself (banc NØDE IA, 25/10/2026). Two measured boxes that match have first looks
+    // within the looks' tolerances of each other (four times, to spare): only those bodies are
+    // measured, then compared as they always were.
+    let looks: Vec<(Vec<f64>, f64)> = bodies.iter().map(|v| (corners(v), v["bbox_tolerance"].as_f64().unwrap_or(0.0))).collect();
+    let near = |(cx, tx): &(Vec<f64>, f64), (cy, ty): &(Vec<f64>, f64)| {
+        cx.len() == 6 && cy.len() == 6 && cx.iter().zip(cy).all(|(a, b)| (a - b).abs() <= 4.0 * (tx + ty) + 2e-6 * (1.0 + a.abs().max(b.abs())))
+    };
+    let made: std::collections::HashSet<&str> = created.iter().copied().collect();
+    let pairs: Vec<(usize, Vec<usize>)> = bodies
         .iter()
-        .map(|v| {
-            let corners = ["min", "max"].iter().flat_map(|k| v["bbox"][*k].as_array().into_iter().flatten()).filter_map(Value::as_f64).collect();
-            (v["volume_mm3"].as_f64().unwrap_or(f64::NAN), corners)
+        .zip(&looks)
+        .enumerate()
+        .filter(|(_, (x, _))| x["name"].as_str().is_some_and(|n| made.contains(n)))
+        .map(|(i, (x, lx))| {
+            (
+                i,
+                bodies
+                    .iter()
+                    .zip(&looks)
+                    .enumerate()
+                    .filter(|(_, (y, ly))| near(lx, ly) && y["name"] != x["name"])
+                    .map(|(j, _)| j)
+                    .collect::<Vec<_>>(),
+            )
         })
+        .filter(|(_, ys)| !ys.is_empty())
         .collect();
-    let same = |(vx, cx): &(f64, Vec<f64>), (vy, cy): &(f64, Vec<f64>)| {
+    // A body in several solids has as many shells in its first look as in its measure.
+    let parted = |x: &Value| x["name"].as_str().is_some_and(|n| seen.contains(n)) && x["kernel"]["shells"].as_u64().is_some_and(|n| n > 1);
+    let mut wanted = vec![false; bodies.len()];
+    for (i, ys) in &pairs {
+        for k in std::iter::once(i).chain(ys) {
+            if let Some(w) = wanted.get_mut(*k) {
+                *w = true;
+            }
+        }
+    }
+    for (w, x) in wanted.iter_mut().zip(&bodies) {
+        *w |= parted(x);
+    }
+    let full = measured(b, &bodies, &wanted, if created.is_empty() { json!({"bodies": touched}) } else { json!({}) });
+    let same = |x: &Value, y: &Value| {
+        let (vx, vy) = (x["volume_mm3"].as_f64().unwrap_or(f64::NAN), y["volume_mm3"].as_f64().unwrap_or(f64::NAN));
+        let (cx, cy) = (corners(x), corners(y));
         (vx - vy).abs() <= 1e-6 * vx.abs().max(1.0)
             && cx.len() == 6
             && cy.len() == 6
-            && cx.iter().zip(cy).all(|(a, b)| (a - b).abs() < 1e-6 * (1.0 + a.abs()))
+            && cx.iter().zip(&cy).all(|(a, b)| (a - b).abs() < 1e-6 * (1.0 + a.abs()))
     };
-    let made: std::collections::HashSet<&str> = created.iter().copied().collect();
-    let twins: Vec<Value> = bodies
+    let twins: Vec<Value> = pairs
         .iter()
-        .zip(&sizes)
-        .filter(|(x, _)| x["name"].as_str().is_some_and(|n| made.contains(n)))
-        .filter_map(|(x, sx)| {
-            bodies
-                .iter()
-                .zip(&sizes)
-                .find(|(y, sy)| y["name"] != x["name"] && same(sx, sy))
-                .map(|(y, _)| json!({"body": x["name"], "same_as": y["name"]}))
+        .filter_map(|(i, ys)| {
+            let x = full.get(*i)?.as_ref()?;
+            ys.iter().filter_map(|j| full.get(*j)?.as_ref()).find(|y| same(x, y)).map(|y| json!({"body": x["name"], "same_as": y["name"]}))
         })
         .collect();
     if !twins.is_empty() {
@@ -741,9 +774,11 @@ fn design_check(b: &mut dyn Backend, assembly: bool, results: &[Value]) -> Optio
     }
     let split: Vec<Value> = bodies
         .iter()
-        .filter(|x| x["name"].as_str().is_some_and(|n| seen.contains(n)))
-        .filter(|x| x["kernel"]["shells"].as_u64().is_some_and(|n| n > 1))
-        .map(|x| json!({"body": x["name"], "solids": x["kernel"]["shells"]}))
+        .zip(&full)
+        .filter(|(x, _)| parted(x))
+        .filter_map(|(_, m)| m.as_ref())
+        .filter(|m| m["kernel"]["shells"].as_u64().is_some_and(|n| n > 1))
+        .map(|m| json!({"body": m["name"], "solids": m["kernel"]["shells"]}))
         .collect();
     if !split.is_empty() {
         check.insert("split_bodies".into(), Value::Array(split));
@@ -819,6 +854,37 @@ fn design_check(b: &mut dyn Backend, assembly: bool, results: &[Value]) -> Optio
         check.insert("fix_before_reporting".into(), json!(faults));
     }
     (!check.is_empty()).then_some(Value::Object(check))
+}
+
+/// The measures of the bodies `looked` at that are `wanted`, in their places (`None` elsewhere, or
+/// when the measure failed). By name, in one request; when names repeat in the design, by the
+/// request that looked at them all (`everyone`), measuring them all as before.
+fn measured(b: &mut dyn Backend, looked: &[Value], wanted: &[bool], everyone: Value) -> Vec<Option<Value>> {
+    let mut out: Vec<Option<Value>> = vec![None; looked.len()];
+    if !wanted.contains(&true) {
+        return out;
+    }
+    let names: Vec<&str> = looked.iter().map(|x| x["name"].as_str().unwrap_or_default()).collect();
+    let mut seen = std::collections::HashSet::new();
+    if names.iter().all(|n| seen.insert(*n)) {
+        let some: Vec<&str> = names.iter().zip(wanted).filter(|(_, w)| **w).map(|(n, _)| *n).collect();
+        let got = exec(b, "inspect.measure", json!({ "bodies": some })).ok();
+        for m in got.as_ref().and_then(|g| g["bodies"].as_array()).into_iter().flatten() {
+            if let Some(i) = names.iter().position(|n| m["name"].as_str() == Some(*n))
+                && let Some(slot) = out.get_mut(i)
+            {
+                *slot = Some(m.clone());
+            }
+        }
+        return out;
+    }
+    let got = exec(b, "inspect.measure", everyone).ok();
+    let all = got.as_ref().and_then(|g| g["bodies"].as_array()).cloned().unwrap_or_default();
+    // The same bodies as the first look, in the same order, or none at all.
+    if all.len() == looked.len() && all.iter().zip(looked).all(|(m, x)| m["name"] == x["name"]) {
+        out = all.into_iter().map(Some).collect();
+    }
+    out
 }
 
 /// A failed batch's reply. Rolled back, the steps that had run are gone with the failure: their
