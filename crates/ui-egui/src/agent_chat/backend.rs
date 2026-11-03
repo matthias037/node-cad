@@ -40,6 +40,9 @@ pub enum Event {
     Text { thought: bool, text: String },
     /// A new tool call, or news about one.
     Tool { id: String, title: Option<String>, kind: Option<String>, status: Option<ToolStatus>, output: Option<String> },
+    /// How far a running tool call is: `done` of its `total` steps (a batch the page runs a few
+    /// steps a frame), and that said for its card.
+    Progress { id: String, done: usize, total: usize, text: String },
     /// Its plan, replaced whole: each entry with its status.
     Plan(Vec<(String, String)>),
     /// It asks before running something of its own; answered with [`ChatBackend::answer_permission`].

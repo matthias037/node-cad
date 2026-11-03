@@ -49,6 +49,7 @@ mod component_link;
 mod config;
 mod file;
 mod inspect;
+pub use inspect::measure_reply;
 mod interference;
 pub(crate) mod joints;
 mod libraries;

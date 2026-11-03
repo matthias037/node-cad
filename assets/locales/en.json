@@ -1775,6 +1775,8 @@
   "ui.ai_testing": "Testing…",
   "ui.ai_tool_done": "done",
   "ui.ai_tool_failed": "failed",
+  "ui.ai_tool_measured": "{done} / {total} bodies measured",
+  "ui.ai_tool_progress": "{done} / {total} commands",
   "ui.ai_tool_running": "running",
   "ui.ai_tool_unfold": "Click to show what it returned",
   "ui.ai_tool_waiting": "waiting",

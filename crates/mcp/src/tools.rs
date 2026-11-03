@@ -686,10 +686,12 @@ fn with_check(b: &mut dyn Backend, reply: &mut Value, steps: &[Value], results: 
 }
 
 fn design_check(b: &mut dyn Backend, assembly: bool, results: &[Value]) -> Option<Value> {
+    // Sets beside the lists: a batch of a thousand bodies compared each name with all the others.
     let mut touched: Vec<&str> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     for r in results {
         for name in ["created_bodies", "changed_bodies"].iter().flat_map(|k| r[*k].as_array().into_iter().flatten()).filter_map(Value::as_str) {
-            if !touched.contains(&name) {
+            if seen.insert(name) {
                 touched.push(name);
             }
         }
@@ -706,17 +708,32 @@ fn design_check(b: &mut dyn Backend, assembly: bool, results: &[Value]) -> Optio
     };
     let bodies = measured.as_ref().and_then(|m| m["bodies"].as_array().cloned()).unwrap_or_default();
     // A body just made the same size and place as one there already: the batch sent again on
-    // top of itself (banc NØDE IA, 25/10/2026).
-    let same = |x: &Value, y: &Value| {
-        let (vx, vy) = (x["volume_mm3"].as_f64().unwrap_or(f64::NAN), y["volume_mm3"].as_f64().unwrap_or(f64::NAN));
-        let corners = |v: &Value| ["min", "max"].iter().flat_map(|k| v["bbox"][*k].as_array().cloned().unwrap_or_default()).filter_map(|c| c.as_f64()).collect::<Vec<_>>();
-        let (cx, cy) = (corners(x), corners(y));
-        (vx - vy).abs() <= 1e-6 * vx.abs().max(1.0) && cx.len() == 6 && cy.len() == 6 && cx.iter().zip(&cy).all(|(a, b)| (a - b).abs() < 1e-6 * (1.0 + a.abs()))
+    // top of itself (banc NØDE IA, 25/10/2026). Each body's volume and corners are read once.
+    let sizes: Vec<(f64, Vec<f64>)> = bodies
+        .iter()
+        .map(|v| {
+            let corners = ["min", "max"].iter().flat_map(|k| v["bbox"][*k].as_array().into_iter().flatten()).filter_map(Value::as_f64).collect();
+            (v["volume_mm3"].as_f64().unwrap_or(f64::NAN), corners)
+        })
+        .collect();
+    let same = |(vx, cx): &(f64, Vec<f64>), (vy, cy): &(f64, Vec<f64>)| {
+        (vx - vy).abs() <= 1e-6 * vx.abs().max(1.0)
+            && cx.len() == 6
+            && cy.len() == 6
+            && cx.iter().zip(cy).all(|(a, b)| (a - b).abs() < 1e-6 * (1.0 + a.abs()))
     };
+    let made: std::collections::HashSet<&str> = created.iter().copied().collect();
     let twins: Vec<Value> = bodies
         .iter()
-        .filter(|x| x["name"].as_str().is_some_and(|n| created.contains(&n)))
-        .filter_map(|x| bodies.iter().find(|y| y["name"] != x["name"] && same(x, y)).map(|y| json!({"body": x["name"], "same_as": y["name"]})))
+        .zip(&sizes)
+        .filter(|(x, _)| x["name"].as_str().is_some_and(|n| made.contains(n)))
+        .filter_map(|(x, sx)| {
+            bodies
+                .iter()
+                .zip(&sizes)
+                .find(|(y, sy)| y["name"] != x["name"] && same(sx, sy))
+                .map(|(y, _)| json!({"body": x["name"], "same_as": y["name"]}))
+        })
         .collect();
     if !twins.is_empty() {
         check.insert("duplicates".into(), Value::Array(twins));
@@ -724,7 +741,7 @@ fn design_check(b: &mut dyn Backend, assembly: bool, results: &[Value]) -> Optio
     }
     let split: Vec<Value> = bodies
         .iter()
-        .filter(|x| x["name"].as_str().is_some_and(|n| touched.contains(&n)))
+        .filter(|x| x["name"].as_str().is_some_and(|n| seen.contains(n)))
         .filter(|x| x["kernel"]["shells"].as_u64().is_some_and(|n| n > 1))
         .map(|x| json!({"body": x["name"], "solids": x["kernel"]["shells"]}))
         .collect();

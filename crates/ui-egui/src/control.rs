@@ -146,48 +146,146 @@ pub(crate) fn batch_step_command(step: &Value) -> Option<&str> {
 /// the reply; refusals (`engine.batch unavailable: …`) come before anything runs, so the client
 /// can send the steps one by one instead.
 fn batch(app: &mut SolveApp, p: &Value) -> Outcome {
-    let Some(steps) = p.get("commands").and_then(Value::as_array).filter(|s| s.len() <= MAX_BATCH) else {
-        return err(format!("engine.batch: commands must be an array of at most {MAX_BATCH} steps"));
+    let mut batch = match Batch::start(app, p) {
+        Ok(batch) => batch,
+        Err(refused) => return refused,
     };
-    // (With the agent cursor shown, the pointer has already acted out a short summary of the
-    // batch: `agent_cursor::intercept`.)
-    if let Some(why) = batch_refusal(steps) {
-        return err(why);
-    }
-    let rollback = p.get("rollback").and_then(Value::as_bool).unwrap_or(true);
-    let profile = p.get("profile").and_then(Value::as_bool).unwrap_or(false);
-    let timed = profile || p.get("timings").and_then(Value::as_bool).unwrap_or(false);
-    let mut rows = Vec::new();
-    let clock = timing::Clock::start();
-    let checkpoint = if rollback { app.run("edit.checkpoint", json!({})).ok().and_then(|v| v["checkpoint"].as_u64()) } else { None };
-    let undo_before = app.session.undo.len();
-    let mut results = Vec::with_capacity(steps.len());
-    for (i, step) in steps.iter().enumerate() {
-        let (r, took) = timing::time(profile, || match command(step) {
-            Some(id) => execute(app, id, step.get("params").cloned().filter(|v| !v.is_null()).unwrap_or(json!({}))),
-            None => Err("missing `command`".to_string()),
-        });
-        if timed {
-            rows.push(took.to_json(i, command(step).unwrap_or_default()));
+    loop {
+        // Never asked to pause, it stops only at its end or at a failure.
+        if let Some(reply) = batch.run(app, || true) {
+            return reply;
         }
-        match r {
-            Ok(v) => results.push(v),
-            Err(e) => {
-                let restored = checkpoint.is_some_and(|id| app.run("edit.restore_checkpoint", json!({"checkpoint": id})).is_ok());
-                let failed = json!({"index": i, "command": command(step), "error": e});
-                // `rolled_back`: the design really is back at its checkpoint.
-                let reply =
-                    json!({"completed": i, "results": results, "failed": failed, "undone": if restored { i } else { 0 }, "rolled_back": restored});
-                return ok(with_timings(reply, timed, rows, clock.ms()));
+    }
+}
+
+/// An `engine.batch` that runs a few steps at a time: the browser's NØDE IA runs a big one over
+/// several frames, so the page goes on drawing and says how far it is
+/// (`agent_chat::web_client`). [`batch`] runs it all at once. The steps, their order, the
+/// checkpoint and the reply are the same either way.
+pub(crate) struct Batch {
+    steps: Vec<Value>,
+    profile: bool,
+    timed: bool,
+    rows: Vec<Value>,
+    /// The time it has run so far (its checkpoint included), not the frames in between.
+    ms: f64,
+    checkpoint: Option<u64>,
+    undo_before: usize,
+    results: Vec<Value>,
+    /// The design as its last step left it: anything else between two runs stops it.
+    doc: std::sync::Arc<solidcraft_engine::doc::Document>,
+}
+
+impl Batch {
+    /// Check the request and set the checkpoint; a refusal comes back before anything runs.
+    pub(crate) fn start(app: &mut SolveApp, p: &Value) -> Result<Batch, Outcome> {
+        let Some(steps) = p.get("commands").and_then(Value::as_array).filter(|s| s.len() <= MAX_BATCH) else {
+            return Err(err(format!("engine.batch: commands must be an array of at most {MAX_BATCH} steps")));
+        };
+        // (With the agent cursor shown, the pointer has already acted out a short summary of the
+        // batch: `agent_cursor::intercept`.)
+        if let Some(why) = batch_refusal(steps) {
+            return Err(err(why));
+        }
+        let rollback = p.get("rollback").and_then(Value::as_bool).unwrap_or(true);
+        let profile = p.get("profile").and_then(Value::as_bool).unwrap_or(false);
+        let timed = profile || p.get("timings").and_then(Value::as_bool).unwrap_or(false);
+        let clock = timing::Clock::start();
+        let checkpoint = if rollback { app.run("edit.checkpoint", json!({})).ok().and_then(|v| v["checkpoint"].as_u64()) } else { None };
+        Ok(Batch {
+            steps: steps.clone(),
+            profile,
+            timed,
+            rows: Vec::new(),
+            ms: clock.ms(),
+            checkpoint,
+            undo_before: app.session.undo.len(),
+            results: Vec::with_capacity(steps.len()),
+            doc: app.session.doc.clone(),
+        })
+    }
+
+    /// The steps that have run, and all its steps.
+    pub(crate) fn progress(&self) -> (usize, usize) {
+        (self.results.len(), self.steps.len())
+    }
+
+    /// Run the next steps, at least one, while `more` says so: the reply once the last has run or
+    /// one failed, `None` while steps are left. The design changed in between by anything else
+    /// (the person's edit or undo, another tab) stops it before its next step.
+    pub(crate) fn run(&mut self, app: &mut SolveApp, mut more: impl FnMut() -> bool) -> Option<Outcome> {
+        let clock = timing::Clock::start();
+        if !std::sync::Arc::ptr_eq(&app.session.doc, &self.doc) {
+            return Some(self.interrupted(app, &clock));
+        }
+        while let Some(step) = self.steps.get(self.results.len()) {
+            let i = self.results.len();
+            let (r, took) = timing::time(self.profile, || match command(step) {
+                Some(id) => execute(app, id, step.get("params").cloned().filter(|v| !v.is_null()).unwrap_or(json!({}))),
+                None => Err("missing `command`".to_string()),
+            });
+            if self.timed {
+                self.rows.push(took.to_json(i, command(step).unwrap_or_default()));
+            }
+            match r {
+                Ok(v) => self.results.push(v),
+                Err(e) => {
+                    let failed = json!({"index": i, "command": command(step), "error": e});
+                    return Some(self.fail(app, failed, &clock));
+                }
+            }
+            if self.results.len() < self.steps.len() && !more() {
+                self.ms += clock.ms();
+                self.doc = app.session.doc.clone();
+                return None;
             }
         }
+        if let Some(id) = self.checkpoint {
+            let _ = app.run("edit.restore_checkpoint", json!({"checkpoint": id, "forget": true}));
+        }
+        // `undo_steps`: the undos that take the whole batch back (the agent's `undo {steps}`).
+        let undo_steps = app.session.undo.len().saturating_sub(self.undo_before);
+        let results = std::mem::take(&mut self.results);
+        let reply = json!({"completed": results.len(), "results": results, "undone": 0, "undo_steps": undo_steps});
+        Some(ok(with_timings(reply, self.timed, std::mem::take(&mut self.rows), self.ms + clock.ms())))
     }
-    if let Some(id) = checkpoint {
-        let _ = app.run("edit.restore_checkpoint", json!({"checkpoint": id, "forget": true}));
+
+    /// Stop it before its next step, as a failure there does (back to the checkpoint): `why`
+    /// is that step's error.
+    pub(crate) fn stop(mut self, app: &mut SolveApp, why: &str) -> Outcome {
+        let clock = timing::Clock::start();
+        let i = self.results.len();
+        let failed = json!({"index": i, "command": self.steps.get(i).and_then(command), "error": why});
+        self.fail(app, failed, &clock)
     }
-    // `undo_steps`: the undos that take the whole batch back (the agent's `undo {steps}`).
-    let undo_steps = app.session.undo.len().saturating_sub(undo_before);
-    ok(with_timings(json!({"completed": results.len(), "results": results, "undone": 0, "undo_steps": undo_steps}), timed, rows, clock.ms()))
+
+    /// The design changed between two runs. Edited (an undo step away, as the job queue tells
+    /// it): back to the checkpoint, as a failure goes. Replaced (another tab, a file opened): the
+    /// checkpoint is that other design's, so nothing is undone here.
+    fn interrupted(&mut self, app: &mut SolveApp, clock: &timing::Clock) -> Outcome {
+        let s = &app.session;
+        let edited = s.undo.iter().chain(&s.redo).any(|snap| std::sync::Arc::ptr_eq(&snap.doc, &self.doc));
+        let i = self.results.len();
+        let next = self.steps.get(i).and_then(command);
+        if edited {
+            let failed =
+                json!({"index": i, "command": next, "error": "the design was changed while the batch ran (an edit or an undo): it stopped here"});
+            return self.fail(app, failed, clock);
+        }
+        let error =
+            "the design was replaced (another tab, or a file opened) while the batch ran: it stopped here, and its steps before stay in that design";
+        let reply = json!({"completed": i, "results": std::mem::take(&mut self.results), "failed": {"index": i, "command": next, "error": error}, "undone": 0, "rolled_back": false});
+        ok(with_timings(reply, self.timed, std::mem::take(&mut self.rows), self.ms + clock.ms()))
+    }
+
+    /// The reply of a batch that stopped at a step (`failed`), the design back at its checkpoint.
+    fn fail(&mut self, app: &mut SolveApp, failed: Value, clock: &timing::Clock) -> Outcome {
+        let restored = self.checkpoint.is_some_and(|id| app.run("edit.restore_checkpoint", json!({"checkpoint": id})).is_ok());
+        let i = self.results.len();
+        // `rolled_back`: the design really is back at its checkpoint.
+        let reply = json!({"completed": i, "results": std::mem::take(&mut self.results), "failed": failed, "undone": if restored { i } else { 0 }, "rolled_back": restored});
+        ok(with_timings(reply, self.timed, std::mem::take(&mut self.rows), self.ms + clock.ms()))
+    }
 }
 
 /// A batch reply with `timings` and `total_ms` when they were asked for.
@@ -1321,6 +1419,84 @@ mod tests {
         let v = batch(&mut h, json!({"commands": steps, "rollback": false}));
         assert_eq!((&v["result"]["rolled_back"], &v["result"]["undone"]), (&json!(false), &json!(0)), "{v}");
         assert_eq!(inspect(&mut h)["bodies"].as_array().map(Vec::len), Some(1));
+    }
+
+    /// The batch at once (`engine.batch`), or a step at a time as the browser runs it over its
+    /// frames ([`Batch`]).
+    fn run_batch(params: &serde_json::Value, a_step_at_a_time: bool) -> (serde_json::Value, serde_json::Value, usize) {
+        let mut app = SolveApp::new(Session::default(), Services::default());
+        let mut runs = 0;
+        let reply = if a_step_at_a_time {
+            let Ok(mut b) = Batch::start(&mut app, params) else { panic!("refused") };
+            loop {
+                runs += 1;
+                if let Some(reply) = b.run(&mut app, || false) {
+                    break reply;
+                }
+            }
+        } else {
+            runs += 1;
+            super::batch(&mut app, params)
+        };
+        let Outcome::Done(reply) = reply else { panic!("no reply") };
+        let design = app.session.execute("document.inspect", &json!({"measure": true})).unwrap();
+        (without_timings(&reply), without_timings(&design), runs)
+    }
+
+    /// Run a step at a time, a batch does the same steps in the same order and replies the same
+    /// as at once, a failing one too (back at its checkpoint).
+    #[test]
+    fn a_batch_run_a_step_at_a_time_replies_as_at_once() {
+        let made =
+            |name: &str, height: f64| json!({"command": "solid.box", "params": {"length": 10, "width": 10, "height": height, "body_name": name}});
+        let fine = json!([made("A", 10.0), {"command": "appearance.assign", "params": {"bodies": ["A"], "color": "#41464d"}}, made("B", 20.0), made("C", 30.0)]);
+        let failing = json!([made("A", 10.0), made("B", 20.0), {"command": "solid.extrude", "params": {"distance": "bogus +"}}, made("C", 30.0)]);
+        for (steps, failed) in [(fine, false), (failing, true)] {
+            let params = json!({"commands": steps});
+            let (once, design, _) = run_batch(&params, false);
+            let (stepwise, stepped_design, runs) = run_batch(&params, true);
+            assert_eq!(stepwise, once);
+            assert_eq!(stepped_design, design);
+            assert_eq!(once["result"].get("failed").is_some(), failed, "{once}");
+            assert_eq!(runs, if failed { 3 } else { 4 }, "a step a run, up to the failing one");
+        }
+    }
+
+    /// The design replaced between two runs (another tab, a file opened): the batch stops before
+    /// its next step and says so; nothing runs in the design now shown, and its first steps stay
+    /// in theirs.
+    #[test]
+    fn a_batch_stops_when_its_design_is_replaced_between_runs() {
+        let mut app = SolveApp::new(Session::default(), Services::default());
+        let made = |name: &str| json!({"command": "solid.box", "params": {"length": 10, "width": 10, "height": 10, "body_name": name}});
+        let Ok(mut b) = Batch::start(&mut app, &json!({"commands": [made("A"), made("B")]})) else { panic!("refused") };
+        assert!(b.run(&mut app, || false).is_none());
+        let first = std::mem::take(&mut app.session);
+        let Some(Outcome::Done(v)) = b.run(&mut app, || false) else { panic!("it went on") };
+        let r = &v["result"];
+        assert_eq!((&r["completed"], &r["rolled_back"], &r["failed"]["index"]), (&json!(1), &json!(false), &json!(1)), "{v}");
+        assert!(r["failed"]["error"].as_str().is_some_and(|e| e.contains("replaced")), "{v}");
+        assert!(app.session.world_state().bodies.is_empty(), "a step ran in the other design");
+        assert_eq!(first.world_state().bodies.len(), 1);
+    }
+
+    /// The design edited between two runs (an undo of the person's): the batch stops before its
+    /// next step and goes back to its checkpoint, as a failure does.
+    #[test]
+    fn a_batch_goes_back_when_its_design_is_edited_between_runs() {
+        let mut app = SolveApp::new(Session::default(), Services::default());
+        app.run("solid.box", json!({"length": 5, "width": 5, "height": 5, "body_name": "Before"})).unwrap();
+        let made = |name: &str| json!({"command": "solid.box", "params": {"length": 10, "width": 10, "height": 10, "body_name": name}});
+        let Ok(mut b) = Batch::start(&mut app, &json!({"commands": [made("A"), made("B"), made("C")]})) else { panic!("refused") };
+        assert!(b.run(&mut app, || false).is_none());
+        assert!(b.run(&mut app, || false).is_none());
+        app.run("edit.undo", json!({})).unwrap();
+        let Some(Outcome::Done(v)) = b.run(&mut app, || false) else { panic!("it went on") };
+        let r = &v["result"];
+        assert_eq!((&r["completed"], &r["rolled_back"], &r["undone"]), (&json!(2), &json!(true), &json!(2)), "{v}");
+        assert!(r["failed"]["error"].as_str().is_some_and(|e| e.contains("changed")), "{v}");
+        let names: Vec<String> = app.session.world_state().bodies.iter().map(|b| b.name.clone()).collect();
+        assert_eq!(names, ["Before"]);
     }
 
     /// Every step of a batch from an MCP server stays inside the agent's folders (#205), as an

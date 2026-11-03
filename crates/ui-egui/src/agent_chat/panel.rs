@@ -1195,8 +1195,8 @@ fn conversation(app: &mut SolveApp, ui: &mut egui::Ui) {
                 ui_kit::assistant_tool_frame(ui, false, |ui| {
                     ui.spacing_mut().item_spacing.y = Tokens::get().space_2;
                     for (offset, next) in app.agent_chat.items.iter().skip(n).take_while(|next| matches!(next, Item::Tool { .. })).enumerate() {
-                        if let Item::Tool { title, kind, status, output, .. } = next {
-                            tool_card(ui, n + offset, title, kind, *status, output.as_deref());
+                        if let Item::Tool { title, kind, status, output, progress, .. } = next {
+                            tool_card(ui, n + offset, title, kind, *status, output.as_deref(), progress.as_ref());
                         }
                     }
                 });
@@ -1621,7 +1621,16 @@ fn add_menu(app: &mut SolveApp, ui: &mut egui::Ui) {
 }
 
 /// A tool call as a card: its state, name and kind on one line; a click unfolds what it returned.
-fn tool_card(ui: &mut egui::Ui, n: usize, title: &str, kind: &str, status: Option<ToolStatus>, output: Option<&str>) {
+/// A call that runs its steps a few at a time says how far it is while it runs, over a bar.
+fn tool_card(
+    ui: &mut egui::Ui,
+    n: usize,
+    title: &str,
+    kind: &str,
+    status: Option<ToolStatus>,
+    output: Option<&str>,
+    progress: Option<&(usize, usize, String)>,
+) {
     let t = Tokens::get();
     let (color, mark, state) = match status {
         Some(ToolStatus::Completed) => (t.form_success, ui_kit::AssistantToolState::Done, "ui.ai_tool_done"),
@@ -1629,6 +1638,8 @@ fn tool_card(ui: &mut egui::Ui, n: usize, title: &str, kind: &str, status: Optio
         Some(ToolStatus::InProgress) => (t.accent, ui_kit::AssistantToolState::Running, "ui.ai_tool_running"),
         _ => (t.text_dim, ui_kit::AssistantToolState::Pending, "ui.ai_tool_waiting"),
     };
+    let progress = progress.filter(|(_, total, _)| status == Some(ToolStatus::InProgress) && *total > 0);
+    let state = progress.map_or(tr(state), |(_, _, text)| text.as_str());
     ui_kit::assistant_tool_row(ui, status == Some(ToolStatus::Failed), |ui| {
         ui.set_width(ui.available_width());
         let id = ui.make_persistent_id(("sc_agent_tool", n));
@@ -1641,7 +1652,7 @@ fn tool_card(ui: &mut egui::Ui, n: usize, title: &str, kind: &str, status: Optio
                     let (rect, _) = ui.allocate_exact_size(vec2(t.space_14, t.space_14), Sense::hover());
                     ui_kit::disclosure(ui.painter(), rect.center(), state_.is_open(), t.text_dim);
                 }
-                ui.label(RichText::new(tr(state)).size(t.font_small).color(color));
+                ui.label(RichText::new(state).size(t.font_small).color(color));
                 if !kind.is_empty() && kind != "other" {
                     ui.label(RichText::new(kind).size(t.font_small).color(t.text_dim));
                 }
@@ -1650,6 +1661,9 @@ fn tool_card(ui: &mut egui::Ui, n: usize, title: &str, kind: &str, status: Optio
                 });
             });
         });
+        if let Some((done, total, _)) = progress {
+            ui_kit::progress(ui, &format!("agent_chat:tool:{n}"), *done as f32 / *total as f32);
+        }
         let click = ui.interact(head.response.rect, id.with("head"), Sense::click());
         crate::scenario::publish_handle(&format!("agent_chat:tool:{n}"), head.response.rect.center());
         if output.is_some() && click.clicked() {

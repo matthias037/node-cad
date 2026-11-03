@@ -136,6 +136,7 @@ fn assistant(h: &mut Harness, requested: &mut BTreeMap<String, bool>) {
             kind: "other".into(),
             status: Some(ToolStatus::Failed),
             output: Some("Use a smaller radius".into()),
+            progress: None,
         },
         Item::Approval { id: 1, title: "Export plate.step".into(), tool: "export".into(), answer: None },
     ];

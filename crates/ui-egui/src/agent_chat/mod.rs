@@ -212,6 +212,8 @@ pub enum Item {
         kind: String,
         status: Option<ToolStatus>,
         output: Option<String>,
+        /// Its steps done and in all while it runs them, and that said (`Event::Progress`).
+        progress: Option<(usize, usize, String)>,
     },
     Plan(Vec<(String, String)>),
     /// The agent asks before running something of its own (its options, its words).
@@ -571,7 +573,12 @@ impl AgentChat {
                         *o = output;
                     }
                 } else {
-                    self.push(Item::Tool { id, title: title.unwrap_or_default(), kind: kind.unwrap_or_default(), status, output });
+                    self.push(Item::Tool { id, title: title.unwrap_or_default(), kind: kind.unwrap_or_default(), status, output, progress: None });
+                }
+            }
+            Event::Progress { id, done, total, text } => {
+                if let Some(Item::Tool { progress, .. }) = self.items.iter_mut().rev().find(|i| matches!(i, Item::Tool { id: x, .. } if *x == id)) {
+                    *progress = Some((done, total, text));
                 }
             }
             Event::Plan(entries) => {
@@ -887,6 +894,7 @@ pub fn connect(app: &mut SolveApp, ctx: &egui::Context) {
 
 /// Stop the agent (and everything it started); the conversation stays.
 pub fn disconnect(app: &mut SolveApp) {
+    web_client::stop(app);
     end_turn(app);
     let chat = &mut app.agent_chat;
     chat.stop_backend(false);
@@ -897,6 +905,7 @@ pub fn disconnect(app: &mut SolveApp) {
 
 /// The app is quitting: end the agent and its helpers before the window goes.
 pub fn shutdown(app: &mut SolveApp) {
+    web_client::stop(app);
     end_turn(app);
     app.agent_chat.stop_backend(true);
 }
@@ -1239,6 +1248,8 @@ pub fn cancel(app: &mut SolveApp) {
 /// Ask the agent to stop the message it is on and decline what waits for approval.
 fn interrupt(app: &mut SolveApp) {
     decline_all(app, "the user stopped the message");
+    // The browser's tool calls run in the page: a batch halfway goes back to where it started.
+    web_client::stop(app);
     if let Some(b) = app.agent_chat.backend.as_mut() {
         b.cancel();
     }
@@ -1780,8 +1791,8 @@ pub fn status(app: &SolveApp) -> Value {
         .map(|i| match i {
             Item::User { text, image, pictures, files } => json!({"user": text, "image": image, "pictures": pictures.len(), "files": files}),
             Item::Agent { thought, text } => json!({"agent": text, "thought": thought}),
-            Item::Tool { id, title, kind, status, output } => {
-                json!({"tool": id, "title": title, "kind": kind, "status": status.map(|s| format!("{s:?}")), "output": output})
+            Item::Tool { id, title, kind, status, output, progress } => {
+                json!({"tool": id, "title": title, "kind": kind, "status": status.map(|s| format!("{s:?}")), "output": output, "progress": progress})
             }
             Item::Plan(p) => json!({"plan": p}),
             Item::Permission { title, options, answer, .. } => {

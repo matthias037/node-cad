@@ -126,15 +126,20 @@ fn measure(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
     }
+    Ok(measure_reply(bodies))
+}
+
+/// `inspect.measure`'s reply for its bodies, each as it measures one (`bodies`, in the design's
+/// order): their count, and their totals. Bodies measured one at a time (the browser measures a
+/// big design over several frames) make the same reply as measured together.
+pub fn measure_reply(bodies: Vec<Value>) -> Value {
     let tv: f64 = bodies.iter().filter_map(|b| b["volume_mm3"].as_f64()).sum();
     let ta: f64 = bodies.iter().filter_map(|b| b["area_mm2"].as_f64()).sum();
     let tf: u64 = bodies.iter().filter_map(|b| b["faces"].as_u64()).sum();
     let te: u64 = bodies.iter().filter_map(|b| b["edges"].as_u64()).sum();
     let tvx: u64 = bodies.iter().filter_map(|b| b["vertices"].as_u64()).sum();
     let tm: f64 = bodies.iter().filter_map(|b| b["mass_g"].as_f64()).sum();
-    Ok(
-        json!({"body_count": bodies.len(), "bodies": bodies, "total": {"volume_mm3": tv, "area_mm2": ta, "mass_g": tm, "faces": tf, "edges": te, "vertices": tvx}}),
-    )
+    json!({"body_count": bodies.len(), "bodies": bodies, "total": {"volume_mm3": tv, "area_mm2": ta, "mass_g": tm, "faces": tf, "edges": te, "vertices": tvx}})
 }
 
 fn sketch_json(s: &Session, id: u64) -> Option<Value> {

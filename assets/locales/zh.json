@@ -1775,6 +1775,8 @@
   "ui.ai_testing": "正在测试…",
   "ui.ai_tool_done": "完成",
   "ui.ai_tool_failed": "失败",
+  "ui.ai_tool_measured": "已测量 {done} / {total} 个实体",
+  "ui.ai_tool_progress": "{done} / {total} 条命令",
   "ui.ai_tool_running": "运行中",
   "ui.ai_tool_unfold": "点击显示返回内容",
   "ui.ai_tool_waiting": "等待中",
