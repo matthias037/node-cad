@@ -14,13 +14,39 @@
 # installed either when appimaged (go-appimage) already made an entry for this AppImage, or when
 # a launcher that manages AppImages (Gear Lever, AppImageLauncher) started it: it sets
 # DESKTOPINTEGRATION and owns the menu entry.
+#
+# The same step puts `node-cad-cli` on PATH: a small wrapper script in ~/.local/bin that starts this
+# AppImage in command-line mode (SOLIDCRAFT_APPIMAGE_CLI=1 makes AppRun run the bundled
+# node-cad-cli), so MCP clients and shells find it by name. It is rewritten when the AppImage
+# moves, and a file there that this script did not write is never touched. The same opt-outs apply.
 
 set -u
 
 APPDIR="$(dirname "$(readlink -f "$0")")"
 DESK_ID=fr.node_os.cad
-# Compatibility shim (docs/compatibility.md): the desktop id of releases before 0.8.
-OLD_DESK_ID=ai.storyteller.solvecraft
+CLI_MARKER="# node-cad-cli wrapper written by the NØDE CAD AppImage"
+# Compatibility shim (docs/compatibility.md): the desktop ids of earlier releases (0.8 until the
+# move to NØDE CAD, and before 0.8).
+OLD_DESK_IDS="ai.storyteller.solidcraft ai.storyteller.solvecraft"
+
+# The wrapper in ~/.local/bin: $1 is the AppImage's path, $2 the home folder.
+install_cli() {
+  bin="${XDG_BIN_HOME:-$2/.local/bin}"
+  wrapper="$bin/node-cad-cli"
+  # Anything there that is not our wrapper (a file, a link, a directory) is the user's.
+  if [ -e "$wrapper" ] || [ -L "$wrapper" ]; then
+    [ -f "$wrapper" ] && [ ! -L "$wrapper" ] && grep -qF "$CLI_MARKER" "$wrapper" 2>/dev/null || return 0
+  fi
+  mkdir -p "$bin" 2>/dev/null || return 0
+  tmp="$bin/.node-cad-cli.tmp.$$"
+  printf '#!/bin/sh\n%s\nSOLIDCRAFT_APPIMAGE_CLI=1 exec "%s" "$@"\n' "$CLI_MARKER" "$1" >"$tmp" 2>/dev/null || { rm -f "$tmp"; return 0; }
+  chmod 755 "$tmp" 2>/dev/null
+  if cmp -s "$tmp" "$wrapper" 2>/dev/null; then
+    rm -f "$tmp"
+  else
+    mv -f "$tmp" "$wrapper" 2>/dev/null || rm -f "$tmp"
+  fi
+}
 
 integrate() {
   case "${SOLIDCRAFT_NO_DESKTOP_INTEGRATION:-${SOLVECRAFT_NO_DESKTOP_INTEGRATION:-}}" in
@@ -41,6 +67,7 @@ integrate() {
   [ -n "$home" ] || return 0
   data="${XDG_DATA_HOME:-$home/.local/share}"
   [ -e "$data/solidcraft/no-desktop-integration" ] && return 0
+  install_cli "$appimage" "$home"
   src_desktop="$APPDIR/usr/share/applications/$DESK_ID.desktop"
   [ -f "$src_desktop" ] || return 0
 
@@ -91,13 +118,15 @@ integrate() {
     return 0
   fi
 
-  # An entry and icons that an AppImage before 0.8 installed under the old id would show a
-  # second menu entry; remove them (only an entry this script wrote: it points Exec at a path).
-  old="$apps/$OLD_DESK_ID.desktop"
-  if [ -f "$old" ] && grep -q "^Icon=$OLD_DESK_ID\$" "$old" && grep -q '^Exec="' "$old"; then
-    rm -f "$old" "$data"/icons/hicolor/*/apps/"$OLD_DESK_ID".png 2>/dev/null
-    command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$apps" >/dev/null 2>&1
-  fi
+  # An entry and icons that an earlier AppImage installed under an old id would show a second
+  # menu entry; remove them (only an entry this script wrote: it points Exec at a path).
+  for old_id in $OLD_DESK_IDS; do
+    old="$apps/$old_id.desktop"
+    if [ -f "$old" ] && grep -q "^Icon=$old_id\$" "$old" && grep -q '^Exec="' "$old"; then
+      rm -f "$old" "$data"/icons/hicolor/*/apps/"$old_id".png 2>/dev/null
+      command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$apps" >/dev/null 2>&1
+    fi
+  done
 
   # Icons: per-file compare so an unchanged install costs a handful of cmp calls.
   src_icons="$APPDIR/usr/share/icons/hicolor"
@@ -110,6 +139,12 @@ integrate() {
     fi
   done
 }
+
+# Started through the wrapper `integrate` installs: the command-line tool, with no integration.
+if [ "${SOLIDCRAFT_APPIMAGE_CLI:-}" = 1 ]; then
+  unset SOLIDCRAFT_APPIMAGE_CLI
+  exec "$APPDIR/usr/bin/node-cad-cli" "$@"
+fi
 
 integrate
 exec "$APPDIR/usr/bin/node-cad" "$@"

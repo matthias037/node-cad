@@ -13,6 +13,21 @@ pub(crate) fn settings_block_hint<R>(ui: &mut Ui, label: &str, hint: &str, label
 }
 
 fn settings_block_content<R>(ui: &mut Ui, label: &str, hint: Option<&str>, label_width: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+    if let Some(gate) = crate::prefs_search::block_gate(ui, label, hint) {
+        let before = crate::prefs_search::hits(ui);
+        if !gate.show {
+            let result = crate::prefs_search::run_hidden(ui, label, add);
+            crate::prefs_search::block_finish(ui, &gate, false, before);
+            return result;
+        }
+        let result = settings_block_body(ui, label, hint, label_width, add);
+        crate::prefs_search::block_finish(ui, &gate, true, before);
+        return result;
+    }
+    settings_block_body(ui, label, hint, label_width, add)
+}
+
+fn settings_block_body<R>(ui: &mut Ui, label: &str, hint: Option<&str>, label_width: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     let t = Tokens::get();
     let width = super::metrics::dimension(ui.available_width());
     let label_width = label_width.min(width * 0.45);
@@ -93,11 +108,14 @@ pub(crate) fn settings_autosave_timeline(ui: &mut Ui, minutes: f64) {
 
 /// A keyboard binding table: keycaps are separate from actions and never imply fixed bindings.
 pub(crate) fn settings_bindings(ui: &mut Ui, bindings: &[(&[&str], &str)]) {
+    if crate::prefs_search::querying(ui) && !crate::prefs_search::shows_all(ui) {
+        return;
+    }
     let t = Tokens::get();
     for (keys, action) in bindings {
         let width = super::metrics::dimension(ui.available_width());
         let (r, _) = ui.allocate_exact_size(vec2(width, t.control_height + t.space_2), Sense::hover());
-        ui.painter().hline(r.x_range(), r.bottom(), Stroke::new(1.0, t.dialog_rule));
+        t.secondary_hline(ui.painter(), r.x_range(), r.bottom(), t.dialog_rule);
         let mut left = r.left();
         for key in *keys {
             let galley = ui.painter().layout_no_wrap((*key).into(), FontId::proportional(t.font_small), t.form_ink);
@@ -105,7 +123,7 @@ pub(crate) fn settings_bindings(ui: &mut Ui, bindings: &[(&[&str], &str)]) {
                 pos2(left + (galley.size().x + t.space_12) * 0.5, r.center().y),
                 vec2(galley.size().x + t.space_12, t.control_height - t.space_8),
             );
-            ui.painter().rect(key_rect, t.radius_sm, t.control_fill, Stroke::new(1.0, t.control_border), egui::StrokeKind::Inside);
+            ui.painter().rect(key_rect, t.radius_sm, t.control_fill, t.container_border(t.control_border), egui::StrokeKind::Inside);
             ui.painter().galley(key_rect.center() - galley.size() * 0.5, galley, t.form_ink);
             left = key_rect.right() + t.space_4;
         }

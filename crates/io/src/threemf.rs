@@ -10,8 +10,10 @@
 //! items may name an object in another model part of the package (`p:path`, the 3MF Production
 //! extension, which slicers use for multi-part projects); those parts are read too. Only the root
 //! model's build counts (readers must ignore the others), and a part that can't be read fails
-//! only the placements that need it. Packages are untrusted: sizes, entry counts, model parts,
-//! mesh sizes and component nesting are capped.
+//! only the placements that need it. Bodies are named after their objects; a slicer project whose
+//! objects have no name in the model names them in its settings (Bambu Studio's
+//! `Metadata/model_settings.config`), and those names are used. Packages are untrusted: sizes,
+//! entry counts, model parts, mesh sizes and component nesting are capped.
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write as _;
@@ -249,6 +251,15 @@ pub fn model_xml(objects: &[MeshObject]) -> String {
 /// The model part's XML with model metadata after `Application`: (3MF metadata name, such as
 /// `Title` or `Designer`, and its text).
 pub fn model_xml_with(objects: &[MeshObject], metadata: &[(&str, &str)]) -> String {
+    model_xml_parts(objects, &[], metadata)
+}
+
+/// [`model_xml_with`], with `parts`: each a name and the indices of two or more `objects` written
+/// as one object whose `<components>` are their meshes, built once, so a slicer loads them as
+/// one object with parts (#8139). An index out of range or already in an earlier part is left
+/// out of it, and a part left with fewer than two objects is not made: those objects are built
+/// on their own, as every object not in a part is.
+pub fn model_xml_parts(objects: &[MeshObject], parts: &[(String, Vec<usize>)], metadata: &[(&str, &str)]) -> String {
     let mut x = String::new();
     x.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     let ft = if objects.iter().any(MeshObject::tagged) { format!(" xmlns:ft=\"{FACE_TAGS_NS}\"") } else { String::new() };
@@ -312,9 +323,36 @@ pub fn model_xml_with(objects: &[MeshObject], metadata: &[(&str, &str)]) -> Stri
         }
         x.push_str("    </triangles>\n   </mesh>\n  </object>\n");
     }
+    // Each part an object after the meshes it names (a component refers back), built in their
+    // place; the meshes in it are not built on their own.
+    let mut in_part = vec![false; objects.len()];
+    let mut built: Vec<usize> = Vec::new();
+    for (name, members) in parts {
+        let mut kept: Vec<usize> = Vec::new();
+        for &k in members {
+            if k < objects.len() && !in_part[k] && !kept.contains(&k) {
+                kept.push(k);
+            }
+        }
+        if kept.len() < 2 {
+            continue;
+        }
+        let id = objects.len() + 2 + built.len();
+        let _ = writeln!(x, "  <object id=\"{id}\" type=\"model\" name=\"{}\">", esc(name));
+        x.push_str("   <components>\n");
+        for &k in &kept {
+            in_part[k] = true;
+            let _ = writeln!(x, "    <component objectid=\"{}\"/>", k + 2);
+        }
+        x.push_str("   </components>\n  </object>\n");
+        built.push(id);
+    }
     x.push_str(" </resources>\n <build>\n");
-    for k in 0..objects.len() {
+    for k in (0..objects.len()).filter(|&k| !in_part[k]) {
         let _ = writeln!(x, "  <item objectid=\"{}\"/>", k + 2);
+    }
+    for id in built {
+        let _ = writeln!(x, "  <item objectid=\"{id}\"/>");
     }
     x.push_str(" </build>\n</model>\n");
     x
@@ -327,6 +365,11 @@ pub fn write_3mf(objects: &[MeshObject]) -> Result<Vec<u8>> {
 
 /// A 3MF package of meshes with model metadata (see [`model_xml_with`]).
 pub fn write_3mf_with(objects: &[MeshObject], metadata: &[(&str, &str)]) -> Result<Vec<u8>> {
+    write_3mf_parts(objects, &[], metadata)
+}
+
+/// A 3MF package of meshes, some of them written as objects with parts (see [`model_xml_parts`]).
+pub fn write_3mf_parts(objects: &[MeshObject], parts: &[(String, Vec<usize>)], metadata: &[(&str, &str)]) -> Result<Vec<u8>> {
     if objects.is_empty() {
         return Err(IoError::Empty);
     }
@@ -334,7 +377,7 @@ pub fn write_3mf_with(objects: &[MeshObject], metadata: &[(&str, &str)]) -> Resu
     let rels = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n <Relationship Target=\"/3D/3dmodel.model\" Id=\"rel0\" Type=\"{MODEL_REL}\"/>\n</Relationships>\n"
     );
-    let model = model_xml_with(objects, metadata);
+    let model = model_xml_parts(objects, parts, metadata);
     let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
     for (name, data) in [("[Content_Types].xml", content_types.as_bytes()), ("_rels/.rels", rels.as_bytes()), ("3D/3dmodel.model", model.as_bytes())]
     {
@@ -679,6 +722,69 @@ fn in_part(name: &str, e: IoError) -> String {
     }
 }
 
+/// Where Bambu Studio keeps a project's per-object settings, among them the objects' names (its
+/// root model's objects have none): `<config><object id="N"><metadata key="name" value="…"/>`,
+/// with `N` the root model object a build item places. The `<part>` elements inside describe the
+/// object's volumes.
+const SLICER_SETTINGS: &str = "Metadata/model_settings.config";
+
+/// The object names in slicer settings `xml` ([`SLICER_SETTINGS`]), by object id. Only an
+/// object's own `name` counts (the first, if there are several); its parts' names and all other
+/// settings are left alone.
+fn slicer_names(xml: &[u8]) -> std::result::Result<HashMap<u32, String>, String> {
+    let mut rd = Reader::from_reader(xml);
+    rd.config_mut().trim_text(true);
+    let mut buf = Vec::new();
+    let mut names = HashMap::new();
+    let mut depth = 0usize;
+    let mut elements = 0usize;
+    // The object being read: its id (if it has a usable one) and the depth of its element.
+    let mut object: Option<(Option<u32>, usize)> = None;
+    loop {
+        let ev = rd.read_event_into(&mut buf).map_err(|e| e.to_string())?;
+        let start = matches!(ev, Event::Start(_));
+        match &ev {
+            Event::Start(e) | Event::Empty(e) => {
+                let at = depth + 1;
+                if start {
+                    depth = at;
+                    if depth > MAX_XML_DEPTH {
+                        return Err("XML nested too deeply".into());
+                    }
+                }
+                elements += 1;
+                if elements > MAX_ELEMENTS {
+                    return Err("too many elements".into());
+                }
+                match (e.local_name().as_ref(), object) {
+                    (b"object", None) if at == 2 && start => {
+                        object = Some((attrs(e).get("id").and_then(|v| v.trim().parse::<u32>().ok()), at));
+                    }
+                    (b"metadata", Some((Some(id), d))) if at == d + 1 => {
+                        let a = attrs(e);
+                        if a.get("key").is_some_and(|k| k == "name")
+                            && let Some(v) = a.get("value").map(|v| v.trim()).filter(|v| !v.is_empty())
+                        {
+                            names.entry(id).or_insert_with(|| v.to_string());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Event::End(_) => {
+                if object.is_some_and(|(_, d)| d == depth) {
+                    object = None;
+                }
+                depth = depth.saturating_sub(1);
+            }
+            Event::Eof => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    Ok(names)
+}
+
 /// Append object `id` of model part `part` (and its components) placed by `xf` to `out`.
 fn flatten<'a>(
     pkg: &'a Package,
@@ -840,17 +946,44 @@ pub fn read_3mf(bytes: &[u8]) -> Result<(Vec<MeshObject>, Vec<String>)> {
     let mut out = Vec::new();
     let mut warnings = Vec::new();
     let mut total = 0usize;
+    // Bodies of root model objects without a name of their own: (index in `out`, object id).
+    let mut unnamed = Vec::new();
     for (k, item) in model.build.iter().enumerate() {
         let part = item.part.as_ref().map_or(pkg.root.as_str(), |p| p.key.as_str());
         let mut mo = MeshObject::default();
         match flatten(&pkg, part, item.id, &item.xf, &mut mo, &mut Vec::new(), &mut total) {
             Ok(()) if !mo.triangles.is_empty() => {
                 let name = pkg.parts.get(part).and_then(|m| m.objects.get(&item.id)).map(|o| o.name.trim().to_string()).filter(|n| !n.is_empty());
+                if name.is_none() && part == pkg.root {
+                    unnamed.push((out.len(), item.id));
+                }
                 mo.name = name.unwrap_or_else(|| format!("Mesh{}", k + 1));
                 out.push(mo);
             }
             Ok(()) => warnings.push(format!("build item {} has no triangles", k + 1)),
             Err(e) => warnings.push(format!("build item {}: {e}", k + 1)),
+        }
+    }
+    // A slicer project names its objects in its settings (#3858). Those are read only when a body
+    // needs a name, within what the model parts left of the budget, and settings that can't be
+    // read only leave the generic names.
+    if !unnamed.is_empty()
+        && let Some(&idx) = entries.get(&part_key(SLICER_SETTINGS))
+    {
+        let names = match read_entry(&mut zip, idx, SLICER_SETTINGS, MAX_PART.saturating_sub(model_bytes)) {
+            Ok(Some(xml)) => slicer_names(&xml),
+            Ok(None) => Err("it expands past what the model parts left of the 1 GB budget".into()),
+            Err(e) => Err(e.to_string()),
+        };
+        match names {
+            Ok(names) => {
+                for (i, id) in unnamed {
+                    if let (Some(o), Some(name)) = (out.get_mut(i), names.get(&id)) {
+                        o.name.clone_from(name);
+                    }
+                }
+            }
+            Err(e) => warnings.push(format!("object names in `{SLICER_SETTINGS}` not read: {e}")),
         }
     }
     if out.is_empty() {
@@ -871,6 +1004,35 @@ pub(crate) mod tests {
             color: None,
             ..Default::default()
         }
+    }
+
+    /// #8139: objects in a part are written once as meshes and built once, as one object whose
+    /// components are those meshes; the others are built on their own, as before. Read back, the
+    /// part is one object named after it, with every triangle of its meshes.
+    #[test]
+    fn a_part_is_one_object_whose_components_are_its_meshes() {
+        let objects = [tetra("Cube"), tetra("Dome"), tetra("Loose")];
+        let x = model_xml_parts(&objects, &[("Bracket:1".into(), vec![0, 1])], &[]);
+        assert_eq!(x.matches("<mesh>").count(), 3, "{x}");
+        assert!(x.contains("<object id=\"5\" type=\"model\" name=\"Bracket:1\">"), "{x}");
+        assert!(x.contains("<component objectid=\"2\"/>") && x.contains("<component objectid=\"3\"/>"), "{x}");
+        let build = x.split("<build>").nth(1).unwrap_or_default();
+        assert_eq!(build.matches("<item ").count(), 2, "{x}");
+        assert!(build.contains("objectid=\"4\"") && build.contains("objectid=\"5\""), "{x}");
+        let (read, warnings) = read_3mf(&write_3mf_parts(&objects, &[("Bracket:1".into(), vec![0, 1])], &[]).unwrap()).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let names: Vec<&str> = read.iter().map(|o| o.name.as_str()).collect();
+        assert_eq!(names, ["Loose", "Bracket:1"]);
+        assert_eq!(read[1].triangles.len(), 8);
+        // Without parts the file is as before: one built object per mesh.
+        assert_eq!(model_xml_parts(&objects, &[], &[]), model_xml_with(&objects, &[]));
+        assert_eq!(model_xml_with(&objects, &[]).split("<build>").nth(1).unwrap_or_default().matches("<item ").count(), 3);
+        // A part of one object, an index out of range, or one already in a part makes nothing new.
+        for parts in [vec![("One".to_string(), vec![2])], vec![("Out".to_string(), vec![0, 7])]] {
+            assert_eq!(model_xml_parts(&objects, &parts, &[]), model_xml_with(&objects, &[]), "{parts:?}");
+        }
+        let x = model_xml_parts(&objects, &[("A".into(), vec![0, 1]), ("B".into(), vec![1, 2])], &[]);
+        assert!(x.contains("name=\"A\"") && !x.contains("name=\"B\""), "{x}");
     }
 
     /// A see-through object writes its alpha; triangles of faces with colours of their own
@@ -1088,9 +1250,9 @@ pub(crate) mod tests {
 
     /// A package shaped like a slicer project (Bambu Studio, OrcaSlicer): object UUIDs, printable
     /// build items, thumbnails, slicer configs, and the meshes in a part of their own with an empty
-    /// build (T3). Each object on the plate is one body with all its volumes. The slicer's config
-    /// (names, which volumes are modifiers) isn't read, so the bodies are named `MeshN` and the
-    /// modifier comes in as solid.
+    /// build (T3). Each object on the plate is one body with all its volumes, named as in the
+    /// slicer's config (#3858). The rest of the config (which volumes are modifiers) isn't read, so
+    /// the modifier comes in as solid.
     #[test]
     fn slicer_project_package() {
         let ns = r#"xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" requiredextensions="p""#;
@@ -1164,19 +1326,88 @@ pub(crate) mod tests {
         let (objs, warnings) = read_3mf(&package).unwrap();
         assert!(warnings.is_empty(), "{warnings:?}");
         let names: Vec<&str> = objs.iter().map(|o| o.name.as_str()).collect();
-        assert_eq!(names, ["Mesh1", "Mesh2"]);
+        assert_eq!(names, ["Cube", "Bracket"]);
         assert_eq!((objs[0].triangles.len(), objs[1].triangles.len()), (4, 8));
         assert!((volume(&objs[0]) - 1000.0 / 6.0).abs() < 1e-6, "{}", volume(&objs[0]));
         assert!((volume(&objs[1]) - (8000.0 + 64.0) / 6.0).abs() < 1e-6, "{}", volume(&objs[1]));
         assert!(objs[0].positions.iter().all(|p| p.x >= 128.0 - 1e-9 && p.y >= 128.0 - 1e-9));
     }
 
+    /// The body names and warnings of a package with slicer settings `settings` (or none): root
+    /// objects 2 and 6 without a name and 4 named `Own`, each placing the tetrahedron of the
+    /// objects part, one build item each, and a fourth build item placing that tetrahedron itself.
+    fn named_by_settings(settings: Option<&str>) -> (Vec<String>, Vec<String>) {
+        let path = "/3D/Objects/object_1.model";
+        let own = assembly(4, &[(path, 1)]).replace(r#"type="model""#, r#"type="model" name="Own""#);
+        let root = root_model(
+            &format!("{}{own}{}", assembly(2, &[(path, 1)]), assembly(6, &[(path, 1)])),
+            &format!(r#"<item objectid="2"/><item objectid="4"/><item objectid="6"/><item p:path="{path}" objectid="1"/>"#),
+        );
+        let part = model_part("millimeter", &tet_object(1, "", 1.0));
+        let mut parts = vec![("3D/3dmodel.model", root.as_str()), (OBJECTS_PART, part.as_str())];
+        parts.extend(settings.map(|s| (SLICER_SETTINGS, s)));
+        let (objs, warnings) = read_3mf(&package_parts(&parts)).unwrap();
+        (objs.into_iter().map(|o| o.name).collect(), warnings)
+    }
+
+    /// Slicer settings name the root objects that have no name of their own, by object id, with
+    /// the object's first name, trimmed (#3858). A name in the model comes first; the names of
+    /// an object's parts, settings outside an object, objects the build doesn't place and objects
+    /// of other model parts change nothing.
+    #[test]
+    fn slicer_settings_name_unnamed_objects() {
+        let settings = r#"<?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <metadata key="name" value="Stray"/>
+  <object id="2"><metadata key="name" value=" Left wall "/><metadata key="extruder" value="1"/><metadata key="name" value="Second"/>
+    <part id="1" subtype="normal_part"><metadata key="name" value="Volume"/></part></object>
+  <object id="4"><metadata key="name" value="From settings"/></object>
+  <object id="6"><metadata key="name" value=""/><part id="1" subtype="normal_part"><metadata key="name" value="Volume only"/></part></object>
+  <object id="1"><metadata key="name" value="Not a root object"/></object>
+  <object id="9"><metadata key="name" value="Not placed"/></object>
+  <object><metadata key="name" value="No id"/></object>
+</config>"#;
+        let (names, warnings) = named_by_settings(Some(settings));
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(names, ["Left wall", "Own", "Mesh3", "Mesh4"]);
+        // Without settings, the generic names as before.
+        assert_eq!(named_by_settings(None), (vec!["Mesh1".into(), "Own".into(), "Mesh3".into(), "Mesh4".into()], Vec::new()));
+    }
+
+    /// Settings that can't be read never fail the import: the bodies keep the generic names, with
+    /// a warning saying why. They are read only when a body needs a name, so a package whose
+    /// objects all have one opens without a word about them.
+    #[test]
+    fn broken_slicer_settings_only_warn() {
+        let generic: Vec<String> = ["Mesh1", "Own", "Mesh3", "Mesh4"].map(String::from).into();
+        let deep = format!("<config>{}", "<object>".repeat(MAX_XML_DEPTH + 1));
+        for (settings, why) in
+            [(r#"<config><object id="2"><metadata key="name" value="A"/></config>"#, "config"), (deep.as_str(), "nested too deeply")]
+        {
+            let (names, warnings) = named_by_settings(Some(settings));
+            assert_eq!(names, generic);
+            assert!(
+                warnings.len() == 1
+                    && warnings[0].starts_with("object names in `Metadata/model_settings.config` not read: ")
+                    && warnings[0].contains(why),
+                "{warnings:?}"
+            );
+        }
+        let [(r, root), (o, objects)] = production_parts();
+        let (objs, warnings) = read_3mf(&package_parts(&[(r, &root), (o, &objects), (SLICER_SETTINGS, "<config><object>")])).unwrap();
+        assert!(warnings.is_empty() && objs[0].name == "Pair", "{warnings:?}");
+    }
+
     /// Placements in every part draw on one budget (T4): three parts fanning out 300 ways each
     /// (27 million placements of an empty object) stop at it, and only the build item that went
     /// over fails.
+    ///
+    /// The clock is not read: the budget is spent inside the reader, so the reader stops on its
+    /// own and the test says what it wants to know, not how long it took. The one object that
+    /// survives and the warning that names the build item that went over are what show the budget
+    /// works (#2999 dropped the clock from the sibling tests the same way).
     #[test]
     fn parts_share_the_placement_budget() {
-        let t = std::time::Instant::now();
         let fan = |id: u32, path: &str| assembly(id, &vec![(path, 1); 300]);
         let root = root_model(&fan(10, "/3D/Objects/a.model"), r#"<item p:path="/3D/Objects/a.model" objectid="9"/><item objectid="10"/>"#);
         let a = model_part("millimeter", &format!("{}{}", fan(1, "/3D/Objects/b.model"), tet_object(9, "Tet", 1.0)));
@@ -1187,7 +1418,6 @@ pub(crate) mod tests {
         let (objs, warnings) = read_3mf(&package).unwrap();
         assert_eq!(objs.len(), 1);
         assert!(warnings.len() == 1 && warnings[0].starts_with("build item 2") && warnings[0].contains("placements"), "{warnings:?}");
-        assert!(t.elapsed() < std::time::Duration::from_secs(30), "took {:?}", t.elapsed());
     }
 
     /// A loop through three parts with different object ids is found, and a chain of parts deeper

@@ -39,7 +39,7 @@ fn machining(s: &mut Session, p: &Value) -> Result<Value> {
     if !(ratio.is_finite() && ratio > 0.0) {
         return Err(bad(cmd, "`hole_depth_ratio` must be a positive number of diameters"));
     }
-    let want = string_list(p, "bodies");
+    let want = string_list(cmd, p, "bodies")?;
     let st = s.world_state();
     for name in &want {
         if !st.bodies.iter().any(|b| &b.name == name) {
@@ -201,13 +201,19 @@ fn body_findings(body: &solidcraft_kernel::Body, mesh: &Mesh, axis: Vec3, tool_r
     for (c, mut angles) in groups {
         // How much of a turn the faces cover: a whole turn but its largest gap.
         angles.sort_by(f64::total_cmp);
-        let gap = angles.windows(2).map(|w| w[1] - w[0]).chain(angles.first().zip(angles.last()).map(|(a, z)| a + std::f64::consts::TAU - z)).fold(0.0, f64::max);
+        let gap = angles
+            .windows(2)
+            .map(|w| w[1] - w[0])
+            .chain(angles.first().zip(angles.last()).map(|(a, z)| a + std::f64::consts::TAU - z))
+            .fold(0.0, f64::max);
         let turn = std::f64::consts::TAU - gap;
         let middle = c.axis_point + *c.axis * ((c.start + c.end) / 2.0);
         let depth = (c.end - c.start).abs();
         if turn > 0.95 * std::f64::consts::TAU {
             if depth > ratio * 2.0 * c.radius {
-                f.deep.push(json!({"at": round3(middle), "diameter": (c.radius * 2000.0).round() / 1000.0, "depth": (depth * 1000.0).round() / 1000.0}));
+                f.deep.push(
+                    json!({"at": round3(middle), "diameter": (c.radius * 2000.0).round() / 1000.0, "depth": (depth * 1000.0).round() / 1000.0}),
+                );
             }
         } else if parallel(*c.axis) && c.radius < tool_radius - 1e-9 {
             f.small.push(json!({"at": round3(middle), "radius": (c.radius * 1000.0).round() / 1000.0}));

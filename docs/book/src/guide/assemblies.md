@@ -9,7 +9,52 @@ faded.
 A component is placed by its **occurrences**. Paste creates another instance of the same
 component, and **Paste New** creates an independent copy. Move an occurrence with the move
 triad, then **Capture Position** to keep it or **Revert** to put it back. NØDE CAD asks before
-the next command if a move wasn't captured. **Ground** fixes an occurrence in place.
+the next command if a move wasn't captured. **Ground** fixes an occurrence in place, and
+**Unground** (the same row of the browser's context menu) frees it again.
+
+The design's first part is grounded when it is made: the first occurrence placed directly in the
+design by **New Component**, **Create Components from Bodies** or an import. Parts made after it,
+standard parts and copies made with Paste or Paste New start free, so do parts made inside other
+components. Any number of parts may be grounded, or none; opening a design never grounds
+anything. A grounded part refuses Move until it is ungrounded, and `component.create` takes
+`grounded: true` or `false` to choose for itself.
+
+**Drag a part to put it somewhere else.** With the design active, press the left button on a part
+and drag: the part follows the pointer, the point you grabbed moving in the plane through it that
+faces the view, and stays where you let go, with its position captured. The whole drag is one
+undo step, and Escape during the drag puts the part back. The drag moves the placement of the
+active component that holds the part, so with the design active a part inside a subassembly
+moves the whole subassembly; activate the subassembly to move the part inside it. Moving a
+definition shared by several placements moves it in all of them, as Move does. A grounded part
+does not move, and a part that joints hold to something grounded moves only as far as its joints
+allow (below). Dragging any member of a chain joined to nothing grounded moves the whole chain,
+preserving its joint values. Shared nested definitions move in every instance; the selected
+instance follows the pointer even when its parent is rotated differently from the first one. A drag that starts on empty space, on a part that can't move, or
+with Shift, Ctrl (Cmd) or Alt held draws a selection box instead. Other uncaptured moves stay
+pending. Scripts and agents do the same with `occurrence.drag {occurrence or path, at, point}`,
+which moves the placement by `point - at` in world coordinates and answers the placements it
+`moved`.
+
+**Move along the joint's free axes.** Select a face or a single assembly part, then choose
+**Assemble → Move**, or right-click the selected face and choose **Move**. Thick straight
+arrows move along the allowed axes; circular arrows turn about them. Grounded parts, rigid
+joints, fixed coordinates and coordinates controlled by parameter expressions have no handle.
+The handles appear only after Move is started and disappear when Measure or another command
+starts. A face selected for measurement does not open Move.
+If the selected part has no free joint value, Move shows a warning instead of handles.
+Check rigid joints, grounding, joint limits and parameter-driven values; OK or Escape
+dismisses the warning without changing those constraints.
+
+While dragging, a readout shows the actual distance or angle from the drag's starting pose,
+including when a joint limit or contact stops the part. Distances use the design's display
+units. Rotation uses 10° steps near the ring; pull the pointer outside the dashed guide to
+use 0.1° steps. Crossing the guide changes precision without jumping to another angle.
+Change both step sizes under **Preferences → Design → Assembly Move**. Each drag is one
+undo step; Escape while dragging restores its starting pose. **Done** (or Escape when idle)
+closes the handles.
+
+To use the previous Move panel, turn off **Use joint motion handles for assembly Move**
+in the same settings section.
 
 Paste New copies nested component definitions, sketches, feature histories and generated
 dimension parameters. Repeated child instances remain shared within the new copy. Materials,
@@ -32,11 +77,18 @@ joined to the rest of the design.
 circles and vertices: rigid, revolute, slider, cylindrical, pin-slot, planar and ball, with
 offsets, flip and limits. **As-built Joint** keeps the current position, **Rigid Group** locks
 components together, **Drive Joints** moves a joint through its values, and **Motion Link**
-couples two joints. Links can be chained (one joint drives a second, which drives a
+couples two joints. A rigid joint holds its parts still, so Drive Joints has nothing to drive on
+it: it says so and offers **Edit Joint**, where the joint's type changes to Revolute (rotate),
+Slider (slide) or Cylindrical (both). Links can be chained (one joint drives a second, which drives a
 third), and a value is carried through a chain of up to 64 links in whatever order they were
 made. Contact sets stop motion where bodies would pass through each other,
 **Motion Study** keys joint values along a timeline, and **Interference** shows overlapping
 volumes in red, lists the pairs closer than its **Clearance** and each body's nearest neighbour.
+
+In the Joint and Joint Origin dialogs, picking a straight edge puts the origin at its midpoint
+with the motion axis along that edge. A revolute joint turns about the picked edge; a slider
+moves along it. Round edges use their circle's centre and normal. Existing saved joint origins
+keep their axes.
 
 A joint origin on a face or a hole keeps the turn it had when it was picked: when the face tilts
 (a bend angle or a rotation changing with a parameter) the part on it tilts with the face but
@@ -185,8 +237,8 @@ picked in the browser, or on the first joint that moves when none is picked.
 grabbed follows the pointer in the plane through it that faces the view, the joints on the
 part's chain take the values that bring it nearest, within their limits, through motion links,
 and with closed loops kept closed, and a four-bar's rocker stops at the end of its swing. The
-whole drag is one undo step. A grounded part, or one no joint places, is not moved; a drag on
-it draws a selection box as before. Each frame runs `joint.reach`, which scripts and agents use
+whole drag is one undo step. A grounded part, or one its joints hold fixed, is not moved; a drag
+on it draws a selection box. Each frame runs `joint.reach`, which scripts and agents use
 directly to put a part's point somewhere: `joint.reach {occurrence, point}` moves the joints on
 its chain from where they are to the nearest pose (the arm keeps its elbow up or down, and a
 linkage stays on its branch). `at` picks the part's point (the centre of its bodies by
@@ -207,7 +259,9 @@ it where it is), and it moves.
 `joint.drive` answers the joint's values as `joint.list` gives them, in degrees and millimetres
 with their units and limits, and `moved` says whether any part moved. A joint's origins are mated
 by default: B's z axis is turned against A's, as two faces meet. `flip: true` lines them up
-instead, so two origins given at one point with the same z stay as they are. Without an
+instead, so two origins given at one point with the same z and x stay as they are. A point origin
+without `x` takes its x from z alone, so a part turned about z turns back when it is joined: give
+`x` on both origins, or use `joint.as_built`, to keep it where it is. Without an
 `angle`, a new joint (other than a relation, which starts where its parts are) takes no turn or a half turn about its axis, whichever turns B less: two
 faces that already meet, a plate under a panel, stay as they are instead of B spinning about
 their shared normal. For scripts that drive many steps, `quiet: true` leaves the per-part
@@ -264,6 +318,11 @@ are drawn by the same renderer as `node-cad-cli snapshot`, on a copy of the desi
 changed. A GIF keeps one palette for all its frames, so colours don't flicker, and stores only
 what changed from one frame to the next. Frames are capped: at most 1000, and a GIF holds at most
 2^26 pixels of frames (about 160 frames of 800 × 500).
+An exploded view animates the same way: give its name or id as `view` (instead of a `study` or a
+`joint`) and the parts come apart at a steady pace, from the assembled placement to where the view
+shows them; `back: true` brings them back together, exploded at the middle frame. That takes 41
+frames by default, or 81 with `back`, and the home view frames the parts both assembled and
+exploded. As with `explode.show`, the design keeps its placements.
 
 **Motion analysis.** The **Motion Study** dialog's **Study** box opens a saved study to edit, and
 by its timeline the dialog charts what the study does.
@@ -287,7 +346,7 @@ stop it), each sample from the one before, on a copy: the design is not changed.
 accelerations are finite differences between samples, central inside and one-sided at the ends,
 so they are as smooth as the samples are dense (up to 1000, one per step by default). Angles are
 unwrapped, so a joint that turns on past half a turn keeps counting.
-`motion.interference {study, occurrences?, against?, contact_sets?, samples?}` answers each
+`motion.interference {study, occurrences?, against?, contact_sets?, samples?, budget_s?}` answers each
 colliding pair with its `first_step`, `last_step`, the `steps` ranges where they overlap, how
 far into each other (`depth_mm`, the most at `deepest_step`) and their shared `volume_mm3`
 there (null when it is not cheap to work out). It plays the study as `motion.play` does, but
@@ -296,7 +355,10 @@ through another between two samples is missed. Parts are told apart by occurrenc
 sets tell them apart: an occurrence inside a sub-assembly placed twice is one part, so its two
 copies are not checked against each other. A check takes at most 256 bodies; on a large design,
 list the `occurrences` to check (an arm, with `against` the parts it must miss). When the work
-runs out it says `truncated` and the step it `checked_to`.
+runs out it says `truncated` and the step it `checked_to`, and it is not `clear`, even when nothing
+collided in the steps it checked. A mechanism with detailed parts, such as a gear train, can need
+more than that fixed work budget: give it `budget_s` (seconds, at most 86400) and the check runs
+until that time instead, looked at between samples.
 `joint.sweep {joint, from, to, index?, step?, refine?, occurrences?, against?, contact_sets?,
 report_gaps?, apply?}` drives one joint value from `from` toward `to` and answers how far it gets
 before parts touch: `stopped_at` (the last value clear of contact), `stopped_by` (the two parts
@@ -313,15 +375,41 @@ leaves the design as it was unless `apply` is true.
 
 **Insert Design** (`component.insert_design {path, translate?}`, on the **ASSEMBLE** panel and
 in the **File** menu) adds a component linked to another saved design, so each part can live in
-its own document. A STEP or mesh file picked there is inserted as **Insert STEP** or **Insert
+its own document. When other designs are open in tabs, the button first lists them under
+**Open designs**. One click inserts that design; a design not saved yet is greyed out, as it has no
+file to link; one with unsaved changes inserts its saved file, and the status line says so.
+**Browse…** at the end opens the file picker, as the button does when no other design is open.
+Preferences › Design › **Insert Design lists the designs open in other tabs first** turns the list
+off. A STEP or mesh file picked there is inserted as **Insert STEP** or **Insert
 Mesh** would. The part's solid bodies come
 in as they sit in that design, and they are kept in the assembly, so it opens even without the
 part file. The link is stored relative to the assembly's folder once the assembly is saved.
 After the part file changes, **Update Links** (`component.update_links`) reads it again.
+An assembly that opens, or whose tab comes back to the front, does that by itself for the parts whose files
+changed since it last read them, whether the part was saved in another tab, another window or by
+a checkout. A part that cannot be read is tried again the next time, and holds up no other.
+**Update changed linked designs when a tab comes back** (Preferences, Design,
+`update_changed_links`) turns this off.
+To edit the source, right-click a linked component or occurrence in the Browser and choose
+**Open Linked Design**. It opens the part in another tab and reports if its file is missing.
 **Break Link** (`component.break_link`) keeps the bodies and forgets the file, and
-`component.links` lists the links and whether their files are found. A linked component holds
+`component.links` lists the links, whether their files are found, and whether they changed since
+the assembly last read them (`changed`). A linked component holds
 the part's bodies only: its timeline, parameters and sheet-metal data (flat pattern, bend
 table) stay in the part's own design.
+
+To edit a linked part where it sits, double-click it, in the Browser or on one of its faces in
+the view, or choose **Edit in Place** from its menu. Its design opens in a tab of its own with the
+rest of the assembly drawn faded around it, at the placement you picked, and the part's own
+history, Browser and commands work as usual. **Update Links** there also reads the assembly's
+links again and redraws it. **Finish Edit** (`component.finish_edit`), at the right end of the
+**MODEL** tab, or the mouse's back button, saves the part and goes back to the assembly, which
+takes up the change; the part's tab closes again when the edit opened it. Run as a command (by
+an agent, for example), it does not save: the part must be saved first. **Activate** still makes
+a linked component the active one without opening it, and a double-click on a component that
+is not linked activates it. **Double-click a component to activate it, or to edit a linked one in
+place** (Preferences, Design, `double_click_components`) turns this off: a double-click in the
+Browser then activates every component, and one in the view does nothing.
 
 If a source file moves or is renamed, right-click its linked component or occurrence in the
 Browser and choose **Relink Source (All Instances)…**. Choose the saved `.nodecad` design
@@ -341,8 +429,11 @@ joint still describes the intended connection.
 
 STEP export writes the component tree as an assembly.
 
-Right-click a component in the Browser and choose **Properties** to inspect
-material-aware mass, volume, surface area, centre of mass and world bounds. Descendants and
+Right-click a component in the Browser and choose **Properties**, or use **Inspect → Measure →
+Properties** for the selected placement or the active component, to inspect material-aware
+mass, volume, surface area, centre of mass, first moments, moment of inertia and world bounds.
+While the window is open, the view marks the centre of mass with the three principal axes
+standing out of it. Descendants and
 repeated instances contribute to assembly totals; pending moves are included. A component
 uses its first placement; `occurrence.properties` selects a specific instance. Root Properties
 measures the complete assembly. Volumes are summed, including overlapping bodies, rather than
@@ -357,7 +448,7 @@ revision, other tools' data under a reverse-DNS key (the same rules as the desig
 properties), and free text properties such as a material grade or a finish. Every occurrence of
 the component shares them, Paste New copies them, and they are saved with the component.
 `component.metadata {component}` reads them and
-`component.metadata.set {component, part_number?, description?, revision?, values?, properties?}`
+`component.metadata.set {component, part_number?, description?, revision?, bom_type?, values?, properties?}`
 changes them in one undo step (an empty value removes a field). The root component is the
 design itself: its properties are `document.metadata`'s. Standard parts (`parts.insert`) get a
 part number from their standard and size (`ISO 4762 M6x20`, or a bearing's designation) and a
@@ -377,10 +468,27 @@ description; **Change Part Size** renumbers them, keeping a field you changed yo
   under it as `children` (items 1.1, 1.2…, with `each` per bolt and `count` in all) instead of
   rows of their own. Bolts with different contents (one with a nut, one without) are different
   rows. `total_occurrences` counts the children too, so it is the same either way.
+  For an inseparable part, only its purchased descendants become children; a purchased part
+  still has no children listed. Parts without a part number are not grouped this way.
 - `component` lists one subassembly's parts instead of the design's.
 
+A component's **bill of materials type** (`bom_type`, a part property set with
+`component.metadata.set {component, bom_type}`) decides how it counts in the assemblies it is
+placed in. Without one it is `normal`.
+
+| Type | For | In the assembly it is placed in |
+|---|---|---|
+| `normal` | Something you make | A row of its own; every occurrence adds to its quantity |
+| `phantom` | Something just to group (a fastener set) | No row: what it holds counts as if it were placed there directly, in the same rows as the same parts placed there |
+| `reference` | Something to use as a reference (a fixture shown for context) | Counted nowhere, and nothing inside it is counted either |
+| `purchased` | Something you buy (a gearbox) | One row; nothing inside it is counted or listed |
+| `inseparable` | Something made as one piece: welded, glued, riveted and so on (a welded frame) | One row; in parts only, the purchased parts inside it are listed too, and the rest of what it holds is listed in its own bill of materials |
+
+Two components with the same part number share a row only when their types agree. A
+component's own bill of materials (`component`) lists what it holds whatever its type.
+
 Rows are sorted by part number (rows without one come last) and hold `item`, `part_number`,
-`description`, `revision`, `count`, `definition` (the component names), `components` (their ids)
+`description`, `revision`, `bom_type`, `count`, `definition` (the component names), `components` (their ids)
 and `properties`, with `total_occurrences` beside them. `path` writes them to a `.csv` file
 (the columns item, part_number, description, revision, count and definition, every field
 quoted; children follow their row) or a `.json` file. The window lists the same rows, switches

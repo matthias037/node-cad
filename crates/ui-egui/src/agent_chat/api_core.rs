@@ -30,6 +30,7 @@ pub fn http_error(status: u16, body: &Value) -> String {
         401 | 403 => crate::i18n::tr("ui.ai_http_key"),
         404 => crate::i18n::tr("ui.ai_http_not_found"),
         429 => crate::i18n::tr("ui.ai_http_busy"),
+        413 => crate::i18n::tr("ui.ai_http_too_large"),
         _ => "",
     };
     format!(
@@ -105,6 +106,9 @@ pub(super) struct Reply {
     /// The assistant message to keep in the history, in the endpoint's own shape. Tool calls are
     /// capped to the ones the loop answers, so every call kept here gets a result.
     pub(super) assistant: Value,
+    /// Why the answer stopped, as the turn-end reason the chat knows: empty for a normal end,
+    /// `max_tokens` for an answer cut off at its length limit, `refusal` when the model declined.
+    pub(super) stop: &'static str,
 }
 
 /// The answer in the endpoint's shape.
@@ -115,11 +119,47 @@ pub(super) fn reply(protocol: Protocol, body: &Value) -> Reply {
     }
 }
 
+/// The turn-end reason for an Anthropic `stop_reason` or an OpenAI `finish_reason`. Anything
+/// else, including a value a server made up, is a normal end.
+pub(super) fn stop_reason(reason: Option<&str>) -> &'static str {
+    match reason {
+        Some("max_tokens" | "length") => "max_tokens",
+        Some("refusal" | "content_filter") => "refusal",
+        _ => "",
+    }
+}
+
+/// A `reasoning_details` array safe to replay: streaming-only `index` members
+/// are dropped (gateways reject them), thinking content is kept.
+pub(super) fn sanitize_reasoning_details(details: Option<&Value>) -> Option<Value> {
+    let items = details?.as_array()?;
+    if items.iter().all(|d| matches!(d, Value::Object(_)) && d.get("index").is_none()) {
+        return Some(Value::Array(items.clone()));
+    }
+    let clean: Vec<Value> = items
+        .iter()
+        .filter_map(|d| {
+            let mut c = d.as_object()?.clone();
+            c.remove("index");
+            Some(Value::Object(c))
+        })
+        .collect();
+    Some(Value::Array(clean))
+}
+
 pub(super) fn openai_reply(body: &Value) -> Reply {
     let message = body.pointer("/choices/0/message").cloned().unwrap_or(Value::Null);
     let text = message.get("content").and_then(Value::as_str).filter(|t| !t.is_empty()).map(|t| vec![(false, t.to_string())]).unwrap_or_default();
-    // No more than the loop answers: every call kept here must get a `tool` message.
-    let raw: Vec<Value> = message.get("tool_calls").and_then(Value::as_array).map(|a| a.iter().take(32).cloned().collect()).unwrap_or_default();
+    let refused = message.get("refusal").and_then(Value::as_str).is_some_and(|r| !r.trim().is_empty());
+    let stop = if refused { "refusal" } else { stop_reason(body.pointer("/choices/0/finish_reason").and_then(Value::as_str)) };
+    // No more than the loop answers: every call kept here must get a `tool` message. A call cut
+    // off at the length limit is incomplete, so none is run or kept.
+    let raw: Vec<Value> = message
+        .get("tool_calls")
+        .and_then(Value::as_array)
+        .filter(|_| stop != "max_tokens")
+        .map(|a| a.iter().take(32).cloned().collect())
+        .unwrap_or_default();
     let calls = raw
         .iter()
         .enumerate()
@@ -130,14 +170,27 @@ pub(super) fn openai_reply(body: &Value) -> Reply {
         })
         .collect();
     let mut assistant = json!({"role": "assistant", "content": message.get("content").cloned().unwrap_or(Value::Null)});
+    // Thinking models (Kimi K3 and kin) need their reasoning back on the next
+    // tool request: replay exactly what the endpoint sent, nothing invented.
+    for key in ["reasoning_content", "reasoning", "refusal"] {
+        if let Some(v) = message.get(key)
+            && !v.is_null()
+        {
+            assistant[key] = v.clone();
+        }
+    }
+    if let Some(clean) = sanitize_reasoning_details(message.get("reasoning_details")) {
+        assistant["reasoning_details"] = clean;
+    }
     if !raw.is_empty() {
         assistant["tool_calls"] = Value::Array(raw);
     }
-    Reply { text, calls, assistant }
+    Reply { text, calls, assistant, stop }
 }
 
 pub(super) fn anthropic_reply(body: &Value) -> Reply {
     let content = body.get("content").cloned().unwrap_or(Value::Null);
+    let stop = stop_reason(body.get("stop_reason").and_then(Value::as_str));
     let mut text = Vec::new();
     let mut calls = Vec::new();
     let assistant = match &content {
@@ -160,6 +213,8 @@ pub(super) fn anthropic_reply(body: &Value) -> Reply {
                         }
                         kept.push(block.clone());
                     }
+                    // A call cut off at the length limit has incomplete input: not run, not kept.
+                    Some("tool_use") if stop == "max_tokens" => {}
                     Some("tool_use") if calls.len() < 32 => {
                         calls.push(Call {
                             id: block.get("id").and_then(Value::as_str).map_or_else(|| format!("toolu-{i}"), str::to_string),
@@ -187,7 +242,7 @@ pub(super) fn anthropic_reply(body: &Value) -> Reply {
         }
         _ => json!({"role": "assistant", "content": content.clone()}),
     };
-    Reply { text, calls, assistant }
+    Reply { text, calls, assistant, stop }
 }
 
 /// MCP `tools/list` as OpenAI function tools (the hidden ones left out).
@@ -276,7 +331,9 @@ pub(super) fn tool_images(r: &Value) -> Vec<(String, String)> {
         .map(|a| {
             a.iter()
                 .filter(|c| c.get("type").and_then(Value::as_str) == Some("image"))
-                .filter_map(|c| Some((c.get("mimeType").and_then(Value::as_str).unwrap_or("image/png").to_string(), c.get("data")?.as_str()?.to_string())))
+                .filter_map(|c| {
+                    Some((c.get("mimeType").and_then(Value::as_str).unwrap_or("image/png").to_string(), c.get("data")?.as_str()?.to_string()))
+                })
                 .take(4)
                 .collect()
         })

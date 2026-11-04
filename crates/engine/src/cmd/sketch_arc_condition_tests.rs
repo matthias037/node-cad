@@ -39,9 +39,14 @@ fn two_circles() -> Session {
 }
 
 #[test]
-fn two_circles_dimension_centre_to_centre_by_default_or_edge_to_edge() {
+fn two_circles_dimension_edge_to_edge_by_default_or_centre_to_centre() {
     let mut s = two_circles();
     let r = run(&mut s, "sketch.dimension", json!({"entities": ["c1", "c2"]}));
+    assert_eq!(r["measured"], 12.0, "the gap between the edges: {r}");
+    let k = sketch(&s).constraints.last().unwrap().kind.clone();
+    assert!(matches!(k, solidcraft_sketch::ConstraintKind::CircleCircleDistance { .. }), "{k:?}");
+    let mut s = two_circles();
+    let r = run(&mut s, "sketch.dimension", json!({"entities": ["c1", "c2"], "arc_condition": "center"}));
     assert_eq!(r["measured"], 20.0, "{r}");
     let mut s = two_circles();
     let r = run(&mut s, "sketch.dimension", json!({"entities": ["c1", "c2"], "arc_condition": "min"}));
@@ -65,6 +70,9 @@ fn a_point_and_a_circle_dimension_to_the_centre_or_either_edge() {
     run(&mut s, "sketch.point", json!({"point": [0, 12]}));
     let pt = sketch(&s).points.last().map(|p| p.id.clone()).unwrap();
     let r = run(&mut s, "sketch.dimension", json!({"entities": [pt, "c1"]}));
+    assert_eq!(r["measured"], 7.0, "to the edge by default: {r}");
+    run(&mut s, "edit.undo", json!({}));
+    let r = run(&mut s, "sketch.dimension", json!({"entities": [pt, "c1"], "arc_condition": "center"}));
     assert_eq!(r["measured"], 12.0, "{r}");
     run(&mut s, "edit.undo", json!({}));
     let r = run(&mut s, "sketch.dimension", json!({"entities": [pt, "c1"], "arc_condition": "min"}));
@@ -96,7 +104,7 @@ fn a_line_and_a_circle_dimension_to_the_far_edge_or_the_centre() {
 #[test]
 fn the_condition_changes_afterwards_and_the_sketch_stays_put() {
     let mut s = two_circles();
-    let r = run(&mut s, "sketch.dimension", json!({"entities": ["c1", "c2"]}));
+    let r = run(&mut s, "sketch.dimension", json!({"entities": ["c1", "c2"], "arc_condition": "center"}));
     let param = r["param"].as_str().unwrap().to_string();
     let at = point(&s, "c2.center");
     let r = run(&mut s, "sketch.dimension_condition", json!({"dimension": param, "arc_condition": "min"}));
@@ -148,7 +156,51 @@ fn the_min_of_a_ring_is_its_wall() {
     assert_eq!(r["measured"], 2.0, "20 - 3 - 15: {r}");
     let sk = sketch(&s);
     let k = &sk.constraints.last().unwrap().kind;
+    assert!(matches!(k, solidcraft_sketch::ConstraintKind::CircleCircleDistance { circles: solidcraft_sketch::TwoCircles::Nested, .. }), "{k:?}");
     assert_eq!(crate::cmd::arc_conditions_of(&sk, k), Some([Some("min"), Some("min")]));
     let r = run(&mut s, "sketch.dimension_condition", json!({"dimension": r["param"], "arc_condition": "max"}));
+    assert_eq!(r["measured"], 38.0, "3 + 20 + 15: {r}");
+}
+
+/// A ring's wall as 0.21.0-rc.7 saved it, a `round_distance` from the outer circle's near edge to
+/// the inner one's far edge, still opens, holds the sketch and reads as min to min; its condition
+/// changes as a new dimension's does.
+#[test]
+fn a_ring_wall_saved_by_rc7_opens_and_changes() {
+    let mut s = Session::default();
+    run(&mut s, "sketch.create", json!({"plane": "XY"}));
+    run(&mut s, "sketch.circle.center", json!({"center": [0, 0], "radius": 20}));
+    run(&mut s, "sketch.circle.center", json!({"center": [3, 0], "radius": 15}));
+    run(&mut s, "sketch.constraint.fix", json!({"entities": ["c1.center"]}));
+    run(&mut s, "sketch.dimension", json!({"entities": ["c1"], "type": "radius", "value": 20}));
+    run(&mut s, "sketch.dimension", json!({"entities": ["c2"], "type": "radius", "value": 15}));
+    run(&mut s, "sketch.constraint.horizontal_vertical", json!({"points": ["c1.center", "c2.center"]}));
+    run(&mut s, "sketch.finish", json!({}));
+    fn constraints(v: &mut Value) -> Option<&mut Vec<Value>> {
+        if v.get("constraints").is_some_and(Value::is_array) {
+            return v.get_mut("constraints")?.as_array_mut();
+        }
+        match v {
+            Value::Object(o) => o.values_mut().find_map(constraints),
+            Value::Array(a) => a.iter_mut().find_map(constraints),
+            _ => None,
+        }
+    }
+    // The constraint as rc.7 wrote it: the wall is 20 - (3 + 15) = 2, the far edge of the inner
+    // circle reaching back past the outer one's near edge.
+    let mut saved: Value = serde_json::from_str(&s.doc.to_json()).unwrap();
+    constraints(&mut saved).expect("the sketch's constraints").push(json!({
+        "id": "k_rc7", "type": "round_distance", "a": {"near": 0}, "b": {"far": 1}, "value": 2.0, "inside": true
+    }));
+    let mut reopened = Session::new(solidcraft_doc::Document::from_json(&saved.to_string()).unwrap());
+    run(&mut reopened, "sketch.edit", json!({"sketch": "Sketch1"}));
+    assert!(point(&reopened, "c2.center").dist(Vec2::new(3.0, 0.0)) < 1e-7, "{:?}", point(&reopened, "c2.center"));
+    let sk = sketch(&reopened);
+    let k = &sk.constraints.iter().find(|c| c.id == "k_rc7").unwrap().kind;
+    assert!((solidcraft_sketch::measure_dimension(&sk, k).unwrap() - 2.0).abs() < 1e-9);
+    assert_eq!(crate::cmd::arc_conditions_of(&sk, k), Some([Some("min"), Some("min")]));
+    let r = run(&mut reopened, "sketch.dimension_condition", json!({"dimension": "k_rc7", "arc_condition": "center"}));
+    assert_eq!(r["measured"], 3.0, "{r}");
+    let r = run(&mut reopened, "sketch.dimension_condition", json!({"dimension": "k_rc7", "arc_condition": "max"}));
     assert_eq!(r["measured"], 38.0, "3 + 20 + 15: {r}");
 }

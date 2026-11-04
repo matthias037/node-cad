@@ -691,7 +691,7 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let format = str_(p, "format").unwrap_or("svg");
     let bytes: Vec<u8> = match format {
         "svg" => svg(&sh).into_bytes(),
-        "dxf" => dxf(&sh).into_bytes(),
+        "dxf" => dxf(&sh).map_err(|e| bad(cmd, e))?.into_bytes(),
         "pdf" => pdf(&sh),
         _ => return Err(bad(cmd, "format must be svg, dxf or pdf")),
     };
@@ -863,7 +863,7 @@ pub fn svg(sh: &Sheet) -> String {
     out
 }
 
-pub fn dxf(sh: &Sheet) -> String {
+pub fn dxf(sh: &Sheet) -> std::result::Result<String, String> {
     let mut entities = Vec::new();
     let layer = |k: &str| match k {
         "frame" | "thin" => "CARTOUCHE",
@@ -897,7 +897,8 @@ pub fn dxf(sh: &Sheet) -> String {
         DxfLayer::new("COTES", 3),
         DxfLayer::new("CARTOUCHE", 7),
     ];
-    solidcraft_io::write_dxf_drawing(&layers, &entities)
+    // A text character DXF can't hold is refused, naming it.
+    solidcraft_io::write_dxf_drawing(&layers, &entities).map_err(|e| e.to_string())
 }
 
 /// A one-page vector PDF: lines in their weights and dashes, Helvetica text (WinAnsi, which has

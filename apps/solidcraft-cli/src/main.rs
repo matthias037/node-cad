@@ -2,28 +2,35 @@
 //!
 //! ```text
 //! node-cad-cli run <script.json|design.nodecad|part.step|mesh.3mf> [--in design|part.step|mesh.3mf] [--out FILE]... [--save FILE] [--quiet] [--results] [--timings] [--profile] [--json-out FILE] [--allow-errors]
-//! node-cad-cli eval <script.json|design.nodecad|part.step> [--json-out FILE] (alias: inspect) measurements as JSON
+//!                    [--param-check off|warn|strict]
+//! node-cad-cli eval <script.json|design.nodecad|part.step> [--in design.nodecad|part.step] [--json-out FILE] (alias: inspect) measurements as JSON
 //! node-cad-cli script <design.nodecad> [--out script.json]     the design's history as a command script
 //! node-cad-cli bench-open <design.nodecad | part.step> [--parse-only] [--save OUT.nodecad] [--display LEVEL [--edit NAME EXPR]] [--ops script.json] loading timings as JSON lines
 //! node-cad-cli bench-agent [--scale F] [--save F] [--script-out F] a ~1,300-body design built command by command, timed
+//! node-cad-cli bench-assistant --connect 127.0.0.1:PORT [--token T] --base-url URL --model NAME [--tasks 1,2,5] [--repeat N]
+//!                                 [--timeout-s 300] [--json out.json] [--markdown out.md]
+//!                                                             the standard Assistant model test (#4851) on a running app
 //! node-cad-cli snapshot <script|design> [--in design|part.step] --out shot.png [--width W] [--height H] [--view iso|front|top|…|NAME | --camera JSON] [--no-grid] [--no-axes]
 //!                                                             [--body NAME:opacity=0.3,color=#rrggbb]... [--tool NAME]... [--section z=27]
 //! node-cad-cli exec <command> [json-params]                 run one command on an empty design
 //! node-cad-cli commands                                     the command registry as JSON
 //! node-cad-cli recipe <recipe.json>                         translate an oracle recipe to a script
 //! node-cad-cli oracle <case-dir>...                         replay recipes and compare with expected.json
-//! node-cad-cli mcp [--in design|script] [--connect HOST:PORT [--token T]] [--allow-path DIR]... [--allow-any-path]
+//! node-cad-cli mcp [--headless] [--in design|script] [--connect HOST:PORT [--token T]] [--allow-path DIR]... [--allow-any-path]
 //!                    [--param-check off|warn|strict]
 //!                                                             MCP server on stdio (docs/mcp.md)
+//! node-cad-cli mcp setup [--dry-run] [--client NAME] [--live] (alias: mcp install) add it to OpenCode, Claude Desktop, Claude Code, Cursor
 //! node-cad-cli licences                                     NØDE CAD's licence and the third-party licences
 //! node-cad-cli icon --out F.png|F.ico [--size N]             the app icon (packaging; drawn, not a file)
 //!
 //! --debug (with any command)                                  NØDE CAD's debug log on stderr (or RUST_LOG=LEVEL)
+//! --max-file-size SIZE (with any command)                     read STEP and design files up to SIZE (2GB, 1500MB; at most 16GB)
 //! ```
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
 
 mod bench_agent;
+mod bench_assistant;
 mod crashes;
 mod fuzz;
 mod logger;
@@ -42,57 +49,101 @@ mod app_icon;
 use solidcraft_engine::Session;
 use solidcraft_engine::view::Guides;
 
-const USAGE: &str = "usage:
-  node-cad-cli run <script.json|design.nodecad|part.step> [--in design.nodecad|part.step] [--out FILE]... [--save FILE] [--quiet] [--results] [--timings] [--profile] [--json-out FILE] [--allow-errors]
-  node-cad-cli run --in <design.nodecad|part.step> [--out FILE]...
-      (a timeline feature that fails fails the run and nothing is written; --allow-errors writes anyway)
-      (--timings prints {timings: [{index, command, ms}], total_ms} for a script, with --results its results too;
-       --profile adds each command's profile: {boolean_ms, tessellate_ms, other_ms}, the kernel's share)
-  node-cad-cli eval <script.json|design.nodecad|part.step> [--json-out FILE]     (alias: inspect; or --in FILE)
-      (--json-out FILE writes the JSON that run (with --results, else the measurement) and eval print to FILE instead of stdout,
-       as plain UTF-8: a shell's > can re-encode it, e.g. Windows PowerShell adds a byte-order mark)
-  node-cad-cli script <design.nodecad|script.json> [--out script.json]
-      (the design's history as a command script that eval and run replay)
-  node-cad-cli bench-open <design.nodecad | part.step> [--parse-only] [--save OUT.nodecad] [--display LEVEL [--edit NAME EXPR]] [--ops script.json]
-      (--ops: after opening, run each command of the script and undo it, timing the command, the
-       evaluations it caused and the view it leaves: placing and meshing what changed)
-  node-cad-cli bench-agent [--scale F] [--save design.nodecad] [--script-out script.json]
-  node-cad-cli snapshot <script|design> [--in design.nodecad|part.step] --out shot.png [--width W] [--height H] [--view NAME | --camera JSON] [--no-grid] [--no-axes]
-      [--body NAME:opacity=0.3,color=#rrggbb]... [--tool NAME]... [--section z=27]
-  node-cad-cli snapshot --in <design.nodecad|part.step> --out shot.png ...
-      (as with run, --in starts from a design and the script runs on top of it; an option snapshot doesn't take is an error;
-       --view: iso, front, back, top, bottom, left, right, or the name of a view saved in the design with view.save;
-       --camera: {target: [x,y,z], yaw, pitch, distance, fov?} in mm and radians, as the MCP screenshot takes it (docs/mcp.md);
-       --no-grid and --no-axes leave the ground grid (on Z 0) and the origin's axes out of the picture;
-       --body: how one body is drawn, as appearance.assign takes it: opacity 0-1 (below 1 is see-through, so what is inside
-         it shows) and color #rrggbb, either or both, once per body;
-       --tool: draw this body solid in the tool colour and every other body see-through, so a cut's or a join's tool body
-         is visible inside the material it meets; a later --body overrides it;
-       --section: cut the model as inspect.section does, so the inside shows: z=27 (the plane through that world
-         coordinate, keeping the smaller side), add ,flip to keep the other side, or XY, XZ, YZ, or its own JSON)
-  node-cad-cli render <script|design> --out image.png [--setup NAME] [--width W] [--height H] [--transparent] [--overwrite] [--timeout SECONDS]
-  node-cad-cli exec <command> [json-params]
-  node-cad-cli commands
-  node-cad-cli recipe <recipe.json>
-  node-cad-cli oracle <case-dir>... [--json]
-  node-cad-cli fuzz [--from N] [--count N] [--jobs J] [--timeout S] [--steps N] [--minimise] [--out DIR] [--report FILE]
-  node-cad-cli mcp [--in design.nodecad|script.json] [--connect 127.0.0.1:PORT [--token T]] [--allow-path DIR]... [--allow-any-path]
-                     [--param-check off|warn|strict]
-  node-cad-cli crashes [list [--json] | show <id> | replay <id> | dir | clear [<id>]]
-  node-cad-cli licences
-  node-cad-cli gpu [--policy auto|hardware|software|cpu]
-      (the GPU adapters a headless render can open, best first, the one the policy picks and the tier it
-       lands on: gpu, gpu-software, or the CPU rasterizer (auto with no adapter, or cpu); the policy defaults
-       to SOLIDCRAFT_GPU, else auto; exits with an error when hardware or software finds no such adapter)
-  node-cad-cli icon --out icon.png [--size 256] | --out icon.ico
-  --debug, with any command: what NØDE CAD logs (why a body has no display plan, why a save left its
-      model cache out), on stderr; RUST_LOG=error|warn|info|debug|trace sets one level for every crate
-";
+/// One command the CLI takes: the name to type, the usage it prints for `--help`,
+/// and whether the top-level usage lists it (an alias answers to another command's name).
+struct Command {
+    name: &'static str,
+    usage: &'static str,
+    listed: bool,
+}
+
+/// `run`'s lines in the usage.
+const USAGE_RUN: &str = "  node-cad-cli run <script.json|design.nodecad|part.step> [--in design.nodecad|part.step] [--out FILE]... [--save FILE] [--quiet] [--results] [--timings] [--profile] [--json-out FILE] [--allow-errors]\n                     [--param-check off|warn|strict]\n  node-cad-cli run --in <design.nodecad|part.step> [--out FILE]...\n      (a timeline feature that fails fails the run and nothing is written; --allow-errors writes anyway)\n      (--param-check checks each step against its command's contract: warn reports on stderr, strict stops the run)\n      (--timings prints {timings: [{index, command, ms}], total_ms} for a script, with --results its results too;\n       --profile adds each command's profile: {boolean_ms, tessellate_ms, other_ms}, the kernel's share)\n";
+/// `eval`'s lines in the usage.
+const USAGE_EVAL: &str = "  node-cad-cli eval <script.json|design.nodecad|part.step> [--in design.nodecad|part.step] [--json-out FILE]     (alias: inspect)\n  node-cad-cli eval --in <script.json|design.nodecad|part.step> [--json-out FILE]\n      (with both inputs, runs the positional script on --in before measuring; does not automatically save the modified design)\n      (--json-out FILE writes the JSON that run (with --results, else the measurement) and eval print to FILE instead of stdout,\n       as plain UTF-8: a shell's > can re-encode it, e.g. Windows PowerShell adds a byte-order mark)\n";
+/// `script`'s lines in the usage.
+const USAGE_SCRIPT: &str = "  node-cad-cli script <design.nodecad|script.json> [--out script.json]\n      (the design's history as a command script that eval and run replay)\n";
+/// `bench-open`'s lines in the usage.
+const USAGE_BENCH_OPEN: &str = "  node-cad-cli bench-open <design.nodecad | part.step> [--parse-only] [--save OUT.nodecad] [--display LEVEL [--edit NAME EXPR]] [--ops script.json]\n      (--ops: after opening, run each command of the script and undo it, timing the command, the\n       evaluations it caused and the view it leaves: placing and meshing what changed)\n";
+/// `bench-agent`'s lines in the usage.
+const USAGE_BENCH_AGENT: &str = "  node-cad-cli bench-agent [--scale F] [--save design.nodecad] [--script-out script.json]\n";
+/// `bench-assistant`'s lines in the usage.
+const USAGE_BENCH_ASSISTANT: &str = "  node-cad-cli bench-assistant --connect 127.0.0.1:PORT [--token T] --base-url URL --model NAME [--tasks 1,2,5] [--repeat N] [--timeout-s 300] [--json out.json] [--markdown out.md]\n";
+/// `snapshot`'s lines in the usage.
+const USAGE_SNAPSHOT: &str = "  node-cad-cli snapshot <script|design> [--in design.nodecad|part.step] --out shot.png [--width W] [--height H] [--view NAME | --camera JSON] [--no-grid] [--no-axes]\n      [--body NAME:opacity=0.3,color=#rrggbb]... [--tool NAME]... [--section z=27]\n  node-cad-cli snapshot --in <design.nodecad|part.step> --out shot.png ...\n      (as with run, --in starts from a design and the script runs on top of it; an option snapshot doesn't take is an error;\n       --view: iso, front, back, top, bottom, left, right, or the name of a view saved in the design with view.save;\n       --camera: {target: [x,y,z], yaw, pitch, distance, fov?} in mm and radians, as the MCP screenshot takes it (docs/mcp.md);\n       --no-grid and --no-axes leave the ground grid (on Z 0) and the origin's axes out of the picture;\n       --body: how one body is drawn, as appearance.assign takes it: opacity 0-1 (below 1 is see-through, so what is inside\n         it shows) and color #rrggbb, either or both, once per body;\n       --tool: draw this body solid in the tool colour and every other body see-through, so a cut's or a join's tool body\n         is visible inside the material it meets; a later --body overrides it;\n       --section: cut the model as inspect.section does, so the inside shows: z=27 (the plane through that world\n         coordinate, keeping the smaller side), add ,flip to keep the other side, or XY, XZ, YZ, or its own JSON)\n";
+/// `render`'s lines in the usage.
+const USAGE_RENDER: &str = "  node-cad-cli render <script|design> --out image.png [--setup NAME] [--width W] [--height H] [--transparent] [--overwrite] [--timeout SECONDS]\n      [--progressive] [--samples N] [--max-depth N] [--seed N] [--exposure EV] [--lighting FILE.json] [--environment FILE.json] [--tone-map reinhard|aces_fitted]\n";
+/// `exec`'s lines in the usage.
+const USAGE_EXEC: &str = "  node-cad-cli exec <command> [json-params]\n";
+/// `commands`'s lines in the usage.
+const USAGE_COMMANDS: &str = "  node-cad-cli commands\n";
+/// `recipe`'s lines in the usage.
+const USAGE_RECIPE: &str = "  node-cad-cli recipe <recipe.json>\n";
+/// `oracle`'s lines in the usage.
+const USAGE_ORACLE: &str = "  node-cad-cli oracle <case-dir>... [--json]\n";
+/// `fuzz`'s lines in the usage.
+const USAGE_FUZZ: &str = "  node-cad-cli fuzz [--from N] [--count N] [--jobs J] [--timeout S] [--steps N] [--minimise] [--out DIR] [--report FILE]\n";
+/// `mcp`'s lines in the usage.
+const USAGE_MCP: &str = "  node-cad-cli mcp [--headless] [--in design.nodecad|script.json] [--connect 127.0.0.1:PORT [--token T]] [--allow-path DIR]... [--allow-any-path]\n                     [--param-check off|warn|strict] [--render-gpu]\n  node-cad-cli mcp setup [--dry-run] [--client opencode|claude-desktop|claude-code|cursor] [--live]\n      (adds a `solidcraft` server, with this program's path, to each installed AI client; --live adds `solidcraft-live` for the running app; alias: mcp install)\n";
+/// `crashes`'s lines in the usage.
+const USAGE_CRASHES: &str = "  node-cad-cli crashes [list [--json] | show <id> | replay <id> | dir | clear [<id>]]\n";
+/// `licences`'s lines in the usage.
+const USAGE_LICENCES: &str = "  node-cad-cli licences\n";
+/// `gpu`'s lines in the usage.
+const USAGE_GPU: &str = "  node-cad-cli gpu [--policy auto|hardware|software|cpu]\n      (the GPU adapters a headless render can open, best first, the one the policy picks and the tier it\n       lands on: gpu, gpu-software, or the CPU rasterizer (auto with no adapter, or cpu); the policy defaults\n       to SOLIDCRAFT_GPU, else auto; exits with an error when hardware or software finds no such adapter)\n";
+/// `icon`'s lines in the usage.
+const USAGE_ICON: &str = "  node-cad-cli icon --out icon.png [--size 256] | --out icon.ico\n";
+/// `fuzz-one`'s lines in the usage: a seed and the flags of one fuzz run.
+const USAGE_FUZZ_ONE: &str = "  node-cad-cli fuzz-one <seed> [--steps N] [--minimise]\n";
+/// `bench-edit`'s lines in the usage: the parameter a script changes.
+const USAGE_BENCH_EDIT: &str = "  node-cad-cli bench-edit <script.json|recipe.json> <param> <expr>\n";
+/// `save-stress`'s lines in the usage: the file saved over and over.
+const USAGE_SAVE_STRESS: &str = "  node-cad-cli save-stress <path> <rounds>\n";
+/// The flags every command takes, at the end of the top-level usage.
+const USAGE_DEBUG: &str = "  --debug, with any command: what NØDE CAD logs (why a body has no display plan, why a save left its\n      model cache out), on stderr; RUST_LOG=error|warn|info|debug|trace sets one level for every crate\n  --max-file-size SIZE, with any command: read STEP and import files and design files up to SIZE for this run\n      (for example 2GB or 1500MB; at most 16GB; the defaults are 512 MB and 256 MB, and a smaller SIZE keeps them)\n";
+
+/// The commands the CLI takes, in the order the top-level usage lists them.
+const COMMANDS: &[Command] = &[
+    Command { name: "run", usage: USAGE_RUN, listed: true },
+    Command { name: "eval", usage: USAGE_EVAL, listed: true },
+    Command { name: "inspect", usage: USAGE_EVAL, listed: false },
+    Command { name: "script", usage: USAGE_SCRIPT, listed: true },
+    Command { name: "bench-open", usage: USAGE_BENCH_OPEN, listed: true },
+    Command { name: "bench-agent", usage: USAGE_BENCH_AGENT, listed: true },
+    Command { name: "bench-assistant", usage: USAGE_BENCH_ASSISTANT, listed: true },
+    Command { name: "snapshot", usage: USAGE_SNAPSHOT, listed: true },
+    Command { name: "render", usage: USAGE_RENDER, listed: true },
+    Command { name: "exec", usage: USAGE_EXEC, listed: true },
+    Command { name: "commands", usage: USAGE_COMMANDS, listed: true },
+    Command { name: "recipe", usage: USAGE_RECIPE, listed: true },
+    Command { name: "oracle", usage: USAGE_ORACLE, listed: true },
+    Command { name: "fuzz", usage: USAGE_FUZZ, listed: true },
+    Command { name: "fuzz-one", usage: USAGE_FUZZ_ONE, listed: false },
+    Command { name: "mcp", usage: USAGE_MCP, listed: true },
+    Command { name: "crashes", usage: USAGE_CRASHES, listed: true },
+    Command { name: "licences", usage: USAGE_LICENCES, listed: true },
+    Command { name: "licenses", usage: USAGE_LICENCES, listed: false },
+    Command { name: "gpu", usage: USAGE_GPU, listed: true },
+    Command { name: "icon", usage: USAGE_ICON, listed: true },
+    Command { name: "bench-edit", usage: USAGE_BENCH_EDIT, listed: false },
+    Command { name: "save-stress", usage: USAGE_SAVE_STRESS, listed: false },
+];
 
 fn main() -> ExitCode {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     logger::init(&mut args);
+    if let Err(e) = max_file_size(&mut args) {
+        eprintln!("error: {e}");
+        return ExitCode::FAILURE;
+    }
     let r = match args.first().map(String::as_str) {
+        // Asked-for help is not an error: the command's usage on stdout, exit 0. It is read
+        // before the command runs, so `--help` never starts a run (a fuzz run, a server).
+        Some(cmd) if wants_help(&args[1..]) && is_command(cmd) => {
+            use std::io::Write as _;
+            let _ = std::io::stdout().lock().write_all(command_usage(cmd).as_bytes());
+            Ok(())
+        }
         Some("run") => cmd_run(&args[1..]),
         Some("eval" | "inspect") => cmd_eval(&args[1..]),
         Some("script") => cmd_script(&args[1..]),
@@ -113,7 +164,7 @@ fn main() -> ExitCode {
                 }
             })
         }
-        Some("recipe") => args.get(1).ok_or_else(|| USAGE.to_string()).and_then(|p| {
+        Some("recipe") => args.get(1).ok_or_else(usage).and_then(|p| {
             let v = read_json(p)?;
             recipe::to_script(&v).map(|s| println!("{}", pretty(&s)))
         }),
@@ -136,6 +187,8 @@ fn main() -> ExitCode {
         Some("bench-open") => cmd_bench_open(&args[1..]),
         // A ~1,300-body design built command by command, as an agent builds one over MCP.
         Some("bench-agent") => bench_agent::run(&args[1..]),
+        // The standard Assistant model test (#4851), run against a desktop app over its control channel.
+        Some("bench-assistant") => bench_assistant::run(&args[1..]),
         Some("--version" | "-V") => {
             println!("node-cad-cli {}", env!("CARGO_PKG_VERSION"));
             Ok(())
@@ -143,10 +196,10 @@ fn main() -> ExitCode {
         // Asked-for help is not an error: usage on stdout, exit 0.
         Some("--help" | "-h" | "help") => {
             use std::io::Write as _;
-            let _ = std::io::stdout().lock().write_all(USAGE.as_bytes());
+            let _ = std::io::stdout().lock().write_all(usage().as_bytes());
             Ok(())
         }
-        _ => Err(USAGE.to_string()),
+        _ => Err(usage()),
     };
     match r {
         Ok(()) => ExitCode::SUCCESS,
@@ -157,18 +210,70 @@ fn main() -> ExitCode {
     }
 }
 
+/// Take `--max-file-size SIZE` (or `--max-file-size=SIZE`), which any command takes, out of the
+/// arguments and raise the file size limits for this run (#4086). A bad size is an error.
+fn max_file_size(args: &mut Vec<String>) -> Result<(), String> {
+    let mut size = None;
+    let mut i = 0;
+    while let Some(arg) = args.get(i) {
+        if arg == "--max-file-size" {
+            let value = args.get(i + 1).cloned().ok_or("--max-file-size needs a size, for example --max-file-size 2GB")?;
+            args.drain(i..i + 2);
+            size = Some(value);
+        } else if let Some(value) = arg.strip_prefix("--max-file-size=") {
+            size = Some(value.to_string());
+            args.remove(i);
+        } else {
+            i += 1;
+        }
+    }
+    let Some(size) = size else { return Ok(()) };
+    let bytes = solidcraft_engine::io::limits::parse_flag(&size).map_err(|e| format!("--max-file-size: {e}"))?;
+    solidcraft_engine::io::limits::set_override(Some(bytes))
+}
+
 fn pretty(v: &Value) -> String {
     serde_json::to_string_pretty(v).unwrap_or_default()
+}
+
+/// The whole usage: every command's lines under one `usage:` line. The lines come from the
+/// same place a command's own `--help` prints, so the two cannot drift apart.
+fn usage() -> String {
+    let mut s = String::from("usage:\n");
+    for c in COMMANDS.iter().filter(|c| c.listed) {
+        s.push_str(c.usage);
+    }
+    s.push_str(USAGE_DEBUG);
+    s
+}
+
+/// A command's own usage: its lines under a `usage:` line.
+fn command_usage(cmd: &str) -> String {
+    match COMMANDS.iter().find(|c| c.name == cmd) {
+        Some(c) => format!("usage:\n{}", c.usage),
+        None => usage(),
+    }
+}
+
+/// Whether the name is a command the CLI takes.
+fn is_command(cmd: &str) -> bool {
+    COMMANDS.iter().any(|c| c.name == cmd)
+}
+
+/// Whether the arguments ask for help.
+fn wants_help(args: &[String]) -> bool {
+    args.iter().any(|a| a == "--help" || a == "-h")
 }
 
 pub fn read_json(path: &str) -> Result<Value, String> {
     // Through the engine's file access, which refuses anything that is not a regular file and
     // reads no more than the cap: a character device or a FIFO would otherwise never end.
-    let s = solidcraft_engine::io::vfs::read_to_string(path, solidcraft_engine::io::MAX_DESIGN_BYTES).map_err(|e| format!("{path}: {e}"))?;
+    let s = solidcraft_engine::io::vfs::read_to_string(path, solidcraft_engine::io::limits::max_design_bytes())
+        .map_err(|e| format!("{path}: {}", solidcraft_engine::io::limits::explain(solidcraft_engine::io::limits::Kind::Design, e)))?;
     serde_json::from_str(&s).map_err(|e| format!("{path}: {e}"))
 }
 
-/// A session from a design file, a STEP/3MF/STL file, a command script, or an oracle recipe.
+/// A session from a design file, a STEP/3MF/STL file, a point cloud, a command script, or an oracle recipe.
 pub fn load(path: &str) -> Result<Session, String> {
     load_checked(path, solidcraft_engine::schema::ParamCheck::Off)
 }
@@ -178,15 +283,14 @@ pub fn load(path: &str) -> Result<Session, String> {
 fn load_checked(path: &str, check: solidcraft_engine::schema::ParamCheck) -> Result<Session, String> {
     let mut s = Session::default();
     s.param_check = check;
-    if solidcraft_engine::io::is_step_path(path) || solidcraft_engine::io::is_mesh_path(path) {
+    if solidcraft_engine::io::is_step_path(path) || solidcraft_engine::io::is_mesh_path(path) || solidcraft_engine::io::is_point_cloud_path(path) {
         s.execute("doc.open", &json!({"path": path})).map_err(|e| e.to_string())?;
         return Ok(s);
     }
-    let bytes = solidcraft_engine::io::vfs::read(path, solidcraft_engine::io::MAX_DESIGN_BYTES).map_err(|e| format!("{path}: {e}"))?;
+    let bytes = solidcraft_engine::io::limits::read(path, solidcraft_engine::io::limits::Kind::Design).map_err(|e| format!("{path}: {e}"))?;
     if solidcraft_engine::io::is_design_container(&bytes) {
         let doc = solidcraft_engine::io::read_design(&bytes).map_err(|e| format!("{path}: {e}"))?;
-        let mut session = Session::new(doc);
-        session.path = Some(path.to_owned());
+        let mut session = Session::opened_at(doc, None, Some(path));
         session.param_check = check;
         return Ok(session);
     }
@@ -195,16 +299,34 @@ fn load_checked(path: &str, check: solidcraft_engine::schema::ParamCheck) -> Res
         s.execute("doc.open", &json!({"path": path})).map_err(|e| e.to_string())?;
     } else {
         let script = if v.get("features").is_some() && v.get("commands").is_none() { recipe::to_script(&v)? } else { v };
-        // Warn level: each step's `param_warnings` as it completes, even when a later step fails
-        // (stderr, so stdout stays the caller's).
-        let mut warn = |step: usize, r: &Value| {
-            for w in r.get("param_warnings").and_then(Value::as_array).into_iter().flatten() {
-                eprintln!("{path}: step {}: {}", step + 1, w.as_str().unwrap_or_default());
-            }
-        };
-        s.run_script_each(&script, &mut warn).map_err(|e| e.to_string())?;
+        run_script_warning(&mut s, path, &script)?;
     }
     Ok(s)
+}
+
+/// Run `script`, read from `path`, on `s`. At the warn level each step's `param_warnings` go to
+/// stderr as the step completes, even when a later step fails (stdout stays the caller's).
+fn run_script_warning(s: &mut Session, path: &str, script: &Value) -> Result<Vec<Value>, String> {
+    s.run_script_each(script, &mut |step, r| print_param_warnings(path, step, r)).map_err(|e| e.to_string())
+}
+
+/// Step `step`'s `param_warnings` on stderr, one per line, named after the script at `path`.
+fn print_param_warnings(path: &str, step: usize, r: &Value) {
+    for w in r.get("param_warnings").and_then(Value::as_array).into_iter().flatten() {
+        eprintln!("{path}: step {}: {}", step + 1, w.as_str().unwrap_or_default());
+    }
+}
+
+/// `--param-check off|warn|strict`: how calls that break a command's parameter contract are
+/// treated (docs/mcp.md); off when the option isn't given.
+fn parse_param_check(cmd: &str, args: &[String]) -> Result<solidcraft_engine::schema::ParamCheck, String> {
+    match flag(args, "--param-check") {
+        None if args.iter().any(|a| a == "--param-check") => Err(format!("{cmd}: --param-check wants off, warn or strict")),
+        None => Ok(solidcraft_engine::schema::ParamCheck::Off),
+        Some(v) => {
+            solidcraft_engine::schema::ParamCheck::parse(v).ok_or_else(|| format!("{cmd}: --param-check wants off, warn or strict, not `{v}`"))
+        }
+    }
 }
 
 fn flag<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
@@ -263,10 +385,19 @@ fn print_json(v: &Value, file: Option<&str>) -> Result<(), String> {
 fn cmd_run(args: &[String]) -> Result<(), String> {
     install_renderer();
     let json_out = json_out(args)?;
+    // Before the option check, so a bare `--param-check` gets the words `mcp` uses.
+    let check = parse_param_check("run", args)?;
+    known_args(
+        "run",
+        args,
+        &["--in", "--out", "--save", "--json-out", "--param-check"],
+        &["--quiet", "--results", "--timings", "--profile", "--allow-errors"],
+        true,
+    )?;
     let base = flag(args, "--in");
     let path = positional(args);
     if path.is_none() && base.is_none() {
-        return Err(USAGE.to_string());
+        return Err(usage());
     }
     let want_results = args.iter().any(|a| a == "--results");
     // `--profile` times each command and splits out its kernel time; it implies `--timings`.
@@ -275,23 +406,25 @@ fn cmd_run(args: &[String]) -> Result<(), String> {
     let (mut s, results) = if want_results || timings {
         // Collect every command's result or time (scripts only), then process requested files too.
         let mut s = match base {
-            Some(b) => load(b)?,
+            Some(b) => load_checked(b, check)?,
             None => Session::default(),
         };
+        s.param_check = check;
         let needs = if want_results { "--results needs a script" } else { "--timings needs a script" };
-        let v = read_json(path.ok_or(needs)?)?;
+        let script = path.ok_or(needs)?;
+        let v = read_json(script)?;
         let out = if timings {
-            let (r, mut t) = s.run_script_timed(&v, profile).map_err(|e| e.to_string())?;
+            let (r, mut t) = s.run_script_timed(&v, profile, &mut |step, r| print_param_warnings(script, step, r)).map_err(|e| e.to_string())?;
             if want_results && let Some(o) = t.as_object_mut() {
                 o.insert("results".into(), Value::Array(r));
             }
             t
         } else {
-            Value::Array(s.run_script(&v).map_err(|e| e.to_string())?)
+            Value::Array(run_script_warning(&mut s, script, &v)?)
         };
         (s, Some(out))
     } else {
-        (open(base, path)?, None)
+        (open(base, path, check)?, None)
     };
     // A feature that fails leaves the bodies as they were before it (a parameter change can
     // break a feature without failing the command that made it): writing them would hand out
@@ -315,24 +448,25 @@ fn cmd_run(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// The session `run` and `snapshot` start from: `--in` (a design or STEP file) with the
-/// positional script run on top of it, or either one alone.
-fn open(base: Option<&str>, path: Option<&String>) -> Result<Session, String> {
+/// The session `run`, `eval` and `snapshot` start from: `--in` (a design or STEP file) with the
+/// positional script run on top of it, or either one alone, with scripts run at `check`.
+fn open(base: Option<&str>, path: Option<&String>, check: solidcraft_engine::schema::ParamCheck) -> Result<Session, String> {
     match (base, path) {
         (Some(b), Some(p)) => {
-            let mut s = load(b)?;
-            s.run_script(&read_json(p)?).map_err(|e| e.to_string())?;
+            let mut s = load_checked(b, check)?;
+            run_script_warning(&mut s, p, &read_json(p)?)?;
             Ok(s)
         }
-        (Some(b), None) => load(b),
-        (None, Some(p)) => load(p),
-        (None, None) => Err(USAGE.to_string()),
+        (Some(b), None) => load_checked(b, check),
+        (None, Some(p)) => load_checked(p, check),
+        (None, None) => Err(usage()),
     }
 }
 
 /// Refuses an option `cmd` doesn't take, and one missing its value: a typo, or another
-/// command's option, would otherwise be ignored without a word.
-fn known_flags(cmd: &str, args: &[String], valued: &[&str], switches: &[&str]) -> Result<(), String> {
+/// command's option, would otherwise be ignored without a word. `positionals` says whether the
+/// command takes a word of its own (a file, a seed): `fuzz` takes none, and would start a run.
+fn known_args(cmd: &str, args: &[String], valued: &[&str], switches: &[&str], positionals: bool) -> Result<(), String> {
     let mut i = 0;
     while let Some(a) = args.get(i) {
         if valued.contains(&a.as_str()) {
@@ -340,7 +474,9 @@ fn known_flags(cmd: &str, args: &[String], valued: &[&str], switches: &[&str]) -
                 Some(v) if !v.starts_with("--") => i += 2,
                 _ => return Err(format!("{cmd}: {a} needs a value")),
             }
-        } else if a.starts_with("--") && !switches.contains(&a.as_str()) {
+        } else if switches.contains(&a.as_str()) {
+            i += 1;
+        } else if a.starts_with("--") || !positionals {
             return Err(format!("{cmd} doesn't take {a} (it takes {})", [valued, switches].concat().join(", ")));
         } else {
             i += 1;
@@ -364,8 +500,8 @@ fn timeline_ok(s: &Session) -> Result<(), String> {
 
 fn cmd_eval(args: &[String]) -> Result<(), String> {
     let json_out = json_out(args)?;
-    let path = flag(args, "--in").or_else(|| positional(args).map(String::as_str)).ok_or_else(|| USAGE.to_string())?;
-    let mut s = load(path)?;
+    known_args("eval", args, &["--in", "--json-out"], &[], true)?;
+    let mut s = open(flag(args, "--in"), positional(args), solidcraft_engine::schema::ParamCheck::Off)?;
     let m = s.execute("inspect.measure", &json!({})).map_err(|e| e.to_string())?;
     let d = s.execute("document.inspect", &json!({})).map_err(|e| e.to_string())?;
     let out = json!({
@@ -382,7 +518,7 @@ fn cmd_eval(args: &[String]) -> Result<(), String> {
 /// A design's history as a command script (`timeline.export_script`): printed, or written to
 /// `--out`; what the script leaves out goes to stderr.
 fn cmd_script(args: &[String]) -> Result<(), String> {
-    let path = positional(args).ok_or_else(|| USAGE.to_string())?;
+    let path = positional(args).ok_or_else(usage)?;
     let s = &mut load(path)?;
     let out = flag(args, "--out");
     let r = s.execute("timeline.export_script", &json!({"path": out})).map_err(|e| e.to_string())?;
@@ -443,14 +579,15 @@ fn install_renderer() {
 
 fn cmd_snapshot(args: &[String]) -> Result<(), String> {
     install_renderer();
-    known_flags(
+    known_args(
         "snapshot",
         args,
         &["--in", "--out", "--width", "--height", "--view", "--camera", "--body", "--tool", "--section"],
         &["--no-grid", "--no-axes"],
+        true,
     )?;
     if positional(args).is_none() && flag(args, "--in").is_none() {
-        return Err(USAGE.to_string());
+        return Err(usage());
     }
     let out = flag(args, "--out").ok_or("snapshot needs --out FILE.png")?;
     let size = |name: &str, default: u32| match flag(args, name) {
@@ -458,7 +595,7 @@ fn cmd_snapshot(args: &[String]) -> Result<(), String> {
         Some(x) => x.parse().ok().filter(|n| (16..=8192).contains(n)).ok_or_else(|| format!("{name} must be 16 to 8192 pixels, not `{x}`")),
     };
     let (w, h) = (size("--width", 1280)?, size("--height", 800)?);
-    let mut s = open(flag(args, "--in"), positional(args))?;
+    let mut s = open(flag(args, "--in"), positional(args), solidcraft_engine::schema::ParamCheck::Off)?;
     // How the bodies are drawn and where the model is cut, through the commands the app's
     // Appearance dialog and Section Analysis run (`preview`).
     preview::apply(&mut s, &flags(args, "--body"), &flags(args, "--tool"), flag(args, "--section"))?;
@@ -534,7 +671,7 @@ fn ico(images: &[(usize, Vec<u8>)]) -> Result<Vec<u8>, String> {
 
 fn cmd_exec(args: &[String]) -> Result<(), String> {
     install_renderer();
-    let id = args.first().ok_or_else(|| USAGE.to_string())?;
+    let id = args.first().ok_or_else(usage)?;
     let p: Value = match args.get(1) {
         Some(t) => serde_json::from_str(t).map_err(|e| format!("params: {e}"))?,
         None => json!({}),
@@ -545,17 +682,34 @@ fn cmd_exec(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+/// `mcp setup`: add the server to each installed AI client, with this program's own path.
+fn cmd_mcp_setup(args: &[String]) -> Result<(), String> {
+    use solidcraft_engine::agent_setup as setup;
+    let (lines, ok) = setup::setup(args, &setup::Env::from_process(), &setup::current_exe()?)?;
+    for l in lines {
+        println!("{l}");
+    }
+    if ok { Ok(()) } else { Err("mcp setup: some clients could not be configured".into()) }
+}
+
 /// MCP server on stdio: headless (optionally starting from a design or script) or bridged to
 /// a running app's control port. stdout carries only protocol messages. Files the agent's tool
 /// calls reach are confined to `solidcraft_mcp::agent_scope` unless `--allow-any-path` is given.
 fn cmd_mcp(args: &[String]) -> Result<(), String> {
+    if matches!(args.first().map(String::as_str), Some("setup" | "install")) {
+        return cmd_mcp_setup(&args[1..]);
+    }
+    let render_gpu = args.iter().any(|arg| arg == "--render-gpu");
+    if render_gpu && flag(args, "--connect").is_some() {
+        return Err("mcp: --render-gpu installs a headless image host; a connected application owns its own device".into());
+    }
     install_renderer();
     let scope = (!args.iter().any(|a| a == "--allow-any-path"))
         .then(|| solidcraft_mcp::agent_scope(flags(args, "--allow-path").into_iter().map(std::path::PathBuf::from)));
     if let Some(s) = &scope {
         let roots: Vec<String> = s.roots().iter().map(|r| r.display().to_string()).collect();
         eprintln!(
-            "node-cad-cli mcp: files limited to {} and the open design's folder (--allow-path DIR adds one, --allow-any-path lifts the limit)",
+            "node-cad-cli mcp: files limited to {} and the folders of designs opened or saved here (--allow-path DIR adds one, --allow-any-path lifts the limit)",
             roots.join(", ")
         );
         let design_dir = flag(args, "--in")
@@ -565,17 +719,8 @@ fn cmd_mcp(args: &[String]) -> Result<(), String> {
             eprintln!("node-cad-cli mcp: the design's folder is left out because {why}; add it with --allow-path if you mean it");
         }
     }
-    // How a headless session treats calls that break a command's parameter contract (docs/mcp.md).
-    let param_check = match flag(args, "--param-check") {
-        None if args.iter().any(|a| a == "--param-check") => return Err("mcp: --param-check wants off, warn or strict".into()),
-        None => solidcraft_engine::schema::ParamCheck::Off,
-        Some(v) => {
-            solidcraft_engine::schema::ParamCheck::parse(v).ok_or_else(|| format!("mcp: --param-check wants off, warn or strict, not `{v}`"))?
-        }
-    };
-    if param_check != solidcraft_engine::schema::ParamCheck::Off && flag(args, "--connect").is_some() {
-        eprintln!("node-cad-cli mcp: --param-check applies to headless sessions; calls to the app are not checked yet");
-    }
+    // How calls that break a command's parameter contract are treated, headless or bridged.
+    let param_check = parse_param_check("mcp", args)?;
     let backend: Box<dyn solidcraft_mcp::Backend> = match (flag(args, "--connect"), flag(args, "--in")) {
         (Some(_), Some(_)) => return Err("mcp: use either --connect or --in, not both".into()),
         (Some(addr), None) => {
@@ -583,7 +728,7 @@ fn cmd_mcp(args: &[String]) -> Result<(), String> {
                 return Err(format!("mcp: --connect wants HOST:PORT, such as 127.0.0.1:7878, not `{addr}`"));
             };
             // Serve without the app too: the tools connect once it runs, and say it isn't until then.
-            let mut remote = solidcraft_mcp::Remote::new(addr, flag(args, "--token"));
+            let mut remote = solidcraft_mcp::Remote::new(addr, flag(args, "--token")).with_param_check(param_check);
             if let Err(e) = remote.try_connect() {
                 eprintln!(
                     "node-cad-cli mcp: no NØDE CAD app at {addr} yet ({e}); start it with `node-cad --control {port}` \
@@ -592,16 +737,48 @@ fn cmd_mcp(args: &[String]) -> Result<(), String> {
             }
             Box::new(remote)
         }
-        (None, Some(path)) => Box::new(solidcraft_mcp::Headless::new(load_checked(path, param_check)?)),
-        (None, None) => {
-            let mut headless = solidcraft_mcp::Headless::default();
-            headless.session.param_check = param_check;
+        (None, Some(path)) => {
+            let mut headless = solidcraft_mcp::Headless::new(load_checked(path, param_check)?);
+            if render_gpu {
+                headless.session.register_render_job_host(solidcraft_gpu::path::host().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+            }
             Box::new(headless)
         }
+        (None, None) => {
+            let auto = !args.iter().any(|a| a == "--headless");
+            if auto && let Some(port) = discover_app() {
+                eprintln!("solidcraft mcp: bridged to the running app at 127.0.0.1:{port} (--headless starts a session of its own)");
+                let remote = solidcraft_mcp::Remote::new(&format!("127.0.0.1:{port}"), flag(args, "--token")).with_param_check(param_check);
+                return serve_mcp(Box::new(remote), scope);
+            }
+            let mut headless = solidcraft_mcp::Headless::default();
+            headless.session.param_check = param_check;
+            if render_gpu {
+                headless.session.register_render_job_host(solidcraft_gpu::path::host().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+            }
+            if auto {
+                // The app may start after the agent: look for it again until there is work here.
+                Box::new(solidcraft_mcp::Auto::new(headless, Box::new(discover_app), flag(args, "--token")))
+            } else {
+                Box::new(headless)
+            }
+        }
     };
+    serve_mcp(backend, scope)
+}
+
+fn serve_mcp(backend: Box<dyn solidcraft_mcp::Backend>, scope: Option<solidcraft_engine::io::vfs::PathScope>) -> Result<(), String> {
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
     solidcraft_mcp::Server::new(backend).with_path_scope(scope).serve(stdin.lock(), stdout.lock()).map_err(|e| e.to_string())
+}
+
+/// The port of the running desktop app: the one its discovery file names, if something listens
+/// there (a file left by an app that crashed names a closed port).
+fn discover_app() -> Option<u16> {
+    let port = solidcraft_engine::control_auth::read_current_port()?;
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(500)).ok().map(|_| port)
 }
 
 /// `save-stress <path> <rounds>`: save a design of a few hundred kilobytes `rounds` times, its
@@ -691,8 +868,8 @@ pub(crate) fn cmd_bench_open(args: &[String]) -> Result<(), String> {
     let path = args.first().ok_or("usage: node-cad-cli bench-open <design.nodecad | part.step> [--parse-only]")?;
     let t = std::time::Instant::now();
     let step = solidcraft_engine::io::is_step_path(path);
-    let limit = if step { solidcraft_engine::io::MAX_STEP_BYTES } else { solidcraft_engine::io::MAX_DESIGN_BYTES };
-    let bytes = solidcraft_engine::io::vfs::read(path, limit).map_err(|e| format!("{path}: {e}"))?;
+    let kind = if step { solidcraft_engine::io::limits::Kind::Step } else { solidcraft_engine::io::limits::Kind::Design };
+    let bytes = solidcraft_engine::io::limits::read(path, kind).map_err(|e| format!("{path}: {e}"))?;
     let read_ms = t.elapsed().as_secs_f64() * 1000.0;
     println!("{}", json!({"step": "read", "ms": read_ms, "bytes": bytes.len()}));
     let t = std::time::Instant::now();
@@ -714,11 +891,12 @@ pub(crate) fn cmd_bench_open(args: &[String]) -> Result<(), String> {
         return Ok(());
     }
     let t = std::time::Instant::now();
-    let s = Session::opened(doc, saved.as_ref());
+    let s = Session::opened_at(doc, saved.as_ref(), (!step).then_some(path.as_str()));
     drop(read);
-    // Taken from the file: nothing evaluated (SOLIDCRAFT_NO_MODEL_CACHE evaluates anyway).
+    // Taken from the file: nothing evaluated (SOLIDCRAFT_NO_MODEL_CACHE evaluates anyway), or
+    // only the features whose state a thinned file left out.
     let adopted = saved.is_some() && s.model.last_recomputed == 0;
-    println!("{}", json!({"step": "evaluate", "ms": t.elapsed().as_secs_f64() * 1000.0, "adopted": adopted}));
+    println!("{}", json!({"step": "evaluate", "ms": t.elapsed().as_secs_f64() * 1000.0, "adopted": adopted, "recomputed": s.model.last_recomputed}));
     for r in &s.model.results {
         println!("{}", json!({"step": "feature", "id": r.id, "name": r.name, "ms": r.ms, "error": r.error}));
     }
@@ -739,7 +917,7 @@ pub(crate) fn cmd_bench_open(args: &[String]) -> Result<(), String> {
         Some(out) => {
             let mut s = s;
             // Without the cache first, for comparison.
-            let plain = format!("{out}.plain.nodecad");
+            let plain = format!("{out}.plain.{}", solidcraft_engine::io::DESIGN_EXT);
             let t = std::time::Instant::now();
             s.execute("file.save_as", &json!({"path": plain, "cache": false})).map_err(|e| e.to_string())?;
             let plain_ms = t.elapsed().as_secs_f64() * 1000.0;

@@ -1,6 +1,9 @@
 //! A drawing of the visible bodies and shown sketches from a supplied viewport camera. No
 //! screen pixels, grid, selection highlights or tessellation diagonals are exported.
 
+/// Mise en plan: sheets with standard views, dimensions and a title block.
+#[path = "view_dxf_drawing.rs"]
+pub(super) mod drawing;
 #[path = "view_dxf_meshes.rs"]
 mod meshes;
 #[path = "view_dxf_progress.rs"]
@@ -9,9 +12,6 @@ mod progress;
 mod projection;
 #[path = "view_dxf_sketch.rs"]
 pub(super) mod sketch;
-/// Mise en plan: sheets with standard views, dimensions and a title block.
-#[path = "view_dxf_drawing.rs"]
-pub(super) mod drawing;
 
 use serde_json::{Value, json};
 use solidcraft_geom::Vec2;
@@ -91,7 +91,7 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
     if sketch > 0 {
         layers.push(DxfLayer::new("SKETCH", 5));
     }
-    let text = solidcraft_io::write_dxf_drawing(&layers, &entities);
+    let text = solidcraft_io::write_dxf_drawing(&layers, &entities)?;
     writing.check().map_err(|e| bad(CMD, e))?;
     let mut result = json!({"visible":visible,"hidden":hidden,"sketch":sketch,"units":"mm","tolerance":tolerance,"projection":if cam.fov > 0.0 {"perspective"} else {"orthographic"}});
     result["stats"] = json!({"bodies":meshes.placements.len(),"shared_meshes":meshes.meshes.len(),"triangles":meshes.triangles,

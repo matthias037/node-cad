@@ -20,10 +20,14 @@ Older names a user may still meet survive **only** in the shims below (plus thei
 file, and changelog / release notes). When you add or remove a shim, update this file in the
 same change.
 
-## 1. `.solidcraft` and `.solvecraft` design files
+## 1. `.sc`, `.solidcraft` and `.solvecraft` design files
 
-New designs are saved as `.nodecad`. Designs with SolidCraft's `.solidcraft` extension, or the
-older `.solvecraft`, still open everywhere a design opens:
+New designs are saved as `.nodecad`. Designs with SolidCraft's `.sc` or `.solidcraft` extension,
+or the older `.solvecraft`, still open everywhere a design opens. Opening one and pressing
+**Save** writes that same file; **Save As**, new designs, autosaves and crash reports use
+`.nodecad`. One constant names the extension new designs get, `DESIGN_EXT` (`nodecad`), and one
+list names every extension a design may have, `DESIGN_EXTS` (`nodecad`, then
+`LEGACY_DESIGN_EXTS`: `sc`, `solidcraft`, `solvecraft`):
 
 | Path in | Where |
 |---|---|

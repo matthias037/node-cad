@@ -1,17 +1,35 @@
 # Agent skills
 
-Skills for AI agents that model in NØDE CAD through its [MCP server](../docs/mcp.md). Each folder is
+Skills for contributing to NØDE CAD and modelling through its [MCP server](../docs/mcp.md). Each folder is
 one skill in the [Agent Skills](https://agentskills.io) format: a `SKILL.md` with a name and a
 description that tell the agent when to load it, and an optional supporting reference file.
 
+The modelling documents are built into NØDE CAD: its MCP server's `skill_reference` tool returns them, so an
+agent without file access (such as the one in NØDE CAD's own chat) can still read a skill's reference.
+The contributor skills (everything except modeling, editing, checking and mechanisms) are for repository work and are not embedded in that tool. `AGENTS.md` routes to them; `cargo xtask skills` fails when its table and this folder disagree or a file, `cargo xtask` command or skill they name is gone.
+
 | Skill | Loads when the agent |
 |---|---|
+| [`solidcraft-contributing`](solidcraft-contributing/SKILL.md) | helps someone set up a fork, choose and claim an issue, and submit a contribution for review; the rules every PR follows |
+| [`node-cad-name`](node-cad-name/SKILL.md) | writes anything users or AI clients see, or renames something: what says NØDE CAD, what keeps the SolidCraft name |
+| [`solidcraft-ground-rules`](solidcraft-ground-rules/SKILL.md) | adds a dependency, asset or wording: independence, licences, attribution, the product name |
+| [`solidcraft-crash-safety`](solidcraft-crash-safety/SKILL.md) | writes non-test Rust, handles hostile input or investigates a crash report |
+| [`solidcraft-commands`](solidcraft-commands/SKILL.md) | adds a command or decides which crate code belongs in |
+| [`solidcraft-ui`](solidcraft-ui/SKILL.md) | adds a dialog, panel, camera input, icon or colour |
+| [`solidcraft-ui-text`](solidcraft-ui-text/SKILL.md) | adds a label, message or translation |
+| [`solidcraft-file-formats`](solidcraft-file-formats/SKILL.md) | changes what a design saves, or touches import and export |
+| [`solidcraft-preferences`](solidcraft-preferences/SKILL.md) | adds a setting or changes a default |
+| [`solidcraft-tests`](solidcraft-tests/SKILL.md) | places or runs tests |
+| [`solidcraft-performance`](solidcraft-performance/SKILL.md) | works on slow code, the window thread or the wasm build |
+| [`solidcraft-packaging`](solidcraft-packaging/SKILL.md) | prepares a release or changes packages |
+| [`solidcraft-agent-tools`](solidcraft-agent-tools/SKILL.md) | runs the app, drives the control channel or changes MCP tools |
 | [`node-cad-modeling`](node-cad-modeling/SKILL.md) | builds a new part (enclosure, bracket, plate, flange, …) |
 | [`node-cad-editing`](node-cad-editing/SKILL.md) | changes, fixes or extends an existing design |
 | [`node-cad-checking`](node-cad-checking/SKILL.md) | builds, changes or ports a design, next to the two above: parameter ranges, every allowed value, exact STEP comparison, regression tests, designs kept in git |
 | [`node-cad-mechanisms`](node-cad-mechanisms/SKILL.md) | builds, drives or animates an assembly: components, joints, motion links, closed loops such as actuators, contact sets, motion studies |
+| [`node-cad-reporting`](node-cad-reporting/SKILL.md) | hears that something went wrong (a crash, a failed command, a wrong shape or number, a hang): reproduces it in a fresh design, shrinks it to a minimal script and writes the bug report |
 
-They teach the agent to:
+The modelling skills teach the agent to:
 - plan the part as numbers
 - build it in a few `batch` calls with parametric positions
 - verify every stage with `measure` against values it computed itself
@@ -19,27 +37,28 @@ They teach the agent to:
 
 They also list the traps that otherwise cost failed calls. Examples are the sketch axes of the XZ plane, edge picks that snap to the nearest edge, and cuts that miss but still report success.
 
-They are written for NØDE CAD 0.8 and later; `node-cad-mechanisms` for `main` after 0.11.1 (the next release), which counts the degrees of freedom of closed loops.
+The modelling skills are written for NØDE CAD 0.8 and later; `node-cad-mechanisms` for `main` after 0.11.1 (the next release), which counts the degrees of freedom of closed loops; `node-cad-reporting` for 0.18 and later.
 
 ## Install
 
-Claude Code, for all projects:
+The modelling skills, for Claude Code in all projects:
 
 ```sh
 git clone --depth 1 https://github.com/matthias037/node-cad
-cp -r node-cad/skills/node-cad-* ~/.claude/skills/
+cp -r node-cad/skills/node-cad-{modeling,editing,checking,mechanisms} ~/.claude/skills/
 ```
 
 Windows (PowerShell):
 
 ```powershell
 git clone --depth 1 https://github.com/matthias037/node-cad
-Copy-Item -Recurse node-cad\skills\node-cad-* $HOME\.claude\skills\
+foreach ($s in 'modeling','editing','checking','mechanisms') { Copy-Item -Recurse node-cad\skills\node-cad-$s $HOME\.claude\skills\ }
 ```
 
 - **One project only:** copy the folders into that project's `.claude/skills/` instead.
 - **Other agents:** for agents that read the Agent Skills format, copy the folders into the skills directory their documentation names.
 - **Updating:** copy the folders again after you update NØDE CAD.
+- **Contributing:** the contributor skills need no install. Tell your assistant: "I want to contribute to NØDE CAD. Read https://github.com/matthias037/node-cad/blob/main/skills/solidcraft-contributing/SKILL.md and help me get started."
 
 ## Maintaining
 

@@ -5,6 +5,7 @@
 //! fingerprint it, so each sketch command took longer the more parts were inserted.
 
 use std::cell::Cell;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use solidcraft_geom::{Plane, Vec2, Vec3};
@@ -13,16 +14,18 @@ use solidcraft_sketch::Sketch;
 
 use crate::*;
 
-/// Work counted on this thread: bodies moved, STEP texts digested, joint faces measured.
+/// Work counted on this thread: bodies moved, STEP texts digested, joint faces and bodies
+/// measured.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(super) struct Counts {
     pub moved: usize,
     pub digested: usize,
     pub joint_faces: usize,
+    pub measures: usize,
 }
 
 thread_local! {
-    static COUNTS: Cell<Counts> = const { Cell::new(Counts { moved: 0, digested: 0, joint_faces: 0 }) };
+    static COUNTS: Cell<Counts> = const { Cell::new(Counts { moved: 0, digested: 0, joint_faces: 0, measures: 0 }) };
 }
 
 pub(super) fn count(f: impl FnOnce(&mut Counts)) {
@@ -31,6 +34,22 @@ pub(super) fn count(f: impl FnOnce(&mut Counts)) {
         f(&mut n);
         c.set(n);
     });
+}
+
+thread_local! {
+    static WRITTEN: Cell<usize> = const { Cell::new(0) };
+}
+
+/// A feature written out on this thread to be fingerprinted.
+pub(super) fn count_written() {
+    WRITTEN.with(|c| c.set(c.get() + 1));
+}
+
+/// The features `f` writes out on this thread to fingerprint them.
+fn written(f: impl FnOnce()) -> usize {
+    WRITTEN.with(|c| c.set(0));
+    f();
+    WRITTEN.with(Cell::get)
 }
 
 /// The work `f` does on this thread.
@@ -45,7 +64,9 @@ fn joint_face_measurements_are_shared_across_motion_samples_and_snap_kinds() {
     use crate::joints::{Joint, JointKind, JointOrigin, Snap, XRef};
     let mut doc = Document::new("joint face work");
     let part = doc.add_component(Some("Crank"), 0).unwrap();
-    let occurrence = doc.occurrences.iter().find(|o| o.component == part).unwrap().id;
+    let occurrence = doc.occurrences.iter_mut().find(|o| o.component == part).unwrap();
+    occurrence.grounded = false;
+    let occurrence = occurrence.id;
     let id = doc
         .add_feature(
             FeatureKind::Cylinder {
@@ -54,6 +75,7 @@ fn joint_face_measurements_are_shared_across_motion_samples_and_snap_kinds() {
                 radius: "2".into(),
                 height: "10".into(),
                 operation: Operation::NewBody,
+                references: Vec::new(),
             },
             None,
         )
@@ -179,11 +201,10 @@ fn a_sketch_on_a_fixed_plane_costs_the_same_in_a_large_placed_design() {
     let plane = doc.add_feature(FeatureKind::ConstructionPlane { plane: PlaneRef::Origin { name: "XZ".into() } }, Some("Datum")).unwrap();
     assert_eq!(counted(|| model.evaluate(&doc)), Counts::default(), "construction plane");
     assert!(model.result(plane).unwrap().error.is_none());
-    let datum = doc.feature(plane).unwrap().name.clone();
     let planes = [
         PlaneRef::Origin { name: "XY".into() },
         PlaneRef::Offset { base: Box::new(PlaneRef::Origin { name: "YZ".into() }), distance: "5 mm".into() },
-        PlaneRef::Construction { name: datum.into() },
+        PlaneRef::Construction { feature: plane.into() },
     ];
     for (k, plane) in planes.into_iter().enumerate() {
         let id = doc.add_feature(line_sketch(plane, Vec2::new(10.0, 1.0 + k as f64)), None).unwrap();
@@ -221,6 +242,101 @@ fn a_sketch_on_a_face_still_sees_the_placed_bodies() {
     assert_eq!(work.digested, 0);
 }
 
+/// A sketch on a face of a plate placed turned (its own frame, so the plate is moved into it),
+/// evaluated once: the design, its model, the plate's component, the sketch, its anchor and the
+/// face picked.
+fn sketch_on_a_turned_occurrence() -> (Document, Model, u64, u64, FaceAnchor, Plane) {
+    use solidcraft_sketch::{LinkKind, LinkSource};
+
+    let mut doc = Document::new("turned face");
+    let comp = doc.add_component(Some("Plate"), 0).unwrap();
+    let occurrence = doc.occurrences.iter_mut().find(|o| o.component == comp).unwrap();
+    occurrence.transform = rigid(Vec3::ZERO, Vec3::ZERO, Vec3::X, std::f64::consts::FRAC_PI_2);
+    let path = vec![occurrence.id];
+    let kind = serde_json::from_value(serde_json::json!({
+        "type": "box", "corner": [0, 0, 0], "length": "90", "width": "120", "height": "8"
+    }))
+    .unwrap();
+    let plate = doc.add_feature(kind, Some("Plate")).unwrap();
+    doc.feature_mut(plate).unwrap().component = comp;
+    let mut model = Model::new();
+    model.evaluate(&doc);
+    let state = model.state();
+    let raw = state.bodies.first().unwrap();
+    let index = raw.body.face_sources().unwrap().iter().position(|s| matches!(s, Some(kernel::FaceSource::Box { axis: 2, high: true, .. }))).unwrap();
+    let world = world_state(&doc, &state);
+    let shown = world.bodies.first().unwrap();
+    let picked = shown.body.face_plane(index).unwrap();
+    let anchor = doc.capture_face_anchor(raw, index, &picked, &path, 0, &[]).unwrap();
+    let source = LinkSource::Face { body: raw.name.clone(), at: apply_point(&doc.component_transform(comp), Vec3::new(30., 60., 8.)) };
+    let resolved = crate::project::resolve(&doc, &BTreeMap::new(), &world, &picked, LinkKind::Project, &source).unwrap();
+    let plane = PlaneRef::Face { plane: picked, at: picked.origin, name: None, anchor: Some(Box::new(anchor.clone())) };
+    let mut sketch = Sketch::new();
+    let a = sketch.add_point(Vec2::ZERO, None).unwrap();
+    let b = sketch.add_point(Vec2::new(3., 3.), None).unwrap();
+    sketch.add_line_pts(a, b, None).unwrap();
+    sketch.add_link(LinkKind::Project, source, &resolved.geom).unwrap();
+    let id = doc.add_feature(FeatureKind::Sketch { plane, sketch }, None).unwrap();
+    doc.feature_mut(id).unwrap().component = 0;
+    let first = counted(|| model.evaluate(&doc));
+    assert!(first.moved > 0, "{first:?}");
+    assert!(model.result(id).unwrap().error.is_none(), "{:?}", model.result(id).unwrap().error);
+    (doc, model, comp, id, anchor, picked)
+}
+
+#[test]
+fn editing_a_sketch_on_a_turned_occurrence_reuses_its_frame_bodies() {
+    let (mut doc, model, comp, id, anchor, picked) = sketch_on_a_turned_occurrence();
+    let reopened = Model::adopt(&doc, &model.saved(&doc).unwrap()).unwrap();
+    for mut model in [model, reopened] {
+        let before = state_in_face_anchor_frame(&doc, &model.state_before(id), &anchor, 0).unwrap().bodies.first().unwrap().mesh();
+
+        for to in [Vec2::new(4., 5.), Vec2::new(6., 7.)] {
+            doc.sketch_mut(id).unwrap().points.get_mut(1).unwrap().pos = to;
+            let work = counted(|| model.evaluate(&doc));
+            assert_eq!(work.moved, 0, "sketch edit must reuse the unchanged placement: {work:?}");
+            assert_eq!(model.last_recomputed, 1);
+            let result = model.result(id).unwrap();
+            assert!(result.error.is_none(), "{:?}", result.error);
+            let solved = model.state();
+            let solved = solved.sketch(id).unwrap();
+            assert!(solved.sketch.links.iter().all(|link| !link.lost));
+            assert!((solved.plane.normal().dot(picked.normal()) - 1.).abs() < 1e-9);
+            let after = state_in_face_anchor_frame(&doc, &model.state_before(id), &anchor, 0).unwrap().bodies.first().unwrap().mesh();
+            assert!(Arc::ptr_eq(&before, &after), "the anchored body's mesh must survive sketch edits");
+        }
+        // A changed placement is a different frame: the body is moved again, not reused.
+        let turned = doc.occurrences.iter().find(|o| o.component == comp).unwrap().transform;
+        doc.occurrences.iter_mut().find(|o| o.component == comp).unwrap().transform =
+            rigid(Vec3::ZERO, Vec3::ZERO, Vec3::X, std::f64::consts::FRAC_PI_3);
+        let work = counted(|| model.evaluate(&doc));
+        assert!(work.moved > 0, "a changed placement must move the body again: {work:?}");
+        doc.occurrences.iter_mut().find(|o| o.component == comp).unwrap().transform = turned;
+        model.evaluate(&doc);
+    }
+}
+
+/// Evaluations between two edits of the sketch that move nothing (a delete refreshes the model
+/// more than once, an undo can take its sketch from the cache) leave its frame bodies in place:
+/// they once aged them out, and the next edit moved and meshed every placed body again, which
+/// in a design of thousands of imported bodies took a minute per edit.
+#[test]
+fn evaluations_that_move_nothing_keep_the_frame_bodies() {
+    let (mut doc, mut model, _, id, _, _) = sketch_on_a_turned_occurrence();
+    let edit = |doc: &mut Document, to: Vec2| doc.sketch_mut(id).unwrap().points.get_mut(1).unwrap().pos = to;
+    edit(&mut doc, Vec2::new(4., 5.));
+    let work = counted(|| model.evaluate(&doc));
+    assert_eq!(work.moved, 0, "{work:?}");
+    for _ in 0..3 {
+        let work = counted(|| model.evaluate(&doc));
+        assert_eq!((work.moved, model.last_recomputed), (0, 0), "{work:?}");
+    }
+    edit(&mut doc, Vec2::new(6., 7.));
+    let work = counted(|| model.evaluate(&doc));
+    assert_eq!(model.last_recomputed, 1);
+    assert_eq!(work.moved, 0, "the edit after idle evaluations must reuse the moved plate: {work:?}");
+}
+
 #[test]
 fn an_imported_file_is_fingerprinted_by_its_text() {
     let doc = placed_imports(2);
@@ -256,4 +372,482 @@ fn an_imported_file_is_fingerprinted_by_its_text() {
     assert_ne!(after.last(), before.last());
     assert_eq!(model.last_recomputed, 1);
     assert_eq!(model.state().bodies.len(), 3);
+}
+
+/// Pinning body names fingerprints the timeline again only from the first renamed feature on
+/// (`Model::pinned_prefix`), and gives the fingerprints the full pass gives: random pins
+/// on a timeline of boxes, cuts, patterns of features (one placed before its source, as one made
+/// with the timeline rolled back is), a suppressed feature and a history marker, after an
+/// evaluation and after earlier pins.
+#[test]
+fn pinning_body_names_fingerprints_as_the_full_pass_does() {
+    let kind = |v: serde_json::Value| serde_json::from_value::<FeatureKind>(v).unwrap();
+    let mut doc = Document::new("pins");
+    let mut ids = Vec::new();
+    for i in 0..10 {
+        let x = 20.0 * i as f64;
+        let b =
+            kind(serde_json::json!({"type": "box", "corner": [x, 0.0, 0.0], "length": "10", "width": "10", "height": "10", "operation": "new_body"}));
+        ids.push(doc.add_feature(b, None).unwrap());
+        if i % 3 == 1 {
+            let c = kind(
+                serde_json::json!({"type": "cylinder", "axis": [0.0, 0.0, 1.0], "base": [x + 5.0, 5.0, -1.0], "height": "12", "radius": "2", "operation": "cut"}),
+            );
+            ids.push(doc.add_feature(c, None).unwrap());
+        }
+    }
+    let circular = |features: Vec<u64>| {
+        kind(serde_json::json!({"type": "pattern", "features": features, "bodies": [],
+            "pattern": {"type": "circular", "angle": "360 deg", "axis": [0.0, 0.0, 1.0], "count": "3", "origin": [0.0, -40.0, 0.0]}}))
+    };
+    ids.push(doc.add_feature(circular(vec![ids[2]]), None).unwrap());
+    // A pattern of a later feature, placed early in the timeline.
+    let early = doc.add_feature(circular(vec![ids[9]]), None).unwrap();
+    let at = doc.features.iter().position(|f| f.id == early).unwrap();
+    let f = doc.features.remove(at);
+    doc.features.insert(3, f);
+    ids.push(early);
+    doc.feature_mut(ids[5]).unwrap().suppressed = true;
+
+    let mut seed = 0x2545_f491_4f6c_dd1du64;
+    let mut next = |n: usize| {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        (seed % n as u64) as usize
+    };
+    let fps = |m: &Model| m.results.iter().map(|r| (r.id, r.fingerprint)).collect::<Vec<_>>();
+    let mut old = Arc::new(doc);
+    let mut model = Model::new();
+    model.evaluate_shared(&old);
+    let (mut proven, mut kept) = (0, 0);
+    for round in 0..60 {
+        if round % 20 == 10 {
+            // From an evaluation's fingerprints again, with the marker in some rounds.
+            let mut d = (*old).clone();
+            d.marker = (round == 30).then_some(d.features.len() - 2);
+            old = Arc::new(d);
+            model.evaluate_shared(&old);
+        }
+        let mut new = (*old).clone();
+        let mut renamed = Vec::new();
+        for _ in 0..1 + next(3) {
+            let f = &mut new.features[next(old.features.len())];
+            let slot = next(3);
+            f.body_names.resize(f.body_names.len().max(slot + 1), String::new());
+            f.body_names[slot] = format!("Pinned {round} {slot}");
+            renamed.push(f.id);
+        }
+        new.reserved_body_names.insert(format!("Body{}", 100 + round));
+        let new = Arc::new(new);
+        let start = model.pinned_prefix(&old, &renamed);
+        let first = new.features.iter().position(|f| renamed.contains(&f.id)).unwrap();
+        assert!(start <= first, "round {round}: kept {start} past the first renamed feature {first}");
+        proven += usize::from(start > 0);
+        kept += start;
+        let mut partial = model.clone();
+        partial.refingerprint_shared(&new, start);
+        let mut full = model.clone();
+        full.refingerprint_shared(&new, 0);
+        assert_eq!(fps(&partial), fps(&full), "round {round}");
+        assert_ne!(fps(&partial), fps(&model), "round {round}: the names are fingerprinted");
+        // The pinned fingerprints prove themselves for the next pin, as the full pass's do.
+        assert_eq!(partial.fingerprinted.as_ref().map(|(_, d)| *d), full.fingerprinted.as_ref().map(|(_, d)| *d));
+        model = partial;
+        old = new;
+    }
+    assert!(proven > 40 && kept > 0, "the stored fingerprints were reused: {proven} rounds, {kept} results");
+
+    // No proof, no reuse: results changed since, another design, or the design about to change
+    // in place.
+    let last = [*ids.last().unwrap()];
+    assert!(model.pinned_prefix(&old, &last) > 0);
+    let mut changed = model.clone();
+    changed.results[0].fingerprint ^= 1;
+    assert_eq!(changed.pinned_prefix(&old, &last), 0);
+    assert_eq!(model.pinned_prefix(&Arc::new((*old).clone()), &last), 0);
+    let mut forgot = model.clone();
+    forgot.forget_fingerprints();
+    assert_eq!(forgot.pinned_prefix(&old, &last), 0);
+}
+
+/// A design evaluated ahead, on a worker thread of its own, fingerprints its features from the
+/// texts the window's evaluation wrote: none is written out again there (the store was per
+/// thread, and every ahead run started it empty), and the fingerprints are the same.
+#[test]
+fn an_evaluation_on_another_thread_reuses_the_written_features() {
+    let mut doc = Document::new("ahead");
+    // Ids no other test's design uses: the store is shared by the tests running beside this one.
+    doc.next_id = 0x0007_e57a_4ead_0000;
+    for i in 0..40 {
+        let x = 20.0 * i as f64;
+        let b = serde_json::json!({"type": "box", "corner": [x, 0.0, 0.0], "length": "10", "width": "10", "height": "10", "operation": "new_body"});
+        doc.add_feature(serde_json::from_value(b).unwrap(), None).unwrap();
+    }
+    let mut window = Model::new();
+    let first = written(|| window.evaluate(&doc));
+    assert!(first >= doc.features.len(), "{first} written");
+    let fps = |m: &Model| m.results.iter().map(|r| r.fingerprint).collect::<Vec<_>>();
+    let (doc2, mut ahead) = (doc.clone(), window.clone());
+    ahead.no_cache = true;
+    let (work, ahead_fps) = std::thread::spawn(move || {
+        let work = written(|| ahead.evaluate(&doc2));
+        (work, fps(&ahead))
+    })
+    .join()
+    .unwrap();
+    assert_eq!(work, 0, "features written out again");
+    assert_eq!(ahead_fps, fps(&window));
+}
+
+/// A 10 mm square plate per hole along X, 4 mm thick, in component `comp`, with `holes` square
+/// holes cut through it by boxes drawn in component `tools` (the plate's own, usually). The
+/// plate's body name.
+fn plate_with_holes(doc: &mut Document, comp: u64, tools: u64, holes: usize) -> String {
+    let length = format!("{}", 10 * holes.max(1));
+    let kind = FeatureKind::Box {
+        corner: point_expr(Vec3::ZERO),
+        length: length.into(),
+        width: "10".into(),
+        height: "4".into(),
+        operation: Operation::NewBody,
+    };
+    let plate = doc.add_feature(kind, None).unwrap();
+    doc.feature_mut(plate).unwrap().component = comp;
+    let mut model = Model::new();
+    model.evaluate(doc);
+    let body = model.state().bodies.iter().find(|b| b.feature == plate).unwrap().name.clone();
+    for k in 0..holes {
+        let corner = point_expr(Vec3::new(10.0 * k as f64 + 4.0, 4.0, -1.0));
+        let kind = FeatureKind::Box { corner, length: "2".into(), width: "2".into(), height: "6".into(), operation: Operation::Cut };
+        let id = doc.add_feature(kind, None).unwrap();
+        let f = doc.feature_mut(id).unwrap();
+        f.component = tools;
+        f.participants = vec![body.clone()];
+    }
+    body
+}
+
+fn place(doc: &mut Document, comp: u64, m: Mat) {
+    doc.occurrences.iter_mut().find(|o| o.component == comp).unwrap().transform = m;
+}
+
+fn volume(model: &Model, body: &str) -> f64 {
+    kernel::measure(&model.state().body(body).unwrap().body).unwrap().volume
+}
+
+#[test]
+fn turning_a_joint_between_parts_cuts_no_hole_again() {
+    let mut doc = Document::new("two parts");
+    let base = doc.add_component(Some("Base"), 0).unwrap();
+    let arm = doc.add_component(Some("Arm"), 0).unwrap();
+    let base_plate = plate_with_holes(&mut doc, base, base, 3);
+    let arm_plate = plate_with_holes(&mut doc, arm, arm, 3);
+    place(&mut doc, arm, rigid(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO, Vec3::Z, 0.0));
+    let mut model = Model::new();
+    model.evaluate(&doc);
+    assert!(model.results.iter().all(|r| r.error.is_none()), "{:?}", model.results.iter().find(|r| r.error.is_some()));
+    assert!((volume(&model, &base_plate) - (1200.0 - 3.0 * 16.0)).abs() < 1e-6);
+    // Turning the arm (as a revolute joint does) moves it and nothing else: each part's holes
+    // stay cut in its own frame, so no hole is cut again.
+    for step in 1..=3 {
+        place(&mut doc, arm, rigid(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO, Vec3::Z, 0.3 * f64::from(step)));
+        model.evaluate(&doc);
+        assert_eq!(model.last_recomputed, 0, "step {step}");
+        assert!((volume(&model, &arm_plate) - (1200.0 - 3.0 * 16.0)).abs() < 1e-6);
+    }
+    // Moving both parts together changes nothing between them either.
+    for comp in [base, arm] {
+        place(&mut doc, comp, rigid(Vec3::new(5.0, 0.0, 0.0), Vec3::ZERO, Vec3::Z, 0.0));
+    }
+    model.evaluate(&doc);
+    assert_eq!(model.last_recomputed, 0);
+}
+
+#[test]
+fn a_tool_cutting_another_part_cuts_again_when_that_part_moves() {
+    let mut doc = Document::new("cross part");
+    let tools = doc.add_component(Some("Tools"), 0).unwrap();
+    let plate = doc.add_component(Some("Plate"), 0).unwrap();
+    let other = doc.add_component(Some("Other"), 0).unwrap();
+    // The other part first, so the cut across parts is the last feature: it alone is evaluated
+    // again when it changes.
+    plate_with_holes(&mut doc, other, other, 1);
+    let body = plate_with_holes(&mut doc, plate, tools, 1);
+    let mut model = Model::new();
+    model.evaluate(&doc);
+    assert!(model.results.iter().all(|r| r.error.is_none()), "{:?}", model.results.iter().find(|r| r.error.is_some()));
+    assert!((volume(&model, &body) - (400.0 - 16.0)).abs() < 1e-6);
+    // An unrelated part moving: the cut keeps its result.
+    place(&mut doc, other, rigid(Vec3::new(0.0, 40.0, 0.0), Vec3::ZERO, Vec3::Z, 0.0));
+    model.evaluate(&doc);
+    assert_eq!(model.last_recomputed, 0);
+    // The plate moving away from the tool by 5 mm: the hole is cut again where the tool now meets
+    // it, half of it on the plate.
+    place(&mut doc, plate, rigid(Vec3::new(5.0, 0.0, 0.0), Vec3::ZERO, Vec3::Z, 0.0));
+    model.evaluate(&doc);
+    assert_eq!(model.last_recomputed, 1);
+    assert!((volume(&model, &body) - (400.0 - 8.0)).abs() < 1e-6, "{}", volume(&model, &body));
+    // The tool's part following it: the hole is where it was at first, the first result again.
+    place(&mut doc, tools, rigid(Vec3::new(5.0, 0.0, 0.0), Vec3::ZERO, Vec3::Z, 0.0));
+    model.evaluate(&doc);
+    assert_eq!(model.last_recomputed, 0);
+    assert!((volume(&model, &body) - (400.0 - 16.0)).abs() < 1e-6, "{}", volume(&model, &body));
+}
+
+#[test]
+fn a_body_is_measured_once_while_it_stays_the_same() {
+    let mut doc = Document::new("measured once");
+    let cylinder = |doc: &mut Document, x: f64| {
+        let kind = FeatureKind::Cylinder {
+            base: point_expr(Vec3::new(x, 0.0, 0.0)),
+            axis: Dir(Vec3::Z),
+            radius: "2".into(),
+            height: "10".into(),
+            operation: Operation::NewBody,
+            references: Vec::new(),
+        };
+        doc.add_feature(kind, None).unwrap();
+    };
+    cylinder(&mut doc, 0.0);
+    cylinder(&mut doc, 10.0);
+    let mut model = Model::new();
+    model.evaluate(&doc);
+    let measure_all = |st: &ModelState| {
+        for b in &st.bodies {
+            b.measure().unwrap();
+        }
+    };
+    let first = model.state();
+    assert_eq!(counted(|| measure_all(&first)).measures, 2);
+    assert_eq!(counted(|| measure_all(&first)).measures, 0, "measured again");
+    // A feature added: only its body is new.
+    cylinder(&mut doc, 20.0);
+    model.evaluate(&doc);
+    let st = model.state();
+    assert_eq!(counted(|| measure_all(&st)).measures, 1);
+    // A body replaced in its holder is measured as it is now; the others keep theirs.
+    let mut replaced = st.bodies[0].clone();
+    replaced.body = kernel::box_solid(Vec3::ZERO, Vec3::new(1.0, 2.0, 3.0)).unwrap();
+    assert!((replaced.measure().unwrap().volume - 6.0).abs() < 1e-9);
+    assert!((st.bodies[0].measure().unwrap().volume - first.bodies[0].measure().unwrap().volume).abs() < 1e-12);
+}
+
+#[test]
+fn placed_bodies_taken_as_before_keep_their_measure() {
+    let mut doc = Document::new("placed measure");
+    let component = doc.add_component(Some("Part"), 0).unwrap();
+    doc.body_components.insert("Pin".into(), component);
+    doc.occurrences[0].transform = rigid(Vec3::new(10.0, 0.0, 0.0), Vec3::ZERO, Vec3::Y, 0.3);
+    let mut state = ModelState::default();
+    state.bodies.push(ModelBody::new("Pin".into(), kernel::cylinder(Vec3::ZERO, Vec3::Z, 2.0, 8.0).unwrap(), 1));
+    let mut cache = PlacedBodies::default();
+    let before = world_state_reusing(&doc, &state, &mut cache);
+    let centroid = before.bodies[0].measure().unwrap().centroid;
+    let again = world_state_reusing(&doc, &state, &mut cache);
+    assert_eq!(counted(|| assert_eq!(again.bodies[0].measure().unwrap().centroid, centroid)).measures, 0);
+}
+
+#[test]
+fn shared_evaluation_requires_its_actual_model_and_unmodified_geometry_inputs() {
+    let mut doc = Document::new("shared evaluation");
+    let feature = doc
+        .add_feature(
+            FeatureKind::Box {
+                corner: point_expr(Vec3::ZERO),
+                length: "2".into(),
+                width: "3".into(),
+                height: "4".into(),
+                operation: Operation::NewBody,
+            },
+            None,
+        )
+        .unwrap();
+    let mut doc = Arc::new(doc);
+    let mut model = Model::new();
+    assert!(model.evaluate_shared(&doc));
+    let original = model.state();
+    assert!(!model.evaluate_shared(&doc));
+    assert_eq!(model.last_recomputed, 0);
+    assert!(Arc::ptr_eq(&original, &model.state()));
+
+    // A geometry edit must be seen even when a caller did not evaluate it before moving.
+    let FeatureKind::Box { length, .. } = &mut Arc::make_mut(&mut doc).feature_mut(feature).unwrap().kind else { panic!("box") };
+    *length = "5".into();
+    assert!(model.evaluate_shared(&doc));
+    assert!((model.state().bodies[0].measure().unwrap().volume - 60.).abs() < 1e-8);
+    assert!((original.bodies[0].measure().unwrap().volume - 24.).abs() < 1e-8);
+    assert!(!model.evaluate_shared(&doc));
+
+    let mut other_doc = (*doc).clone();
+    let FeatureKind::Box { length, .. } = &mut other_doc.feature_mut(feature).unwrap().kind else { panic!("box") };
+    *length = "7".into();
+    let mut other = Model::new();
+    other.evaluate(&other_doc);
+    model.results = other.results;
+    assert!(model.evaluate_shared(&doc), "replaced results cannot use the retained proof");
+    assert_eq!(model.state().bodies.len(), 1);
+    model.no_cache = true;
+    assert!(model.evaluate_shared(&doc));
+    model.no_cache = false;
+    assert!(model.evaluate_shared(&doc));
+    let ahead = model.clone();
+    model.prime(&ahead);
+    assert!(model.evaluate_shared(&doc), "primed results use normal evaluation");
+    model.unprime();
+    assert!(model.evaluate_shared(&doc));
+    model.evaluate(&doc);
+    assert!(model.evaluate_shared(&doc), "the borrowed-document API invalidates the shared-input proof");
+    Arc::make_mut(&mut doc).set_param("Width", "6 mm", None, None).unwrap();
+    let FeatureKind::Box { width, .. } = &mut Arc::make_mut(&mut doc).feature_mut(feature).unwrap().kind else { panic!("box") };
+    *width = "Width".into();
+    assert!(model.evaluate_shared(&doc));
+    assert!((model.state().bodies[0].measure().unwrap().volume - 120.).abs() < 1e-8);
+    Arc::make_mut(&mut doc).set_param("Width", "9 mm", None, None).unwrap();
+    assert!(model.evaluate_shared(&doc));
+    assert!((model.state().bodies[0].measure().unwrap().volume - 180.).abs() < 1e-8);
+    // A primitive's label can change its result without replacing the geometry state.
+    // Restoring the earlier document must restore that label and fingerprint too.
+    let name = doc.feature(feature).unwrap().name.clone();
+    let mut renamed = (*doc).clone();
+    renamed.feature_mut(feature).unwrap().name = "Renamed box".into();
+    assert!(model.rename_feature(&renamed, feature));
+    assert!(model.evaluate_shared(&doc), "refingerprinted results must not keep the old shared-input proof");
+    assert_eq!(model.result(feature).unwrap().name, name);
+    assert!(model.is_current(&doc));
+}
+
+#[test]
+fn shared_imported_mesh_inputs_keep_payload_identity_and_invalidate_replacements() {
+    let mut doc = Document::new("shared mesh input");
+    let component = doc.add_component(Some("Part"), 0).unwrap();
+    let feature = doc
+        .add_feature(
+            FeatureKind::MeshImport {
+                file: "triangle.stl".into(),
+                meshes: vec![MeshData {
+                    name: "Triangle".into(),
+                    positions: Arc::from([0., 0., 0., 1., 0., 0., 0., 1., 0.]),
+                    triangles: Arc::from([0, 1, 2]),
+                    color: None,
+                }],
+            },
+            None,
+        )
+        .unwrap();
+    doc.feature_mut(feature).unwrap().component = component;
+    let mut doc = Arc::new(doc);
+    let mut model = Model::new();
+    assert!(model.evaluate_shared(&doc));
+    let original = model.state();
+    Arc::make_mut(&mut doc).occurrences[0].transform = rigid(Vec3::new(10., 0., 0.), Vec3::ZERO, Vec3::Z, 0.3);
+    assert!(!model.evaluate_shared(&doc));
+    assert!(Arc::ptr_eq(&original, &model.state()));
+    for edit in 0..5 {
+        let FeatureKind::MeshImport { meshes, .. } = &mut Arc::make_mut(&mut doc).feature_mut(feature).unwrap().kind else { panic!("mesh") };
+        let mesh = &mut meshes[0];
+        match edit {
+            0 => Arc::make_mut(&mut mesh.positions)[3] = 2.,
+            1 => Arc::make_mut(&mut mesh.triangles).swap(1, 2),
+            2 => mesh.color = Some([0.2, 0.4, 0.6]),
+            3 => mesh.name = "Renamed".into(),
+            _ => mesh.positions = Arc::from(mesh.positions.to_vec()),
+        }
+        assert!(model.evaluate_shared(&doc), "mesh edit {edit} must invalidate");
+        assert!(model.results.iter().all(|r| r.error.is_none()));
+        let mut fresh = Model::new();
+        fresh.no_cache = true;
+        fresh.evaluate(&doc);
+        let (actual, expected) = (model.state(), fresh.state());
+        assert_eq!(actual.bodies[0].name, expected.bodies[0].name);
+        let (actual, expected) = (actual.bodies[0].mesh(), expected.bodies[0].mesh());
+        assert_eq!(actual.positions, expected.positions);
+        assert_eq!(actual.triangles, expected.triangles);
+        assert_eq!(actual.normals, expected.normals);
+        assert!(!model.evaluate_shared(&doc));
+    }
+}
+
+#[test]
+fn shared_evaluation_refreshes_live_sketches_and_keeps_unknown_features_conservative() {
+    let mut doc = Document::new("live and unknown inputs");
+    let feature = doc.add_feature(line_sketch(PlaneRef::Origin { name: "XY".into() }, Vec2::new(2., 1.)), None).unwrap();
+    let mut doc = Arc::new(doc);
+    let mut model = Model::new();
+    assert!(model.evaluate_shared(&doc));
+    assert!(!model.evaluate_shared(&doc));
+    let solved = model.state().sketch(feature).unwrap().clone();
+    let mut live = solved.sketch.clone();
+    live.points[1].pos.y += 2.;
+    assert!(model.show_live_sketch(feature, live, solved.report.clone()));
+    assert!(model.is_stale());
+    assert!(model.evaluate_shared(&doc));
+    assert!(!model.is_stale());
+    assert_eq!(model.state().sketch(feature).unwrap().sketch.points, solved.sketch.points);
+    Arc::make_mut(&mut doc).add_feature(FeatureKind::ConstructionPlane { plane: PlaneRef::Origin { name: "XY".into() } }, None).unwrap();
+    assert!(model.evaluate_shared(&doc));
+    assert!(model.results.iter().all(|r| r.error.is_none()));
+    assert!(model.evaluate_shared(&doc), "an unclassified feature must keep the ordinary evaluation path");
+}
+
+/// A saved model writes each set of sketch keys once, as the keys it sets and drops relative to
+/// the set written before it (every state repeating its whole set made a 5,484-feature design's
+/// model too large for its file, which then kept only some states and evaluated the rest on
+/// opening). Every state reads back the keys it was evaluated with, also in a model thinned to
+/// fewer states; a set that names no set before it is refused.
+#[test]
+fn saved_states_read_back_their_sketch_keys() {
+    let mut doc = Document::new("Sketch keys");
+    for i in 0..4 {
+        doc.add_feature(line_sketch(PlaneRef::Origin { name: "XY".into() }, Vec2::new(f64::from(i) + 1.0, 1.0)), None).unwrap();
+        for j in 0..3 {
+            let corner = point_expr(Vec3::new(f64::from(i) * 20.0, f64::from(j) * 20.0, 0.0));
+            let kind = FeatureKind::Box { corner, length: "5".into(), width: "5".into(), height: "5".into(), operation: Operation::NewBody };
+            doc.add_feature(kind, None).unwrap();
+        }
+    }
+    let mut model = Model::new();
+    model.evaluate(&doc);
+    let keys = |m: &Model| m.results.iter().map(|r| r.state.sketch_keys.clone()).collect::<Vec<_>>();
+    assert_eq!(model.state().sketch_keys.len(), 4);
+    let saved = model.saved(&doc).unwrap();
+    assert_eq!(saved.records["sketch_key_sets"].as_array().unwrap().len(), 4, "one set per sketch");
+    assert_eq!(saved.records["states"].as_array().unwrap().len(), doc.features.len());
+    assert_eq!(keys(&Model::adopt(&doc, &saved).unwrap()), keys(&model));
+    // The final state alone (every body costs more than the budget): the sets are all kept.
+    let pieces: Vec<Vec<(usize, usize)>> = (0..saved.bodies.len()).map(|i| vec![(i, 1 << 20)]).collect();
+    let (thinned, _, _) = saved.thinned(&pieces, 0).unwrap();
+    assert_eq!(thinned.records["states"].as_array().unwrap().len(), 1);
+    assert_eq!(thinned.final_state().unwrap().sketch_keys, model.state().sketch_keys);
+    assert_eq!(keys(&Model::adopt(&doc, &thinned).unwrap()), keys(&model));
+    // Sets and drops read as written; a base that is not an earlier set is refused.
+    let with_sets = |sets: serde_json::Value| SavedModel {
+        records: {
+            let mut r = saved.records.clone();
+            r["sketch_key_sets"] = sets;
+            r
+        },
+        bodies: saved.bodies.clone(),
+    };
+    let first = *model.state().sketch_keys.keys().next().unwrap();
+    let dropped = with_sets(serde_json::json!([
+        {"set": [[first, "0000000000000001"], [7, "0000000000000002"]], "drop": []},
+        {"base": 0, "set": [], "drop": []},
+        {"base": 1, "set": [[8, "0000000000000003"]], "drop": [first]},
+        {"base": 0, "set": [[7, "00000000000000ff"]], "drop": []},
+    ]));
+    let want: BTreeMap<u64, u64> = [(7, 0xff), (first, 1)].into();
+    assert_eq!(dropped.final_state().unwrap().sketch_keys, want);
+    let dropped = with_sets(serde_json::json!([
+        {"set": [[first, "0000000000000001"], [7, "0000000000000002"]], "drop": []},
+        {"base": 0, "set": [], "drop": []},
+        {"base": 0, "set": [], "drop": []},
+        {"base": 1, "set": [[8, "0000000000000003"]], "drop": [first]},
+    ]));
+    assert_eq!(dropped.final_state().unwrap().sketch_keys, [(7, 2), (8, 3)].into());
+    for base in [3, 4] {
+        let sets =
+            serde_json::json!([{"set": [], "drop": []}, {"set": [], "drop": []}, {"set": [], "drop": []}, {"base": base, "set": [], "drop": []}]);
+        assert!(with_sets(sets).final_state().is_err(), "base {base}");
+    }
 }

@@ -1115,7 +1115,10 @@ fn paint_stock_box(d: &SetupDraft, painter: &egui::Painter, proj: &crate::viewpo
         painter.text(
             *p + egui::vec2(8.0, -6.0),
             Align2::LEFT_BOTTOM,
-            crate::i18n::format("ui.mfg_stock_size", &[("x", &format!("{:.1}", size(0))), ("y", &format!("{:.1}", size(1))), ("z", &format!("{:.1}", size(2)))]),
+            crate::i18n::format(
+                "ui.mfg_stock_size",
+                &[("x", &format!("{:.1}", size(0))), ("y", &format!("{:.1}", size(1))), ("z", &format!("{:.1}", size(2)))],
+            ),
             egui::FontId::proportional(t.font_small),
             t.text,
         );

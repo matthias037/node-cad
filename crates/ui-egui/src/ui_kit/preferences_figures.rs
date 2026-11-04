@@ -89,7 +89,7 @@ pub(crate) fn paint_orbit(p: &Painter, rect: Rect, pivot: usize) {
         p.line_segment([centre, c.at(x - 11.0, y + 5.5)], grey);
     }
     if pivot == 1 {
-        // A restrained screen-space crosshair makes "View centre" distinct from origin.
+        // A restrained screen-space crosshair makes "View center" distinct from origin.
         let guide = Stroke::new(c.width(1.0), t.form_dim.gamma_multiply(0.7));
         for (a, b) in [((x - 9.0, y), (x - 5.0, y)), ((x + 5.0, y), (x + 9.0, y)), ((x, y - 9.0), (x, y - 5.0))] {
             p.line_segment([c.at(a.0, a.1), c.at(b.0, b.1)], guide);
@@ -121,6 +121,17 @@ pub(crate) fn paint_orbit(p: &Painter, rect: Rect, pivot: usize) {
     }
 }
 
+/// Axis tips of the orientation figure on its 120 x 100 canvas, as `(x, y, triad index, label)`,
+/// drawn from the centre `(60, 48)`. Z up has X toward the viewer on the right and Y away on the
+/// right, as the view's axis gizmo draws them (#5680).
+fn orientation_axes(y_up: bool) -> [(f32, f32, usize, &'static str); 3] {
+    if y_up {
+        [(94.0, 65.0, 0, "X"), (60.0, 13.0, 1, "Y"), (26.0, 65.0, 2, "Z")]
+    } else {
+        [(94.0, 65.0, 0, "X"), (94.0, 31.0, 1, "Y"), (60.0, 13.0, 2, "Z")]
+    }
+}
+
 /// Orientation uses the same 30-degree ground plane as the model cards, with unmistakable
 /// axis arrows and readable labels rather than an unrelated generic cube.
 pub(crate) fn paint_orientation(p: &Painter, rect: Rect, y_up: bool) {
@@ -131,13 +142,8 @@ pub(crate) fn paint_orientation(p: &Painter, rect: Rect, y_up: bool) {
     let ground = [c.at(60.0, 32.0), c.at(97.0, 50.5), c.at(60.0, 69.0), c.at(23.0, 50.5)];
     face(&p, ground, t.form_dim.gamma_multiply(0.035));
     p.add(Shape::closed_line(ground.to_vec(), Stroke::new(c.width(0.8), t.form_dim.gamma_multiply(0.20))));
-    let axes = if y_up {
-        [(94.0, 65.0, 0, "X"), (60.0, 13.0, 1, "Y"), (26.0, 65.0, 2, "Z")]
-    } else {
-        [(94.0, 65.0, 0, "X"), (26.0, 65.0, 1, "Y"), (60.0, 13.0, 2, "Z")]
-    };
-    for (x, y, index, label) in axes {
-        let colour = t.triad.get(index).copied().unwrap_or(t.form_ink);
+    for (x, y, index, label) in orientation_axes(y_up) {
+        let colour = t.axes().get(index).copied().unwrap_or(t.form_ink);
         let end = c.at(x, y);
         // A halo keeps every shaft distinct from the subtle ground and the other axes.
         p.line_segment([centre, end], Stroke::new(c.width(4.2), t.viewport_top));
@@ -184,10 +190,10 @@ pub(crate) fn paint_layout(ui: &mut egui::Ui, state: super::preferences::LayoutP
     let size = vec2(super::metrics::dimension(ui.available_width()), t.space_24 * 7.0 + t.space_6);
     let (outer, _) = ui.allocate_exact_size(size, egui::Sense::hover());
     let p = ui.painter().with_clip_rect(outer);
-    p.rect(outer, t.radius_lg, t.control_fill, Stroke::new(1.0, t.dialog_rule), egui::StrokeKind::Inside);
+    t.container_rect(&p, outer, t.radius_lg, t.control_fill, t.dialog_rule);
     let r = outer.shrink(t.space_8);
     let c = Canvas { rect: r };
-    p.rect(r, t.control_radius, t.viewport_top, Stroke::new(1.0, t.control_border), egui::StrokeKind::Inside);
+    p.rect(r, t.control_radius, t.viewport_top, t.control_border_stroke(t.control_border), egui::StrokeKind::Inside);
     let inset = if state.compact { 0.0 } else { 4.0 };
     let gap = if state.compact { 0.0 } else { 3.0 };
     let ribbon_height = if state.labels { 16.0 } else { 10.0 };
@@ -205,7 +211,7 @@ pub(crate) fn paint_layout(ui: &mut egui::Ui, state: super::preferences::LayoutP
     };
     let panel = |x: f32, y: f32, w: f32, h: f32, label: &str, fill: Color32| {
         let rect = Rect::from_min_max(c.at(x, y), c.at(x + w, y + h));
-        p.rect(rect, if state.compact { 0 } else { t.radius_sm }, fill, Stroke::new(1.0, t.control_border), egui::StrokeKind::Inside);
+        p.rect(rect, if state.compact { 0 } else { t.radius_sm }, fill, t.control_border_stroke(t.control_border), egui::StrokeKind::Inside);
         if !label.is_empty() {
             let centre = if h > 20.0 { c.at(x + w * 0.5, y + 7.0) } else { rect.center() };
             p.text(centre, egui::Align2::CENTER_CENTER, crate::i18n::tr_label(label), egui::FontId::proportional(t.font_small), t.form_dim);
@@ -237,11 +243,13 @@ pub(crate) fn paint_layout(ui: &mut egui::Ui, state: super::preferences::LayoutP
     crate::icons::glyphs::brand_mark_silhouette(&p, object_centre, c.width(22.0), quiet);
     p.circle_filled(c.at(110.0 - inset, top + 7.0), c.width(3.5), quiet);
     let history = match state.history {
-        1 => panel(inset, top, 10.0, bottom - top, "", t.selected_bg),
-        2 => panel(bx, top + browser_height + gap, bw, bottom - top - browser_height - gap, "History", t.selected_bg),
-        _ => panel(inset, bottom - 10.0, 120.0 - inset * 2.0, 10.0, "History", t.selected_bg),
+        1 => Some(panel(inset, top, 10.0, bottom - top, "", t.selected_bg)),
+        2 => Some(panel(bx, top + browser_height + gap, bw, bottom - top - browser_height - gap, "History", t.selected_bg)),
+        // In the browser: no history panel of its own.
+        3 => None,
+        _ => Some(panel(inset, bottom - 10.0, 120.0 - inset * 2.0, 10.0, "History", t.selected_bg)),
     };
-    if state.history == 1 {
+    if let Some(history) = history.filter(|_| state.history == 1) {
         // A single vertical mark reads as the narrow icon-only history rail.
         p.line_segment(
             [history.center_top() + vec2(0.0, t.space_8), history.center_bottom() - vec2(0.0, t.space_8)],
@@ -250,4 +258,27 @@ pub(crate) fn paint_layout(ui: &mut egui::Ui, state: super::preferences::LayoutP
     }
     crate::scenario::publish_rect("prefs:layout_preview", outer);
     super::text(ui, crate::i18n::tr("prefs.preview_choices"), super::Text::Note("preview"));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::orientation_axes;
+
+    /// Both orientation figures draw right-handed axes (#5680): seen from above, the turn from X
+    /// to Y and from Y to Z is counter-clockwise on screen (negative cross product, as the canvas y
+    /// axis points down), the way the view's axis gizmo draws them. (Z to X is not tested: with Z
+    /// up, Y points away from the viewer and that turn is clockwise.)
+    #[test]
+    fn orientation_figures_are_right_handed() {
+        for y_up in [false, true] {
+            let axes = orientation_axes(y_up);
+            let v: Vec<(f32, f32)> = axes.iter().map(|(x, y, _, _)| (x - 60.0, y - 48.0)).collect();
+            assert_eq!(axes.map(|a| a.3), ["X", "Y", "Z"]);
+            for i in 0..2 {
+                let (a, b) = (v[i], v[i + 1]);
+                let cross = a.0 * b.1 - a.1 * b.0;
+                assert!(cross < 0.0, "y_up {y_up}: {} to {} turns clockwise (mirrored figure)", axes[i].3, axes[i + 1].3);
+            }
+        }
+    }
 }

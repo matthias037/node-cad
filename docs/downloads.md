@@ -13,8 +13,16 @@ all formats, is on the [releases page](https://github.com/matthias037/node-cad/r
   `.snap` file (see [Getting started](book/src/guide/getting-started.md)).
 - **Web:** [try it in your browser](https://node-os.fr/cad/app/), no install.
 
-The downloads aren't signed yet. On Windows, if SmartScreen warns you, choose **More info**, then
-**Run anyway**. On macOS, the first time, right-click NØDE CAD in Applications and choose **Open**.
+## Code signing
+
+Windows releases will be code signed through the SignPath Foundation: free code signing provided by
+[SignPath.io](https://about.signpath.io/), certificate by
+[SignPath Foundation](https://signpath.org/). This is being set up; until it's live, the note
+below applies. macOS releases are signed with an Apple Developer ID and notarized by Apple (the app
+and the disk image carry the notarization ticket), so they open normally.
+
+The Windows downloads aren't signed yet. If SmartScreen warns you, choose **More info**, then
+**Run anyway**.
 
 Install details and building from source are in
 [Getting started](book/src/guide/getting-started.md).

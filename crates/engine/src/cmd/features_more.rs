@@ -20,7 +20,9 @@ pub static COMMANDS: &[CommandSpec] = &[
     ),
     CommandSpec::new("solid.coil", "Coil", coil).at("SOLID", "CREATE").icon("coil").params(
         "diameter; two of revolutions (or turns), height, pitch; section_size; section?: circular|square; section_position?: inside|center|outside; \
-         base?: [x,y,z] (numbers in mm or length expressions; default: the origin); axis?: X|Y|Z|[x,y,z] (default Z); start_angle?; clockwise?: bool; operation?, targets?, name?, body_name?",
+         base?: [x,y,z] (numbers in mm or length expressions; default: the origin); axis?: X|Y|Z|[x,y,z] (default Z); start_angle?; clockwise?: bool; \
+         sketch? (a sketch; its plane is the section plane, so its placement sets the radius and start phase), profiles? (default: all; one closed profile without holes); \
+         operation?, targets?, name?, body_name?",
     ),
     CommandSpec::new("solid.rib", "Rib", rib)
         .at("SOLID", "CREATE")
@@ -41,16 +43,32 @@ pub static COMMANDS: &[CommandSpec] = &[
     CommandSpec::new("solid.align", "Align", align)
         .at("SOLID", "MODIFY")
         .icon("align")
-        .params("bodies: [names]; from: [x,y,z] | \"origin\" | {snap: vertex|edge_mid|face_center|circle_center, at: [x,y,z]} | from_face: [x,y,z] | from_plane: XY|XZ|YZ|construction or offset plane name or id|{origin, normal}; to: (the same) | to_face: [x,y,z] | to_plane: (a plane as from_plane; the point or face goes onto it along its normal, and the plane may move later: the bodies follow); faces and planes also turn to meet; flip?: bool"),
+        .params("bodies: [names]; from: [x,y,z] | \"origin\" | {snap: vertex|edge_mid|face_center|circle_center, at: [x,y,z]} | from_face: [x,y,z] | from_plane: XY|XZ|YZ|construction or offset plane name or id|{origin, normal}; to: (the same) | to_face: [x,y,z] | to_plane: (a plane as from_plane; the point or face goes onto it along its normal, and the plane may move later: the bodies follow); faces and planes also turn to meet; flip?: bool; axes?: [x, y, z] (point-to-point only: which world axes the offset moves along; default all three, at least one true)"),
     CommandSpec::new("solid.remove", "Remove", remove).at("SOLID", "MODIFY").icon("delete").params("bodies: [names] (removed from here on in the timeline)"),
 ];
 
 fn coil(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "solid.coil";
+    let given = |k: &str| p.get(k).is_some_and(|v| !v.is_null());
+    let profile_mode = given("sketch");
+    if profile_mode {
+        if let Some(k) = ["diameter", "section_size", "section", "section_position", "start_angle"].into_iter().find(|k| given(k)) {
+            return Err(bad(cmd, format!("`{k}` does not apply with `sketch`: the section comes from the sketch")));
+        }
+    } else if given("profiles") {
+        return Err(bad(cmd, "`profiles` needs `sketch`"));
+    }
+    let sketch = if profile_mode { Some(solidcraft_doc::SketchId(super::features::sketch_id(s, p.get("sketch"), cmd, "sketch")?)) } else { None };
+    let profiles = if profile_mode { super::features::profiles(p, cmd)? } else { solidcraft_doc::ProfileSel::All };
     let base = point_param(s, p, "base", cmd)?.unwrap_or_else(|| solidcraft_doc::point_expr(Vec3::ZERO));
     let axis = axis_dir_param(p, cmd)?;
-    let diameter = req_expr(cmd, p, "diameter")?;
-    check_expr(s, &diameter, Kind::Length, cmd, "diameter")?;
+    let diameter = if profile_mode {
+        None
+    } else {
+        let d = req_expr(cmd, p, "diameter")?;
+        check_expr(s, &d, Kind::Length, cmd, "diameter")?;
+        Some(d)
+    };
     let turns = expr(p, "revolutions").or_else(|| expr(p, "turns"));
     let (height, pitch) = (expr(p, "height"), expr(p, "pitch"));
     // The pitch or the revolutions from the height keep the units the lengths were given in.
@@ -69,8 +87,13 @@ fn coil(s: &mut Session, p: &Value) -> Result<Value> {
     };
     check_expr(s, &turns, Kind::Unitless, cmd, "revolutions")?;
     check_expr(s, &pitch, Kind::Length, cmd, "pitch")?;
-    let section_size = req_expr(cmd, p, "section_size")?;
-    check_expr(s, &section_size, Kind::Length, cmd, "section_size")?;
+    let section_size = if profile_mode {
+        None
+    } else {
+        let size = req_expr(cmd, p, "section_size")?;
+        check_expr(s, &size, Kind::Length, cmd, "section_size")?;
+        Some(size)
+    };
     let section = match str_(p, "section").map(str::to_ascii_lowercase).as_deref() {
         None | Some("circular" | "circle") => solidcraft_doc::CoilSection::Circular,
         Some("square") => solidcraft_doc::CoilSection::Square,
@@ -94,6 +117,8 @@ fn coil(s: &mut Session, p: &Value) -> Result<Value> {
         FeatureKind::Coil {
             base,
             axis: Dir(axis),
+            sketch,
+            profiles,
             diameter,
             pitch,
             turns,
@@ -103,13 +128,13 @@ fn coil(s: &mut Session, p: &Value) -> Result<Value> {
             start_angle,
             clockwise,
             operation,
-            targets: string_list(p, "targets").into_iter().map(BodyName).collect(),
+            targets: string_list(cmd, p, "targets")?.into_iter().map(BodyName).collect(),
         },
     )
 }
 
 fn curves_param(p: &Value, cmd: &str) -> Result<Vec<String>> {
-    let c = string_list(p, "curves");
+    let c = string_list(cmd, p, "curves")?;
     if c.is_empty() || c.len() > 1000 {
         return Err(bad(cmd, "`curves` must list 1…1000 sketch curve ids"));
     }
@@ -160,7 +185,7 @@ fn emboss(s: &mut Session, p: &Value) -> Result<Value> {
         Some("deboss") => true,
         Some(m) => return Err(bad(cmd, format!("unknown mode `{m}` (emboss or deboss)"))),
     };
-    let mut targets = string_list(p, "targets");
+    let mut targets = string_list(cmd, p, "targets")?;
     let face = if let Some(value) = p.get("face") {
         let local = vec3(value).ok_or_else(|| bad(cmd, "`face` must be a finite point [x,y,z]"))?;
         let at = solidcraft_doc::apply_point(&s.active_component_frame(), local);
@@ -373,9 +398,24 @@ fn replace_face(s: &mut Session, p: &Value) -> Result<Value> {
     add_feature(s, p, FeatureKind::ReplaceFace { faces: faces.into_iter().map(FacePick).collect(), target, body: body.map(BodyName) })
 }
 
+/// `axes`: three booleans, one per world axis, for a point-to-point Align.
+/// `None` when the call does not restrict the move.
+fn axes_param(p: &Value, cmd: &str) -> Result<Option<[bool; 3]>> {
+    let Some(v) = p.get("axes").filter(|v| !v.is_null()) else { return Ok(None) };
+    let a = v.as_array().filter(|a| a.len() == 3).ok_or_else(|| bad(cmd, "`axes` must be [x, y, z] booleans"))?;
+    let mut mask = [false; 3];
+    for (slot, v) in mask.iter_mut().zip(a) {
+        *slot = v.as_bool().ok_or_else(|| bad(cmd, "`axes` must be [x, y, z] booleans"))?;
+    }
+    if !mask.iter().any(|on| *on) {
+        return Err(bad(cmd, "`axes` must enable at least one of X, Y and Z"));
+    }
+    Ok((mask != [true; 3]).then_some(mask))
+}
+
 fn align(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "solid.align";
-    let bodies = string_list(p, "bodies");
+    let bodies = string_list(cmd, p, "bodies")?;
     if bodies.is_empty() {
         return Err(bad(cmd, "`bodies` must list the bodies to move"));
     }
@@ -385,6 +425,17 @@ fn align(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(cmd, format!("no body `{b}`")));
         }
     }
+    // Picks and snaps are where the view shows them (the world); the feature moves the bodies
+    // in their component's frame, so both ends go into the first moved body's frame. A body
+    // picked in another placed component (aligning two imported parts) is found where it
+    // is shown, not where its own frame has it.
+    let frame = s
+        .placed_document()
+        .body_frames_with_source(&s.model.state())
+        .into_iter()
+        .find(|(world, own, ..)| *world == bodies[0] || *own == bodies[0])
+        .map(|(.., m)| m);
+    let inverse = frame.and_then(|m| solidcraft_doc::mat_inverse(&m)).unwrap_or(solidcraft_doc::IDENTITY);
     // A side is a plane (`from_plane`/`to_plane`: XY|XZ|YZ, a construction or offset plane, or
     // {origin, normal}), kept as a plane so the bodies follow it when it moves; or a point and, for
     // a face, its normal.
@@ -392,7 +443,7 @@ fn align(s: &mut Session, p: &Value) -> Result<Value> {
         p.get(key).map(|_| super::features::plane_param(s, p.get(key), cmd)).transpose()
     };
     let (from_plane, to_plane) = (plane(s, "from_plane")?, plane(s, "to_plane")?);
-    let pick = |s: &Session, pk: &str, fk: &str, plane: &Option<solidcraft_doc::PlaneRef>| -> Result<(Vec3, Option<Vec3>)> {
+    let world_pick = |s: &Session, pk: &str, fk: &str, plane: &Option<solidcraft_doc::PlaneRef>| -> Result<(Vec3, Option<Vec3>)> {
         if plane.is_some() {
             if p.get(pk).is_some() || p.get(fk).is_some() {
                 return Err(bad(cmd, format!("give `{pk}_plane` or `{pk}`/`{fk}`, not both")));
@@ -401,7 +452,7 @@ fn align(s: &mut Session, p: &Value) -> Result<Value> {
             return Ok((Vec3::ZERO, None));
         }
         if let Some(fp) = p.get(fk).and_then(vec3) {
-            let n = super::face::face_normal(s, fp).ok_or_else(|| bad(cmd, format!("`{fk}` must be on a planar face")))?;
+            let n = super::face::face_normal_world(s, fp).ok_or_else(|| bad(cmd, format!("`{fk}` must be on a planar face")))?;
             return Ok((fp, Some(n)));
         }
         // The origin point.
@@ -419,6 +470,13 @@ fn align(s: &mut Session, p: &Value) -> Result<Value> {
             .map(|v| (v, None))
             .ok_or_else(|| bad(cmd, format!("give `{pk}`, `{fk}` or `{pk}_plane` ([x, y, z], \"origin\", or a plane)")))
     };
+    let pick = |s: &Session, pk: &str, fk: &str, plane: &Option<solidcraft_doc::PlaneRef>| -> Result<(Vec3, Option<Vec3>)> {
+        let (at, n) = world_pick(s, pk, fk, plane)?;
+        if plane.is_some() {
+            return Ok((at, n));
+        }
+        Ok((solidcraft_doc::apply_point(&inverse, at), n.and_then(|n| solidcraft_doc::apply_vector(&inverse, n).normalized())))
+    };
     let (from, from_normal) = pick(s, "from", "from_face", &from_plane)?;
     let (to, to_normal) = pick(s, "to", "to_face", &to_plane)?;
     // Faces turn only to meet another face or a plane; a plane's normal is read when evaluated.
@@ -427,6 +485,18 @@ fn align(s: &mut Session, p: &Value) -> Result<Value> {
         (a, b) if from_plane.is_some() || to_plane.is_some() => (a, b),
         _ => (None, None),
     };
+    let axes = axes_param(p, cmd)?;
+    if axes.is_some() && (from_plane.is_some() || to_plane.is_some() || from_normal.is_some() || to_normal.is_some()) {
+        return Err(bad(cmd, "`axes` applies to point-to-point alignment: leave out `from_face`, `to_face`, `from_plane` and `to_plane`"));
+    }
+    // The directions are stored in the same frame as `from`/`to` (the first moved body's frame).
+    let axes = axes.map(|mask| {
+        mask.into_iter()
+            .zip([Vec3::X, Vec3::Y, Vec3::Z])
+            .filter(|&(on, _)| on)
+            .map(|(_, world)| Dir(solidcraft_doc::apply_vector(&inverse, world).normalized().unwrap_or(world)))
+            .collect::<Vec<_>>()
+    });
     let flip = bool_(p, "flip").unwrap_or(false);
     add_feature(
         s,
@@ -440,13 +510,14 @@ fn align(s: &mut Session, p: &Value) -> Result<Value> {
             flip,
             from_plane,
             to_plane,
+            axes,
         },
     )
 }
 
 fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "solid.remove";
-    let bodies = string_list(p, "bodies");
+    let bodies = string_list(cmd, p, "bodies")?;
     if bodies.is_empty() {
         return Err(bad(cmd, "`bodies` must list bodies"));
     }
@@ -463,7 +534,7 @@ mod tests;
 
 /// A snap point near `at` on the model: the nearest vertex, edge midpoint, planar face's centre
 /// or circular edge's centre (the end of a cylindrical face).
-pub(super) fn snap_point(s: &Session, kind: &str, at: Vec3) -> Option<Vec3> {
+pub(crate) fn snap_point(s: &Session, kind: &str, at: Vec3) -> Option<Vec3> {
     let st = s.world_state();
     let near = |pts: Vec<Vec3>| pts.into_iter().min_by(|a, b| a.dist(at).total_cmp(&b.dist(at)));
     match kind {
@@ -498,7 +569,7 @@ pub(super) fn snap_point(s: &Session, kind: &str, at: Vec3) -> Option<Vec3> {
 
 fn boundary_fill(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "solid.boundary_fill";
-    let tools = string_list(p, "tools");
+    let tools = string_list(cmd, p, "tools")?;
     let st = s.model.state();
     if tools.is_empty() || tools.len() > 64 || tools.iter().any(|t| st.body(t).is_none()) {
         return Err(bad(cmd, "`tools` must list 1…64 bodies"));

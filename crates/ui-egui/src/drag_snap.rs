@@ -6,7 +6,7 @@
 
 use std::cell::{Cell, RefCell};
 
-use egui::{Align2, FontId, Shape, Stroke};
+use egui::{Align2, FontId, Stroke};
 use serde_json::{Value, json};
 use solidcraft_engine::geom::Vec2;
 use solidcraft_engine::sketch::{CurveKind, Sketch};
@@ -223,7 +223,7 @@ pub fn show(app: &SolveApp, painter: &egui::Painter, proj: &Proj) {
     let tk = Tokens::get();
     for (a, b) in &s.guides {
         if let (Some(a), Some(b)) = (to(*a), to(*b)) {
-            painter.add(Shape::dashed_line(&[a, b], Stroke::new(1.0, tk.rubber_band), 5.0, 4.0));
+            painter.extend(crate::viewport::dashed_line(&[a, b], painter.clip_rect(), Stroke::new(1.0, tk.rubber_band), 5.0, 4.0));
         }
     }
     let Some(sp) = to(s.at) else { return };
@@ -231,7 +231,7 @@ pub fn show(app: &SolveApp, painter: &egui::Painter, proj: &Proj) {
     let label = s.label();
     if !label.is_empty() {
         let r = egui::Rect::from_min_size(sp + egui::vec2(12.0, -24.0), egui::vec2(24.0, 14.0));
-        painter.rect_filled(r, 3.0, tk.accent_soft);
+        painter.rect_filled(r, tk.radius_sm.saturating_sub(1), tk.accent_soft);
         painter.text(r.center(), Align2::CENTER_CENTER, label, FontId::proportional(crate::theme::Tokens::get().font_micro), tk.text);
     }
     crate::scenario::publish_count("drag_guides", s.guides.len() as f64);

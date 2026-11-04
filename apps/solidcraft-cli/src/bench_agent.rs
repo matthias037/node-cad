@@ -36,8 +36,9 @@ impl Script {
         );
     }
 
+    /// A part placed after it is built: free, even as the design's first part (#2804).
     fn component(&mut self, name: &str) {
-        self.c("component.create", json!({"name": name}));
+        self.c("component.create", json!({"name": name, "grounded": false}));
     }
 
     fn root(&mut self) {
@@ -204,7 +205,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
     );
     let path = match flag("--save") {
         Some(p) => p.clone(),
-        None => std::env::temp_dir().join(format!("bench-agent-{}.nodecad", std::process::id())).to_string_lossy().into_owned(),
+        None => std::env::temp_dir()
+            .join(format!("bench-agent-{}.{}", std::process::id(), solidcraft_engine::io::DESIGN_EXT))
+            .to_string_lossy()
+            .into_owned(),
     };
     s.execute("file.save", &json!({"path": path})).map_err(|e| e.to_string())?;
     let r = crate::cmd_bench_open(std::slice::from_ref(&path));

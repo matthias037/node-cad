@@ -6,6 +6,17 @@ use egui::{FontId, Rect, Sense, Stroke, Ui, pos2, vec2};
 /// One mouse silhouette beside the actual mapping selector and binding legend.
 /// The figure is descriptive content, not an icon asset or an application viewport.
 pub(crate) fn settings_mouse_mapping(ui: &mut Ui, bindings: &[(Vec<String>, String)], mapping: impl FnOnce(&mut Ui)) {
+    if crate::prefs_search::suppress_chrome(ui) {
+        mapping(ui);
+        for (keys, action) in bindings.iter().take(10) {
+            let chord = keys.join(" ");
+            if crate::prefs_search::texts_hit(ui, &[action, &chord]) {
+                crate::prefs_search::reveal(ui);
+                settings_gesture(ui, keys, action);
+            }
+        }
+        return;
+    }
     let t = Tokens::get();
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = t.space_24 - t.space_2;
@@ -42,7 +53,7 @@ fn settings_gesture(ui: &mut Ui, keys: &[String], action: &str) {
     let width = dimension(ui.available_width());
     let (rect, response) = ui.allocate_exact_size(vec2(width, t.control_height + t.space_2), Sense::hover());
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, ui.is_enabled(), format!("{}: {action}", keys.join(" + "))));
-    ui.painter().hline(rect.x_range(), rect.bottom(), Stroke::new(1.0, t.dialog_rule));
+    t.secondary_hline(ui.painter(), rect.x_range(), rect.bottom(), t.dialog_rule);
     let key_width = (t.form_label_width * 2.0 + t.space_24 + t.space_6).min(width * 0.57);
     let key_rect = Rect::from_min_size(rect.min, vec2(key_width, rect.height()));
     let p = ui.painter().with_clip_rect(key_rect);
@@ -58,7 +69,7 @@ fn settings_gesture(ui: &mut Ui, keys: &[String], action: &str) {
             pos2(x + (galley.size().x + t.space_12) / 2.0, rect.center().y),
             vec2(galley.size().x + t.space_12, t.space_24 - t.space_2),
         );
-        p.rect(cap, t.radius_sm, t.control_fill, Stroke::new(1.0, t.control_border), egui::StrokeKind::Inside);
+        p.rect(cap, t.radius_sm, t.control_fill, t.container_border(t.control_border), egui::StrokeKind::Inside);
         p.galley(pos2(cap.center().x - galley.size().x / 2.0, cap.center().y - galley.size().y / 2.0), galley, t.form_ink);
         x = cap.right() + t.space_4;
     }
@@ -88,6 +99,9 @@ fn axis_columns(rect: Rect) -> [Rect; 5] {
 }
 
 pub(crate) fn settings_axis_header(ui: &mut Ui) {
+    if crate::prefs_search::suppress_chrome(ui) {
+        return;
+    }
     let t = Tokens::get();
     let (rect, _) = ui.allocate_exact_size(vec2(dimension(ui.available_width()), t.space_24), Sense::hover());
     for (column, label) in axis_columns(rect).into_iter().zip(["prefs.axis", "prefs.live_input", "", "prefs.speed", "prefs.source"]) {
@@ -105,9 +119,20 @@ pub(crate) fn settings_axis_row(
     speed: impl FnOnce(&mut Ui),
     source: impl FnOnce(&mut Ui),
 ) {
+    if crate::prefs_search::querying(ui) && crate::prefs_search::suppress_chrome(ui) && !crate::prefs_search::texts_hit(ui, &[name]) {
+        crate::prefs_search::run_hidden(ui, name, |ui| {
+            invert(ui);
+            speed(ui);
+            source(ui);
+        });
+        return;
+    }
+    if crate::prefs_search::querying(ui) {
+        crate::prefs_search::reveal(ui);
+    }
     let t = Tokens::get();
     let (rect, _) = ui.allocate_exact_size(vec2(dimension(ui.available_width()), t.control_height + t.space_4), Sense::hover());
-    ui.painter().hline(rect.x_range(), rect.bottom(), Stroke::new(1.0, t.dialog_rule));
+    t.secondary_hline(ui.painter(), rect.x_range(), rect.bottom(), t.dialog_rule);
     let [label_rect, live_rect, invert_rect, speed_rect, source_rect] = axis_columns(rect);
     paint_text(ui, label_rect, name, FontId::proportional(t.font_label), t.form_ink, false);
     ui.interact(label_rect, ui.id().with("axis_name"), Sense::hover()).on_hover_text(name);
@@ -145,7 +170,7 @@ pub(crate) fn live_axis_bar_in(ui: &Ui, live_rect: Rect, value: f32, dead_zone: 
     );
     let mut x = zone.left() - zone.height();
     while x < zone.right() {
-        p.with_clip_rect(zone).line_segment([pos2(x, zone.bottom()), pos2(x + zone.height(), zone.top())], Stroke::new(1.0, t.control_border));
+        p.with_clip_rect(zone).line_segment([pos2(x, zone.bottom()), pos2(x + zone.height(), zone.top())], t.control_border_stroke(t.control_border));
         x += t.space_4;
     }
     let value = if value.is_finite() { value.clamp(-1.0, 1.0) } else { 0.0 };
@@ -163,6 +188,9 @@ pub(crate) fn live_axis_bar_in(ui: &Ui, live_rect: Rect, value: f32, dead_zone: 
 
 /// Compact per-axis gain uses a consistent two-decimal specimen and the real accepted range.
 pub(crate) fn settings_axis_gain(ui: &mut Ui, gain: &mut f32) -> egui::Response {
+    if crate::prefs_search::querying(ui) && (!ui.is_visible() || crate::prefs_search::suppress_chrome(ui)) {
+        return crate::prefs_search::hidden_response(ui);
+    }
     let response =
         ui.add(egui::DragValue::new(gain).range(0.0..=3.0).speed(0.05).suffix("×").fixed_decimals(2).custom_parser(crate::prefs::parse_number));
     response.widget_info(|| {

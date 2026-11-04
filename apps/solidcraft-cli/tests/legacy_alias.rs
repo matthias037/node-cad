@@ -1,7 +1,8 @@
 //! The `solidcraft-cli` and `solvecraft-cli` compatibility aliases forward to `node-cad-cli`.
 use std::process::Command;
 
-const ALIASES: [(&str, &str); 2] = [("solidcraft-cli", env!("CARGO_BIN_EXE_solidcraft-cli")), ("solvecraft-cli", env!("CARGO_BIN_EXE_solvecraft-cli"))];
+const ALIASES: [(&str, &str); 2] =
+    [("solidcraft-cli", env!("CARGO_BIN_EXE_solidcraft-cli")), ("solvecraft-cli", env!("CARGO_BIN_EXE_solvecraft-cli"))];
 
 #[test]
 fn legacy_aliases_forward_with_a_deprecation_note() {

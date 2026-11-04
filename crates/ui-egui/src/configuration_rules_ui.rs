@@ -16,7 +16,12 @@ pub struct Editor {
     pub(super) adding_row: bool,
     pub(super) focus_new_row: bool,
     pub(super) drafts: std::collections::BTreeMap<(String, String), String>,
-    pub(super) table: Option<(u64, Value)>,
+    /// The configuration table at a design revision: the command's answer and its shown cells.
+    pub(super) table: Option<std::sync::Arc<(u64, Value, super::Table)>>,
+    /// The Add Column menu's filter text, and whether the menu was open last frame (the filter
+    /// takes focus when the menu opens and is cleared when it closes).
+    pub(super) column_filter: String,
+    pub(super) column_menu_open: bool,
 }
 impl Default for Editor {
     fn default() -> Self {
@@ -27,7 +32,7 @@ impl Default for Editor {
                 enabled: true,
                 length_unit: None,
                 condition: RuleCondition::Always,
-                effect: RuleEffect::DriveParameter { parameter: String::new(), expression: "10 mm".into() },
+                effect: RuleEffect::DriveParameter { parameter: String::new(), expression: "10".into() },
             },
             row: String::new(),
             preview: None,
@@ -38,6 +43,8 @@ impl Default for Editor {
             focus_new_row: false,
             drafts: Default::default(),
             table: None,
+            column_filter: String::new(),
+            column_menu_open: false,
         }
     }
 }
@@ -163,9 +170,9 @@ pub(super) fn show(ui: &mut Ui, app: &mut SolveApp, error: &mut Option<String>, 
             let parameter = parameters.first().cloned().unwrap_or_default();
             editor.rule.effect = match effect_kind.as_str() {
                 "Drive suppression" => RuleEffect::DriveSuppression { feature: suppression_features.first().map(|f| f.0).unwrap_or(0), value: true },
-                "Range" => RuleEffect::ParameterRange { parameter, minimum: "0 mm".into(), maximum: "100 mm".into() },
-                "Allowed values" => RuleEffect::AllowParameterValues { parameter, expressions: vec!["10 mm".into(), "20 mm".into()] },
-                _ => RuleEffect::DriveParameter { parameter, expression: "10 mm".into() },
+                "Range" => RuleEffect::ParameterRange { parameter, minimum: "0".into(), maximum: "100".into() },
+                "Allowed values" => RuleEffect::AllowParameterValues { parameter, expressions: vec!["10".into(), "20".into()] },
+                _ => RuleEffect::DriveParameter { parameter, expression: "10".into() },
             };
         }
         match &mut editor.rule.effect {
@@ -342,7 +349,7 @@ fn condition_editor(ui: &mut Ui, condition: &mut RuleCondition, parameters: &[St
             "Parameter" => RuleCondition::Parameter {
                 parameter: parameters.first().cloned().unwrap_or_default(),
                 operator: RuleOperator::Ge,
-                expression: "10 mm".into(),
+                expression: "10".into(),
             },
             "Suppression" => RuleCondition::Suppression { feature: features.first().map(|f| f.0).unwrap_or(0), value: true },
             "All" => RuleCondition::All { conditions: vec![RuleCondition::Always] },
