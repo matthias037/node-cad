@@ -468,6 +468,8 @@ impl AgentChat {
         std::mem::swap(&mut self.models_cache, &mut other.models_cache);
         std::mem::swap(&mut self.window_placed, &mut other.window_placed);
         std::mem::swap(&mut self.connect_at_start, &mut other.connect_at_start);
+        // The official app offers NØDE IA alone in every tab, not only in the first one.
+        std::mem::swap(&mut self.node_ia_only, &mut other.node_ia_only);
         // A sign-in proven in one tab holds for that agent in every tab (#9293).
         std::mem::swap(&mut self.login_results, &mut other.login_results);
         #[cfg(not(target_arch = "wasm32"))]

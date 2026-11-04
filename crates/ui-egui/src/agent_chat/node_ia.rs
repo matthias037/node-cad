@@ -452,6 +452,18 @@ mod tests {
     /// is not listed, and without an account the chat says where to sign in.
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
+    /// A new tab gets a chat of its own: the official app still offers NØDE IA alone there (the
+    /// 0.28 merge lost it, and a tab opened from the start page talked to a direct Mistral agent).
+    fn a_new_tab_keeps_node_ia_alone() {
+        let mut app = crate::SolveApp::new(solidcraft_engine::Session::default(), crate::Services::default());
+        app.agent_chat.node_ia_only = true;
+        app.preferences.agents.push(super::super::agents::AgentConfig { id: "api-1".into(), kind: Kind::Api, ..Default::default() });
+        app.agent_chat.swap_document(&mut super::super::AgentChat::default());
+        let all = super::super::agents::entries(&app);
+        assert_eq!(all.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), [ID]);
+    }
+
+    #[test]
     fn the_official_app_has_node_ia_alone_and_asks_to_sign_in() {
         let mut app = crate::SolveApp::new(solidcraft_engine::Session::default(), crate::Services::default());
         app.agent_chat.node_ia_only = true;
