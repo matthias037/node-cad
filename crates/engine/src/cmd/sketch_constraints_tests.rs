@@ -1614,11 +1614,12 @@ fn slot_caps_dimension_is_the_centre_to_centre_distance() {
         "{:?}",
         sk.constraints.iter().map(|c| &c.kind).collect::<Vec<_>>()
     );
-    // Two circles drawn apart, not joined as a slot, still measure the gap between their edges (#4064).
+    // Two circles drawn apart, not joined as a slot, measure the gap between their edges with
+    // `arc_condition: min` (#4064); NØDE CAD measures whole circles from their centres by default.
     let mut s = new_sketch();
     let c1 = ids(&run(&mut s, "sketch.circle.center", json!({"center": [0, 0], "radius": 5}))["curves"])[0].clone();
     let c2 = ids(&run(&mut s, "sketch.circle.center", json!({"center": [30, 0], "radius": 5}))["curves"])[0].clone();
-    let d = run(&mut s, "sketch.dimension", json!({"entities": [c1, c2], "driven": true}));
+    let d = run(&mut s, "sketch.dimension", json!({"entities": [c1, c2], "driven": true, "arc_condition": "min"}));
     assert!((d["measured"].as_f64().unwrap() - 20.0).abs() < 1e-6, "{d}");
 }
 

@@ -2,8 +2,9 @@
 //! circle or arc and `arc_condition: min` measures the distance from the point to its edge, with
 //! two circles or arcs the gap between their edges (how far they overlap when they cross, the
 //! narrowest gap when one is inside the other); it drives that distance, follows its parameter,
-//! and survives undo and reopening. Without a condition NØDE CAD measures from the centre
-//! (`sketch_arc_condition_tests`), except for two circles about the same centre (the tube here).
+//! and survives undo and reopening. Without a condition NØDE CAD measures a whole circle from its
+//! centre (`sketch_arc_condition_tests`), except two circles about the same centre (the tube
+//! here); arcs keep their edges.
 
 use serde_json::{Value, json};
 use solidcraft_geom::Vec2;

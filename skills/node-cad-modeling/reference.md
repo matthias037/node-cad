@@ -51,7 +51,7 @@ These are the shapes of the commands a part build needs, so an agent rarely has 
 {"command":"sketch.dimension","params":{"entities":["c1","c2"],"value":"3"}}
 ```
 
-A point or another circle with a circle or arc measures between centres; add `"arc_condition": "min"` (near edge) or `"max"` (far edge) to measure an edge instead (0 is tangent, or the point on the circle; two circles: the gap, the overlap when they cross, the thinnest wall when one is inside the other). Two circles about the same centre measure the ring's wall. A line with a circle or arc measures to its edge; give the centre point (`c1.center`) or `"arc_condition": "center"` for the distance to the centre.
+A point or another whole circle with a whole circle measures between centres; add `"arc_condition": "min"` (near edge) or `"max"` (far edge) to measure an edge instead (0 is tangent, or the point on the circle; two circles: the gap, the overlap when they cross, the thinnest wall when one is inside the other). Two circles about the same centre measure the ring's wall. Arcs, and a line with a circle or arc, measure to the edge (a slot's two caps: centre to centre); give the centre point (`c1.center`) or `"arc_condition": "center"` for the distance to the centre.
 
 Distances are unsigned. Draw the geometry on the correct side first, and the dimension keeps it there.
 
