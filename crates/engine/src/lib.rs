@@ -643,7 +643,8 @@ impl SurfaceAnalysis {
     }
 }
 
-const MAX_UNDO: usize = 200;
+/// Undo steps kept (the oldest go first). A batch longer than this cannot be taken back by undo.
+pub const MAX_UNDO: usize = 200;
 /// Checkpoints kept (the oldest go first).
 const MAX_CHECKPOINTS: usize = 16;
 const MAX_LOG: usize = 2000;

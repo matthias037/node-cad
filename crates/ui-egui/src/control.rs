@@ -460,7 +460,10 @@ impl Batch {
             let _ = app.run("edit.restore_checkpoint", json!({"checkpoint": id, "forget": true}));
         }
         // `undo_steps`: the undos that take the whole batch back (the agent's `undo {steps}`).
-        let undo_steps = app.session.undo.len().saturating_sub(self.undo_before);
+        // With the undo history full, the oldest steps went: the count is not known (`null`), and
+        // the batch's bodies go with solid.remove instead.
+        let full = app.session.undo.len() >= solidcraft_engine::MAX_UNDO;
+        let undo_steps = (!full).then(|| app.session.undo.len().saturating_sub(self.undo_before));
         let results = std::mem::take(&mut self.results);
         let reply = json!({"completed": results.len(), "results": results, "undone": 0, "undo_steps": undo_steps});
         Some(ok(with_timings(reply, self.timed, std::mem::take(&mut self.rows), self.ms + clock.ms())))

@@ -1317,7 +1317,10 @@ fn places_parts(command: &str) -> bool {
 /// take it back, as an agent that sends it again on top doubles every part (banc NØDE IA,
 /// 24/10/2026).
 fn with_check(b: &mut dyn Backend, reply: &mut Value, a: &Map<String, Value>) {
-    let undo_steps = reply.as_object_mut().and_then(|o| o.remove("undo_steps")).and_then(|n| n.as_u64());
+    // `undo_steps` stays in every reply: how many undos take the whole batch back (NØDE IA's server
+    // corrects an agent's `undo {steps}` with it); `null` when the app's undo history overflowed.
+    let undo_steps = reply.get("undo_steps").and_then(Value::as_u64);
+    let overflowed = reply.get("undo_steps").is_some_and(Value::is_null);
     // A step named after a tool is checked as the command it runs.
     let assembly = a.get("commands").and_then(Value::as_array).into_iter().flatten().any(|step| match batch_step(step) {
         Ok((command, _, _)) if !command.is_empty() => places_parts(&command),
@@ -1327,6 +1330,7 @@ fn with_check(b: &mut dyn Backend, reply: &mut Value, a: &Map<String, Value>) {
     let Some(mut check) = design_check(b, assembly, &results) else { return };
     if check.get("fix_before_reporting").is_some() {
         check["kept"] = json!(match undo_steps.filter(|n| *n > 0) {
+            _ if overflowed => "This batch was kept and is longer than the undo history: never send it again on top. Fix the faults with new steps, or remove the bodies it made with solid.remove {bodies: [...]} and send a corrected batch.".to_string(),
             Some(n) => format!(
                 "This batch was kept: never send it again on top. Fix the faults with new steps, or take the whole batch back with undo {{steps: {n}}} and send a corrected one."
             ),
