@@ -130,7 +130,7 @@ pub static COMMANDS: &[CommandSpec] = &[
         .params(concat!("p0, p1: overall ends, width", connect_doc!(), created_doc!())),
     CommandSpec::new("sketch.point", "Point", draw_point).at("SKETCH", "CREATE").icon("point").enabled(in_sketch).params(concat!("point: [x,y] (each a number or an expression over the design's parameters: the point is then fixed where it comes to and follows them) or a snap: \"mid:<line>\" (held at the line's midpoint), \"on:<curve>:x,y\" (on the curve near x,y), {vertex: [x,y,z]} or {on_edge: [x,y,z]} of the model; id?", connect_doc!(), created_doc!())),
     CommandSpec::new("sketch.dimension", "Sketch Dimension", dimension).at("SKETCH", "CREATE").icon("dimension").key("D").enabled(in_sketch).params(
-        "entities: [refs] (a line midpoint is \"mid:line_id\"; a model edge or vertex, {edge: [x,y,z], body?} or {vertex: [x,y,z], body?}, is projected into the sketch first and measured there: a point against the projected edge measures the distance to it), type?: auto|distance|horizontal|distance_x|vertical|distance_y|length|radius|diameter|angle, value?: number or expression (default: current; a bare number is in the design's units, e.g. 2 means 2 in in an inch design; give a unit such as \"50 mm\" to override), or `name = expression` (e.g. \"width = 40\"; also `#name = expression`), which adds the user parameter `name` with that expression and dimensions with `name` (refused when the name is taken or reserved; the reply's `defined` names it); text_at?: [x, y]. Two points, two midpoints or a line off the axes: with auto, text_at inside the box they span (as opposite corners) or in its outer corners is the distance between them, above or below the box horizontal, beside it vertical. Two lines: the angle between them (acute, or 180° − it when the value is nearer that) unless text_at picks a sector. A line and a circle or arc: the distance from the line to its edge (the gap, or how far the edge reaches past a line that cuts it; 0 is tangent); dimension the centre point for the distance to the centre. A point and a circle or arc: the distance from the point to its edge (or how far within it a point inside lies). Two circles or arcs: the gap between their edges (or how far they overlap when they cross, or the narrowest gap between them when one lies inside the other), or the centre-to-centre distance when they are the two caps of a slot. arc_condition?: center|min|max, or one per entity: where a circle or arc is measured from, its centre, its edge nearest the other entity (min, the default) or its edge farthest from it (max), along the line through the centres (along the normal for a line); `sketch.dimension_condition` changes it afterwards. An arc and one of its end points: the arc's length (type arc_length does it from the arc alone). A dimension the sketch already determines is refused (naming what determines it); if_redundant?: \"driven\" places it as a driven (reference) dimension instead. scale_sketch?: bool (the dimension tool sends true): when this is the sketch's first length dimension and nothing in the sketch fixes a size (no other driving length dimension, nothing fixed or projected), the whole sketch scales about its origin to the value instead of distorting. Returns measured in unit (mm or deg), and scaled: the factor when the sketch was scaled",
+        "entities: [refs] (a line midpoint is \"mid:line_id\"; a model edge or vertex, {edge: [x,y,z], body?} or {vertex: [x,y,z], body?}, is projected into the sketch first and measured there: a point against the projected edge measures the distance to it), type?: auto|distance|horizontal|distance_x|vertical|distance_y|length|radius|diameter|angle, value?: number or expression (default: current; a bare number is in the design's units, e.g. 2 means 2 in in an inch design; give a unit such as \"50 mm\" to override), or `name = expression` (e.g. \"width = 40\"; also `#name = expression`), which adds the user parameter `name` with that expression and dimensions with `name` (refused when the name is taken or reserved; the reply's `defined` names it); text_at?: [x, y]. Two points, two midpoints or a line off the axes: with auto, text_at inside the box they span (as opposite corners) or in its outer corners is the distance between them, above or below the box horizontal, beside it vertical. Two lines: the angle between them (acute, or 180° − it when the value is nearer that) unless text_at picks a sector. A line and a circle or arc: the distance from the line to its edge (the gap, or how far the edge reaches past a line that cuts it; 0 is tangent); dimension the centre point for the distance to the centre. A point and a circle or arc: the distance to its centre; with arc_condition min or max, to its edge (how far within it a point inside lies). Two circles or arcs: the distance between their centres; with arc_condition min or max, between their edges (the gap, how far they overlap when they cross, or the narrowest gap between them when one lies inside the other); two about the same centre measure the narrowest gap (a ring's wall). arc_condition?: center|min|max, or one per entity: where a circle or arc is measured from, its centre (the default against a point or another circle), its edge nearest the other entity (min, the default against a line) or its edge farthest from it (max), along the line through the centres (along the normal for a line); `sketch.dimension_condition` changes it afterwards. An arc and one of its end points: the arc's length (type arc_length does it from the arc alone). A dimension the sketch already determines is refused (naming what determines it); if_redundant?: \"driven\" places it as a driven (reference) dimension instead. scale_sketch?: bool (the dimension tool sends true): when this is the sketch's first length dimension and nothing in the sketch fixes a size (no other driving length dimension, nothing fixed or projected), the whole sketch scales about its origin to the value instead of distorting. Returns measured in unit (mm or deg), and scaled: the factor when the sketch was scaled",
     ),
     CommandSpec::new("sketch.constraint.horizontal_vertical", "Horizontal/Vertical", c_horizontal_vertical)
         .at("SKETCH", "CONSTRAINTS")
@@ -2553,6 +2553,16 @@ fn arc_end(sk: &Sketch, c: usize, q: usize) -> bool {
     *a == q || *b == q || at(q).is_some_and(|pq| [*a, *b].iter().any(|e| at(*e).is_some_and(|pe| pe.dist(pq) < 1e-9)))
 }
 
+/// Is point `q` the centre of circle or arc `c`?
+fn own_centre(sk: &Sketch, c: usize, q: usize) -> bool {
+    matches!(sk.curves.get(c).map(|x| &x.kind), Some(CurveKind::Circle { c: centre, .. } | CurveKind::Arc { c: centre, .. }) if *centre == q)
+}
+
+/// Do two circles or arcs turn about the same centre (a ring, a counterbore)?
+fn concentric(sk: &Sketch, a: usize, b: usize) -> bool {
+    sk.center(a).zip(sk.center(b)).is_some_and(|(ca, cb)| ca.dist(cb) < 1e-9)
+}
+
 fn c_symmetry(s: &mut Session, p: &Value) -> Result<Value> {
     let cmd = "sketch.constraint.symmetry";
     let p = &super::sketch_project::project_operands(s, p, cmd, &["a", "b", "line", "point"])?;
@@ -2806,14 +2816,25 @@ fn dimension(s: &mut Session, p: &Value) -> Result<Value> {
         let is_circle = |c: usize| matches!(sk.curves.get(c).map(|c| &c.kind), Some(CurveKind::Circle { .. }));
         let is_round = |c: usize| matches!(sk.curves.get(c).map(|c| &c.kind), Some(CurveKind::Circle { .. } | CurveKind::Arc { .. }));
         // A circle or arc measured from its centre (the arc condition `center`) is its centre
-        // point; by default it is measured to its edge (#1803, #4064).
+        // point. Against a point or another circle that is the default, as NØDE CAD measured it
+        // until 0.21 and as most CAD software does; against a line it is the edge (#1803). The
+        // arc conditions min and max measure an edge (#4064). Left on the edge: an arc and one of
+        // its own end points (its length), a circle and its own centre (refused below), and two
+        // circles about the same centre (a ring: its wall).
         let (e0, e1) = match e1 {
             Some(e1) if ty != "overall_length" => {
-                let centred = |e: (Option<usize>, Option<usize>), cond: Option<ArcCondition>| match (e, cond) {
+                let to_line = [e0, e1].iter().any(|e| matches!(e, (None, Some(c)) if is_line(*c)));
+                let on_edge = |e: (Option<usize>, Option<usize>), other: (Option<usize>, Option<usize>)| match (e, other) {
+                    ((None, Some(c)), (Some(q), None)) => arc_end(sk, c, q) || own_centre(sk, c, q),
+                    ((None, Some(a)), (None, Some(b))) => concentric(sk, a, b),
+                    _ => false,
+                };
+                let centred = |e: (Option<usize>, Option<usize>), other: (Option<usize>, Option<usize>), cond: Option<ArcCondition>| match (e, cond) {
                     ((None, Some(c)), Some(ArcCondition::Center)) => round_centre(sk, c).map_or(e, |p| (Some(p), None)),
+                    ((None, Some(c)), None) if is_round(c) && !to_line && !on_edge(e, other) => round_centre(sk, c).map_or(e, |p| (Some(p), None)),
                     _ => e,
                 };
-                (centred(e0, conds[0]), Some(centred(e1, conds[1])))
+                (centred(e0, e1, conds[0]), Some(centred(e1, e0, conds[1])))
             }
             e1 => (e0, e1),
         };
@@ -2965,8 +2986,7 @@ fn dimension(s: &mut Session, p: &Value) -> Result<Value> {
             // A point and a circle or arc: the distance from the point to its edge, along the
             // radius through the point (#4064).
             ((Some(q), None), Some((None, Some(c)))) | ((None, Some(c)), Some((Some(q), None))) if is_round(c) => {
-                let own_centre = matches!(sk.curves.get(c).map(|x| &x.kind), Some(CurveKind::Circle { c: centre, .. } | CurveKind::Arc { c: centre, .. }) if *centre == q);
-                if own_centre {
+                if own_centre(sk, c, q) {
                     return Err(bad(cmd, "that point is the circle's own centre: dimension its radius or diameter instead"));
                 }
                 let (centre, r) = sk.center(c).zip(sk.radius(c)).ok_or_else(|| bad(cmd, "cannot dimension that curve"))?;

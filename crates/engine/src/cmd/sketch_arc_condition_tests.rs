@@ -39,12 +39,12 @@ fn two_circles() -> Session {
 }
 
 #[test]
-fn two_circles_dimension_edge_to_edge_by_default_or_centre_to_centre() {
+fn two_circles_dimension_centre_to_centre_by_default_or_edge_to_edge() {
     let mut s = two_circles();
     let r = run(&mut s, "sketch.dimension", json!({"entities": ["c1", "c2"]}));
-    assert_eq!(r["measured"], 12.0, "the gap between the edges: {r}");
+    assert_eq!(r["measured"], 20.0, "between the centres by default: {r}");
     let k = sketch(&s).constraints.last().unwrap().kind.clone();
-    assert!(matches!(k, solidcraft_sketch::ConstraintKind::CircleCircleDistance { .. }), "{k:?}");
+    assert!(matches!(k, solidcraft_sketch::ConstraintKind::Distance { .. }), "{k:?}");
     let mut s = two_circles();
     let r = run(&mut s, "sketch.dimension", json!({"entities": ["c1", "c2"], "arc_condition": "center"}));
     assert_eq!(r["measured"], 20.0, "{r}");
@@ -70,7 +70,7 @@ fn a_point_and_a_circle_dimension_to_the_centre_or_either_edge() {
     run(&mut s, "sketch.point", json!({"point": [0, 12]}));
     let pt = sketch(&s).points.last().map(|p| p.id.clone()).unwrap();
     let r = run(&mut s, "sketch.dimension", json!({"entities": [pt, "c1"]}));
-    assert_eq!(r["measured"], 7.0, "to the edge by default: {r}");
+    assert_eq!(r["measured"], 12.0, "to the centre by default: {r}");
     run(&mut s, "edit.undo", json!({}));
     let r = run(&mut s, "sketch.dimension", json!({"entities": [pt, "c1"], "arc_condition": "center"}));
     assert_eq!(r["measured"], 12.0, "{r}");
@@ -143,6 +143,21 @@ fn the_condition_saves_reopens_and_undoes() {
     assert!(point(&reopened, "c2.center").dist(Vec2::new(22.0, 0.0)) < 1e-7, "{:?}", point(&reopened, "c2.center"));
     run(&mut s, "edit.undo", json!({}));
     assert_eq!(sketch(&s).constraints.len(), before);
+}
+
+/// Two circles about the same centre: without a condition, their dimension is the ring's wall,
+/// not a distance between two centres that are one point.
+#[test]
+fn a_ring_dimensions_its_wall_by_default() {
+    let mut s = Session::default();
+    run(&mut s, "sketch.create", json!({"plane": "XY"}));
+    run(&mut s, "sketch.circle.center", json!({"center": [0, 0], "radius": 20}));
+    run(&mut s, "sketch.circle.center", json!({"center": [0, 0], "radius": 15}));
+    run(&mut s, "sketch.constraint.coincident", json!({"a": "c1.center", "b": "c2.center"}));
+    let r = run(&mut s, "sketch.dimension", json!({"entities": ["c1", "c2"]}));
+    assert_eq!(r["measured"], 5.0, "20 - 15: {r}");
+    let k = sketch(&s).constraints.last().unwrap().kind.clone();
+    assert!(matches!(k, solidcraft_sketch::ConstraintKind::CircleCircleDistance { .. }), "{k:?}");
 }
 
 /// A ring: the least distance between its two circles is its wall, centred or not.

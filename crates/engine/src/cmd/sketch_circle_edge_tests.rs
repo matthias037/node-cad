@@ -1,8 +1,9 @@
 //! Sketch Dimension to the edge of a circle or arc (#4064): `sketch.dimension` with a point and a
-//! circle or arc measures the distance from the point to its edge, with two circles or arcs the
-//! gap between their edges (how far they overlap when they cross, the narrowest gap when one is
-//! inside the other); it drives that distance, follows its parameter, and survives undo and
-//! reopening.
+//! circle or arc and `arc_condition: min` measures the distance from the point to its edge, with
+//! two circles or arcs the gap between their edges (how far they overlap when they cross, the
+//! narrowest gap when one is inside the other); it drives that distance, follows its parameter,
+//! and survives undo and reopening. Without a condition NØDE CAD measures from the centre
+//! (`sketch_arc_condition_tests`), except for two circles about the same centre (the tube here).
 
 use serde_json::{Value, json};
 use solidcraft_geom::Vec2;
@@ -67,7 +68,7 @@ fn near(s: &Session, id: &str, want: [f64; 2]) {
 fn a_point_and_a_circle_dimension_to_its_edge() {
     let mut s = circle_and_point([32.0, 15.0]);
     // 12 from the centre, radius 5: 7 from the edge.
-    let r = run(&mut s, "sketch.dimension", json!({"entities": ["pt", "c1"]}));
+    let r = run(&mut s, "sketch.dimension", json!({"entities": ["pt", "c1"], "arc_condition": "min"}));
     assert_eq!(r["type"], "LinearDimension", "{r}");
     assert_eq!(r["measured"], 7.0, "{r}");
     assert_eq!(r["expression"], "7 mm", "{r}");
@@ -77,7 +78,7 @@ fn a_point_and_a_circle_dimension_to_its_edge() {
     near(&s, "pt", [28.0, 15.0]);
     // The circle and the point in the other order, with a value.
     let mut s = circle_and_point([32.0, 15.0]);
-    let r = run(&mut s, "sketch.dimension", json!({"entities": ["c1", "pt"], "value": 4}));
+    let r = run(&mut s, "sketch.dimension", json!({"entities": ["c1", "pt"], "arc_condition": "min", "value": 4}));
     assert_eq!(r["measured"], 4.0, "{r}");
     near(&s, "pt", [29.0, 15.0]);
 }
@@ -86,7 +87,7 @@ fn a_point_and_a_circle_dimension_to_its_edge() {
 fn a_point_inside_the_circle_dimensions_how_far_within_the_edge_it_lies() {
     // 2 from the centre, radius 5: 3 within the edge.
     let mut s = circle_and_point([22.0, 15.0]);
-    let r = run(&mut s, "sketch.dimension", json!({"entities": ["pt", "c1"]}));
+    let r = run(&mut s, "sketch.dimension", json!({"entities": ["pt", "c1"], "arc_condition": "min"}));
     assert_eq!(r["measured"], 3.0, "{r}");
     let param = r["param"].as_str().unwrap().to_string();
     run(&mut s, "parameters.change", json!({"name": param, "expression": "1"}));
@@ -107,7 +108,7 @@ fn the_circles_own_centre_is_refused() {
 fn two_circles_dimension_the_gap_between_their_edges() {
     // Centres 20 apart, radii 5 and 3: a gap of 12.
     let mut s = two_circles(5.0, 20.0, 3.0);
-    let r = run(&mut s, "sketch.dimension", json!({"entities": ["c1", "c2"]}));
+    let r = run(&mut s, "sketch.dimension", json!({"entities": ["c1", "c2"], "arc_condition": "min"}));
     assert_eq!(r["type"], "LinearDimension", "{r}");
     assert_eq!(r["measured"], 12.0, "{r}");
     let param = r["param"].as_str().unwrap().to_string();
@@ -119,14 +120,14 @@ fn two_circles_dimension_the_gap_between_their_edges() {
 fn crossing_and_nested_circles_dimension_their_overlap_and_their_narrowest_gap() {
     // Centres 6 apart, radii 5 and 3: they overlap by 2; overlapping by 1 puts them 7 apart.
     let mut s = two_circles(5.0, 6.0, 3.0);
-    let r = run(&mut s, "sketch.dimension", json!({"entities": ["c2", "c1"]}));
+    let r = run(&mut s, "sketch.dimension", json!({"entities": ["c2", "c1"], "arc_condition": "min"}));
     assert_eq!(r["measured"], 2.0, "{r}");
     run(&mut s, "parameters.change", json!({"name": r["param"].as_str().unwrap(), "expression": "1"}));
     near(&s, "c2.center", [17.0, 10.0]);
     // A radius 3 circle 4 off the centre of a radius 10 one: 3 at the narrowest; 1 there puts
     // it 6 off.
     let mut s = two_circles(10.0, 4.0, 3.0);
-    let r = run(&mut s, "sketch.dimension", json!({"entities": ["c1", "c2"]}));
+    let r = run(&mut s, "sketch.dimension", json!({"entities": ["c1", "c2"], "arc_condition": "min"}));
     assert_eq!(r["measured"], 3.0, "{r}");
     run(&mut s, "parameters.change", json!({"name": r["param"].as_str().unwrap(), "expression": "1"}));
     near(&s, "c2.center", [16.0, 10.0]);
@@ -189,10 +190,10 @@ fn arcs_dimension_to_their_circles() {
     run(&mut s, "sketch.circle.center", json!({"center": [40, 20], "radius": 4}));
     run(&mut s, "sketch.point", json!({"point": [20, 0], "id": "pt"}));
     // Centres 20 apart, radii 6 and 4.
-    let r = run(&mut s, "sketch.dimension", json!({"entities": ["a1", "c1"]}));
+    let r = run(&mut s, "sketch.dimension", json!({"entities": ["a1", "c1"], "arc_condition": "min"}));
     assert_eq!(r["measured"], 10.0, "{r}");
     // 20 below the arc's centre, radius 6.
-    let r = run(&mut s, "sketch.dimension", json!({"entities": ["pt", "a1"]}));
+    let r = run(&mut s, "sketch.dimension", json!({"entities": ["pt", "a1"], "arc_condition": "min"}));
     assert_eq!(r["measured"], 14.0, "{r}");
 }
 
@@ -202,8 +203,8 @@ fn the_dimensions_undo_and_reopen() {
     run(&mut s, "sketch.point", json!({"point": [10, 30], "id": "pt"}));
     run(&mut s, "sketch.constraint.horizontal_vertical", json!({"points": ["c1.center", "pt"], "mode": "vertical"}));
     let before = sketch(&s).constraints.len();
-    run(&mut s, "sketch.dimension", json!({"entities": ["c1", "c2"], "value": 6}));
-    run(&mut s, "sketch.dimension", json!({"entities": ["pt", "c1"], "value": 9}));
+    run(&mut s, "sketch.dimension", json!({"entities": ["c1", "c2"], "arc_condition": "min", "value": 6}));
+    run(&mut s, "sketch.dimension", json!({"entities": ["pt", "c1"], "arc_condition": "min", "value": 9}));
     let saved = s.doc.to_json();
     assert!(saved.contains("\"point_circle_distance\"") && saved.contains("\"circle_circle_distance\""), "not saved");
     let mut reopened = Session::new(solidcraft_doc::Document::from_json(&saved).unwrap());
@@ -222,9 +223,9 @@ fn a_gap_the_sketch_already_has_is_refused_or_driven() {
     // Tangent circles already have a gap of zero.
     let mut s = two_circles(5.0, 8.0, 3.0);
     run(&mut s, "sketch.constraint.tangent", json!({"a": "c1", "b": "c2"}));
-    let err = s.execute("sketch.dimension", &json!({"entities": ["c1", "c2"]})).unwrap_err().to_string();
+    let err = s.execute("sketch.dimension", &json!({"entities": ["c1", "c2"], "arc_condition": "min"})).unwrap_err().to_string();
     assert!(err.contains("already determined"), "{err}");
-    let r = run(&mut s, "sketch.dimension", json!({"entities": ["c1", "c2"], "if_redundant": "driven"}));
+    let r = run(&mut s, "sketch.dimension", json!({"entities": ["c1", "c2"], "arc_condition": "min", "if_redundant": "driven"}));
     assert_eq!(r["driven"], true, "{r}");
     assert!(r["measured"].as_f64().unwrap().abs() < 1e-7, "{r}");
 }
