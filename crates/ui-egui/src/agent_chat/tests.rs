@@ -3490,6 +3490,7 @@ fn a_tool_card_shows_its_summary_and_keeps_the_json_behind_details() {
         status: Some(ToolStatus::Completed),
         input: Some(input.clone()),
         output: Some(output.into()),
+        progress: None,
     });
     h.app.agent_chat.items.push(Item::Tool {
         id: "u".into(),
@@ -3498,6 +3499,7 @@ fn a_tool_card_shows_its_summary_and_keeps_the_json_behind_details() {
         status: Some(ToolStatus::InProgress),
         input: None,
         output: None,
+        progress: None,
     });
     h.frames(3);
     assert!(h.widget("Extrude Sketch1 by 10 mm").is_some(), "the summary is the card's title");
@@ -3529,6 +3531,7 @@ fn a_screenshot_card_hides_the_path_until_details() {
         status: Some(ToolStatus::Completed),
         input: Some(json!({"path": path})),
         output: Some(path.into()),
+        progress: None,
     });
     h.frames(3);
     assert!(h.widget("Screenshot").is_some(), "the card says what it did");

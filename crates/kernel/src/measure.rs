@@ -122,13 +122,31 @@ pub fn measure_mass(b: &Body) -> Result<MassMeasure> {
     Ok(mass(b, false)?.0)
 }
 
+/// A first look at a body: the box of [`measure`]'s coarse tessellation, the first it makes (a
+/// few hundredths of the whole measure), and how far [`measure`]'s box may reach past it (that
+/// tessellation's chord tolerance: its triangles are refined to within it of the surface). The
+/// box [`measure`] gives holds this one, and lies within the tolerance of it; a mesh body's is
+/// exact (0). A check over many bodies looks at them all, then measures the few it needs.
+pub fn measure_box(b: &Body) -> Result<(Aabb3, f64)> {
+    if b.triangle_mesh().is_some() {
+        return Ok((b.tessellate(1.0)?.bounds(), 0.0));
+    }
+    let tol = coarse_tolerance(b.size());
+    Ok((b.tessellate_with(tol, true)?.bounds(), tol))
+}
+
+/// The chord tolerance of [`measure`]'s coarse tessellation, for a body of this size.
+fn coarse_tolerance(size: f64) -> f64 {
+    (size * 1e-3).max(1e-3)
+}
+
 /// The mass properties of a B-rep body from three tessellations: a coarse one (which sets how
 /// fine the others go), then a fine and a medium one at once on desktop (one after the other
 /// in the browser). With `topology`, also the coarse unrefined mesh the topology counts take,
 /// made alongside them.
 fn mass(b: &Body, topology: bool) -> Result<(MassMeasure, Option<Mesh>)> {
     let size = b.size();
-    let coarse_tol = (size * 1e-3).max(1e-3);
+    let coarse_tol = coarse_tolerance(size);
     let coarse = b.tessellate_with(coarse_tol, true)?;
     // Chord error relative to a radius sets the volume error: keep it near 3e-4 of the
     // smallest radius (thin tubes, small fillets).
@@ -316,6 +334,29 @@ mod tests {
                 assert!(rel(m.volume, at_origin.volume) < 1e-6, "moved {d} along {axis:?}: {} vs {}", m.volume, at_origin.volume);
                 let off = m.centroid - at_origin.centroid - axis * d;
                 assert!(off.len() < 1e-6 * d, "centroid moved {d} along {axis:?}: off by {off:?}");
+            }
+        }
+    }
+
+    /// A first look's box lies inside the measured box, and the measured box within the look's
+    /// tolerance of it, for curved bodies and booleans, far from the origin too: a check can
+    /// compare the looks and measure only the bodies whose boxes may match.
+    #[test]
+    fn the_first_look_box_frames_the_measured_one() {
+        let ring = torus(Vec3::ZERO, 10.0, 2.0).unwrap();
+        let post = cylinder(Vec3::new(10.0, 0.0, -5.0), Vec3::Z, 1.5, 10.0).unwrap();
+        let shared = boolean(&ring, &post, BoolOp::Intersect).unwrap().unwrap();
+        let pts: Vec<Vec2> = PROFILE.iter().map(|&(r, z)| Vec2::new(r, z)).collect();
+        let far = transform(&revolved(&Plane::XZ, &pts), Vec3::new(5000.0, -3000.0, 800.0), Vec3::ZERO, Vec3::Z, 0.0).unwrap();
+        for b in [&ring, &post, &shared, &far] {
+            let (look, tol) = measure_box(b).unwrap();
+            let full = measure(b).unwrap().bbox;
+            let xyz = |v: Vec3| [v.x, v.y, v.z];
+            let (lo, hi, flo, fhi) = (xyz(look.min), xyz(look.max), xyz(full.min), xyz(full.max));
+            assert!(tol > 0.0);
+            for k in 0..3 {
+                assert!(flo[k] <= lo[k] && hi[k] <= fhi[k], "the look's box {look:?} is not inside the measured {full:?}");
+                assert!(lo[k] - flo[k] <= tol && fhi[k] - hi[k] <= tol, "the measured box {full:?} reaches past {look:?} ± {tol}");
             }
         }
     }

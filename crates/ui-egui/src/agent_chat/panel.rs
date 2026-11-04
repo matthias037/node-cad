@@ -1604,7 +1604,7 @@ fn conversation(app: &mut SolveApp, ui: &mut egui::Ui) {
                 ui_kit::assistant_tool_frame(ui, false, |ui| {
                     ui.spacing_mut().item_spacing.y = Tokens::get().space_2;
                     for (offset, next) in app.agent_chat.items.iter().skip(n).take_while(|next| matches!(next, Item::Tool { .. })).enumerate() {
-                        if let Item::Tool { title, kind, status, input, output, .. } = next {
+                        if let Item::Tool { title, kind, status, input, output, progress, .. } = next {
                             let words = summary::summary(title, input.as_ref(), output.as_deref(), *status == Some(ToolStatus::Completed), units);
                             let call = ToolCall {
                                 title,
@@ -1613,6 +1613,7 @@ fn conversation(app: &mut SolveApp, ui: &mut egui::Ui) {
                                 status: *status,
                                 input: input.as_ref(),
                                 output: output.as_deref(),
+                                progress: progress.as_ref(),
                             };
                             tool_card(ui, n + offset, &call);
                         }
@@ -2053,6 +2054,8 @@ struct ToolCall<'a> {
     status: Option<ToolStatus>,
     input: Option<&'a Value>,
     output: Option<&'a str>,
+    /// Its steps done and in all while it runs them a few at a time, and that said.
+    progress: Option<&'a (usize, usize, String)>,
 }
 
 /// Longest raw text shown under a card's Details (characters).
@@ -2060,7 +2063,8 @@ const MAX_DETAIL: usize = 8000;
 
 /// A tool call as a card: its state and what it did in words on one line (the agent's own title
 /// when there are none); a click on the line unfolds Details, the raw arguments and what it
-/// returned.
+/// returned. A call that runs its steps a few at a time says how far it is while it runs, over a
+/// bar.
 fn tool_card(ui: &mut egui::Ui, n: usize, call: &ToolCall) {
     let t = Tokens::get();
     let status = call.status;
@@ -2071,6 +2075,8 @@ fn tool_card(ui: &mut egui::Ui, n: usize, call: &ToolCall) {
         _ => (t.text_dim, ui_kit::AssistantToolState::Pending, "ui.ai_tool_waiting"),
     };
     let details = call.input.is_some() || call.output.is_some();
+    let progress = call.progress.filter(|(_, total, _)| status == Some(ToolStatus::InProgress) && *total > 0);
+    let state = progress.map_or(tr(state), |(_, _, text)| text.as_str());
     ui_kit::assistant_tool_row(ui, status == Some(ToolStatus::Failed), |ui| {
         ui.set_width(ui.available_width());
         let id = ui.make_persistent_id(("sc_agent_tool", n));
@@ -2084,7 +2090,7 @@ fn tool_card(ui: &mut egui::Ui, n: usize, call: &ToolCall) {
                     ui_kit::disclosure(ui.painter(), rect.center(), state_.is_open(), t.text_dim);
                     ui.label(RichText::new(tr("ui.ai_tool_details")).size(t.font_small).color(t.text_dim));
                 }
-                ui.label(RichText::new(tr(state)).size(t.font_small).color(color));
+                ui.label(RichText::new(state).size(t.font_small).color(color));
                 if !call.kind.is_empty() && call.kind != "other" {
                     ui.label(RichText::new(call.kind).size(t.font_small).color(t.text_dim));
                 }
@@ -2097,6 +2103,9 @@ fn tool_card(ui: &mut egui::Ui, n: usize, call: &ToolCall) {
                 });
             });
         });
+        if let Some((done, total, _)) = progress {
+            ui_kit::progress(ui, &format!("agent_chat:tool:{n}"), *done as f32 / *total as f32);
+        }
         let click = ui.interact(head.response.rect, id.with("head"), Sense::click());
         crate::scenario::publish_handle(&format!("agent_chat:tool:{n}"), head.response.rect.center());
         if details && click.clicked() {

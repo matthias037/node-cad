@@ -4528,6 +4528,8 @@
   "ui.ai_tool_details": "Détails",
   "ui.ai_tool_done": "terminé",
   "ui.ai_tool_failed": "échec",
+  "ui.ai_tool_measured": "{done} / {total} corps mesurés",
+  "ui.ai_tool_progress": "{done} / {total} commandes",
   "ui.ai_tool_result": "Résultat",
   "ui.ai_tool_running": "en cours",
   "ui.ai_tool_sum_bodies_one": "{count} corps",

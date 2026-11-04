@@ -4532,6 +4532,8 @@
   "ui.ai_tool_details": "详细信息",
   "ui.ai_tool_done": "完成",
   "ui.ai_tool_failed": "失败",
+  "ui.ai_tool_measured": "已测量 {done} / {total} 个实体",
+  "ui.ai_tool_progress": "{done} / {total} 条命令",
   "ui.ai_tool_result": "结果",
   "ui.ai_tool_running": "运行中",
   "ui.ai_tool_sum_bodies_one": "{count} 个实体",

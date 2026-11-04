@@ -63,6 +63,7 @@ mod design_link;
 mod file;
 mod frame;
 pub(crate) mod inspect;
+pub use inspect::measure_reply;
 mod interference;
 pub(crate) mod joints;
 mod libraries;

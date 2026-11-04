@@ -228,6 +228,8 @@ pub enum Item {
         /// for the card's summary, #1457).
         input: Option<Value>,
         output: Option<String>,
+        /// Its steps done and in all while it runs them, and that said (`Event::Progress`).
+        progress: Option<(usize, usize, String)>,
     },
     Plan(Vec<(String, String)>),
     /// The agent asks before running something of its own (its options, its words).
@@ -710,7 +712,12 @@ impl AgentChat {
                         *o = output;
                     }
                 } else {
-                    self.push(Item::Tool { id, title: title.unwrap_or_default(), kind: kind.unwrap_or_default(), status, input, output });
+                    self.push(Item::Tool { id, title: title.unwrap_or_default(), kind: kind.unwrap_or_default(), status, input, output, progress: None });
+                }
+            }
+            Event::Progress { id, done, total, text } => {
+                if let Some(Item::Tool { progress, .. }) = self.items.iter_mut().rev().find(|i| matches!(i, Item::Tool { id: x, .. } if *x == id)) {
+                    *progress = Some((done, total, text));
                 }
             }
             Event::Plan(entries) => {
@@ -1113,12 +1120,14 @@ fn connect_at_start(app: &mut SolveApp, ctx: &egui::Context) {
 
 /// Stop the agent (and everything it started); the conversation stays.
 pub fn disconnect(app: &mut SolveApp) {
+    web_client::stop(app);
     crate::edit_in_place::forget_after_turn(app);
     app.agent_chat.disconnect_document(&mut app.session, false);
 }
 
 /// The app is quitting: end the agent and its helpers before the window goes.
 pub fn shutdown(app: &mut SolveApp) {
+    web_client::stop(app);
     app.agent_chat.disconnect_document(&mut app.session, true);
     crate::documents::disconnect_background_chats(app, true);
 }
@@ -1617,6 +1626,8 @@ pub fn cancel(app: &mut SolveApp) {
 /// Ask the agent to stop the message it is on and decline what waits for approval.
 fn interrupt(app: &mut SolveApp) {
     decline_all(app, "the user stopped the message");
+    // The browser's tool calls run in the page: a batch halfway goes back to where it started.
+    web_client::stop(app);
     if let Some(b) = app.agent_chat.backend.as_mut() {
         b.cancel();
     }
@@ -2388,8 +2399,8 @@ pub fn status(app: &SolveApp) -> Value {
         .map(|i| match i {
             Item::User { text, image, pictures, context, files } => json!({"user": text, "image": image, "pictures": pictures.len(), "files": files, "context": context.items.iter().map(|i| json!({"label": i.label, "detail": i.detail})).collect::<Vec<_>>(), "context_omitted": context.omitted}),
             Item::Agent { thought, text } => json!({"agent": text, "thought": thought}),
-            Item::Tool { id, title, kind, status, input, output } => {
-                json!({"tool": id, "title": title, "kind": kind, "status": status.map(|s| format!("{s:?}")), "input": input, "output": output})
+            Item::Tool { id, title, kind, status, input, output, progress } => {
+                json!({"tool": id, "title": title, "kind": kind, "status": status.map(|s| format!("{s:?}")), "input": input, "output": output, "progress": progress})
             }
             Item::Plan(p) => json!({"plan": p}),
             Item::Permission { title, options, answer, .. } => {

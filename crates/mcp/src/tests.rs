@@ -999,6 +999,123 @@ fn a_batch_takes_tool_names_and_flags_a_rebuilt_part() {
     assert_eq!(r["results"][1]["body_count"], 1, "{r}");
 }
 
+/// The headless session, counting the measures the batch's check asks for: first looks
+/// (`quick`) and full ones.
+struct Counting {
+    inner: Headless,
+    quick: usize,
+    full: usize,
+}
+
+impl crate::backend::Backend for Counting {
+    fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
+        if method == "engine.execute" && params["command"] == "inspect.measure" {
+            if params["params"]["quick"] == true {
+                self.quick += 1;
+            } else {
+                self.full += 1;
+            }
+        }
+        self.inner.call(method, params)
+    }
+    fn has_ui(&self) -> bool {
+        false
+    }
+    fn describe(&self) -> String {
+        "counting".into()
+    }
+    fn in_process(&self) -> bool {
+        true
+    }
+}
+
+/// What the check reported when it measured every body: the twins of the bodies a batch made,
+/// and the bodies it made or changed that are in several solids.
+fn faults_measuring_every_body(b: &mut Counting, reply: &Value) -> (Value, Value) {
+    let names = |k: &str| -> Vec<String> {
+        reply["results"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .flat_map(|r| r[k].as_array().cloned().unwrap_or_default())
+            .filter_map(|n| n.as_str().map(str::to_string))
+            .collect()
+    };
+    let (created, mut touched) = (names("created_bodies"), names("changed_bodies"));
+    touched.extend(created.iter().cloned());
+    let all = crate::backend::Backend::call(&mut b.inner, "engine.execute", json!({"command": "inspect.measure", "params": {}})).unwrap();
+    let bodies = all["bodies"].as_array().cloned().unwrap_or_default();
+    let named = |x: &Value, list: &[String]| x["name"].as_str().is_some_and(|n| list.iter().any(|m| m == n));
+    let same = |x: &Value, y: &Value| {
+        let (vx, vy) = (x["volume_mm3"].as_f64().unwrap_or(f64::NAN), y["volume_mm3"].as_f64().unwrap_or(f64::NAN));
+        let corners = |v: &Value| {
+            ["min", "max"].iter().flat_map(|k| v["bbox"][*k].as_array().cloned().unwrap_or_default()).filter_map(|c| c.as_f64()).collect::<Vec<_>>()
+        };
+        let (cx, cy) = (corners(x), corners(y));
+        (vx - vy).abs() <= 1e-6 * vx.abs().max(1.0)
+            && cx.len() == 6
+            && cy.len() == 6
+            && cx.iter().zip(&cy).all(|(a, b)| (a - b).abs() < 1e-6 * (1.0 + a.abs()))
+    };
+    let twins: Vec<Value> = bodies
+        .iter()
+        .filter(|x| named(x, &created))
+        .filter_map(|x| bodies.iter().find(|y| y["name"] != x["name"] && same(x, y)).map(|y| json!({"body": x["name"], "same_as": y["name"]})))
+        .collect();
+    let split: Vec<Value> = bodies
+        .iter()
+        .filter(|x| named(x, &touched) && x["kernel"]["shells"].as_u64().is_some_and(|n| n > 1))
+        .map(|x| json!({"body": x["name"], "solids": x["kernel"]["shells"]}))
+        .collect();
+    (Value::Array(twins), Value::Array(split))
+}
+
+/// The batch's check looks at every body first and measures in full only those that may be at
+/// fault, and says what it said when it measured them all: nothing for a line of distinct parts
+/// (and no full measure), every part of a batch sent again on top, twins made other ways (a box
+/// and the same block extruded from a sketch), not a near miss, a body joined from pieces apart.
+#[test]
+fn the_batch_check_measures_only_the_bodies_that_may_be_at_fault() {
+    let mut b = Counting { inner: Headless::default(), quick: 0, full: 0 };
+    let c = |cmd: &str, p: Value| json!({"command": cmd, "params": p});
+    let line: Vec<Value> = (0..8)
+        .flat_map(|i| {
+            let x = 30.0 * f64::from(i);
+            [
+                c("solid.box", json!({"length": 20, "width": 10, "height": 5 + i, "corner": [x, 0, 0], "body_name": format!("Plaque {i}")})),
+                c("solid.cylinder", json!({"base": [x + 10.0, 30, 0], "axis": "Z", "diameter": 8, "height": 12, "body_name": format!("Axe {i}")})),
+            ]
+        })
+        .collect();
+    let block = vec![
+        c("solid.box", json!({"length": 10, "width": 20, "height": 5, "corner": [500, 0, 0], "body_name": "Bloc"})),
+        c("sketch.create", json!({"plane": "XY"})),
+        c("sketch.rectangle.two_point", json!({"p0": [500, 0], "p1": [510, 20]})),
+        c("sketch.finish", json!({})),
+        c("solid.extrude", json!({"distance": 5, "operation": "new", "body_name": "Bloc extrudé"})),
+        c("solid.box", json!({"length": 10, "width": 20, "height": 4.5, "corner": [500, 0, 0], "body_name": "Presque"})),
+    ];
+    let apart = vec![
+        c("solid.box", json!({"length": 60, "width": 40, "height": 3, "corner": [0, 143, 0], "body_name": "Feuille"})),
+        c("solid.cylinder", json!({"base": [0, 123, 0], "axis": "Y", "diameter": 8, "height": 3, "operation": "join"})),
+    ];
+    let mut faults = 0;
+    for (steps, full_measures) in [(line.clone(), 0), (line, 1), (block, 1), (apart, 1)] {
+        let (quick, full) = (b.quick, b.full);
+        let r = crate::tools::call_tool(&mut b, "batch", &json!({"commands": steps}));
+        let reply: Value = serde_json::from_str(r["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(reply["ok"], true, "{reply}");
+        assert_eq!((b.quick - quick, b.full - full), (1, full_measures), "first looks, full measures: {reply}");
+        let (twins, split) = faults_measuring_every_body(&mut b, &reply);
+        let said = |k: &str| reply["check"].get(k).cloned().unwrap_or_else(|| json!([]));
+        assert_eq!((said("duplicates"), said("split_bodies")), (twins.clone(), split.clone()), "{reply}");
+        faults += twins.as_array().map_or(0, Vec::len) + split.as_array().map_or(0, Vec::len);
+    }
+    // The second line is all twins (16), the extruded block is the box's (and the other way
+    // round), the leaf is in two solids.
+    assert_eq!(faults, 16 + 2 + 1);
+}
+
 /// `screenshot {views}`, connected: one model render per standard view (no grid), and the
 /// person's camera put back after; a bad list is refused before anything runs.
 #[test]
@@ -2084,7 +2201,8 @@ fn compact_execute_uses_one_backend_call_and_keeps_removed_bodies() {
         fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
             assert_eq!(method, "engine.execute");
             if params["command"] == "inspect.measure" {
-                assert_eq!(params["params"], json!({"bodies": ["Base"]}));
+                // A first look: one shell, nothing more to measure.
+                assert_eq!(params["params"], json!({"bodies": ["Base"], "quick": true}));
                 return Ok(json!({"bodies": [{"name": "Base", "kernel": {"shells": 1}}]}));
             }
             assert_eq!(params, json!({"command": "test.feature", "params": {}}));
@@ -2455,8 +2573,9 @@ fn batch_is_one_engine_batch_call() {
     let steps = json!([{"command": "a.one", "params": {"v": 1}}, {"command": "a.two"}]);
     let (b, body, is_error) = recorded_batch(Ok(reply.clone()), json!({"commands": steps}));
     assert_eq!(methods(&b), ["engine.batch", "engine.execute"]);
-    // It made a body: every body is measured once, for a twin and for pieces.
-    assert_eq!(b.calls[1].1, json!({"command": "inspect.measure", "params": {}}));
+    // It made a body: every body is looked at once, for a twin and for pieces (and the ones
+    // that may be either measured).
+    assert_eq!(b.calls[1].1, json!({"command": "inspect.measure", "params": {"quick": true}}));
     assert_eq!(b.calls[0].1, json!({"commands": steps, "rollback": true}));
     assert!(!is_error);
     assert_eq!(body, json!({"ok": true, "completed": 2, "results": reply["results"]}));

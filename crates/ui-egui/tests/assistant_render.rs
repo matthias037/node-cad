@@ -41,6 +41,7 @@ fn assistant_transcript_tools_and_approvals_fit_in_both_themes() {
                     status: Some(ToolStatus::Completed),
                     input: None,
                     output: Some("plate_width = 80 mm".into()),
+                    progress: None,
                 },
                 Item::Tool {
                     id: "fillet".into(),
@@ -49,6 +50,7 @@ fn assistant_transcript_tools_and_approvals_fit_in_both_themes() {
                     status: Some(ToolStatus::Failed),
                     input: None,
                     output: Some("The requested radius is too large. Try a smaller radius.".into()),
+                    progress: None,
                 },
                 Item::Agent {
                     thought: false,

@@ -27,7 +27,7 @@ pub static COMMANDS: &[CommandSpec] = &[
         .icon("measure")
         .key("I")
         .noundo()
-        .params("bodies?: [names] (default all) → closed per body; volume_mm3, center_of_mass, density_g_cm3 and mass_g only for closed, consistently oriented bodies; area, bbox and counts for all; total.open_bodies_skipped counts bodies excluded from volume/mass totals; or items: [1-2 selections] (face/edge: type, body, point; index optional: the one nearest the point; more than two: each measured alone, in `each`) → length/area/volume; diameter, radius, circumference or arc_length/angle_deg of circles, arcs and cylinders; slot sizes; min (distance_mm, from, to), max, center_distance (centre to centre, or from an axis) and angle"),
+        .params("bodies?: [names] (default all) → closed per body; volume_mm3, center_of_mass, density_g_cm3 and mass_g only for closed, consistently oriented bodies; area, bbox and counts for all; total.open_bodies_skipped counts bodies excluded from volume/mass totals; quick?: bool (a first look, no measuring: each body's `bbox` from its coarse tessellation, how far the measured box may reach past it (`bbox_tolerance`), and its shells (`kernel.shells`); no volume, area, mass or totals); or items: [1-2 selections] (face/edge: type, body, point; index optional: the one nearest the point; more than two: each measured alone, in `each`) → length/area/volume; diameter, radius, circumference or arc_length/angle_deg of circles, arcs and cylinders; slot sizes; min (distance_mm, from, to), max, center_distance (centre to centre, or from an axis) and angle"),
     CommandSpec::new("document.inspect", "Inspect Design", inspect).icon("inspect").noundo().params("measure?: bool (include body measurements)"),
     CommandSpec::new("document.revision", "Design Revision", revision).icon("inspect").noundo().params(
         "→ document_id (this open design's id: kept while it stays open, another for each design started or opened), \
@@ -93,6 +93,20 @@ pub(crate) fn encloses_volume(body: &solidcraft_kernel::Body) -> bool {
     if body.is_mesh() { body.is_closed_mesh() } else { !body.is_surface() }
 }
 
+/// A body's first look (`inspect.measure {quick: true}`): the box of its coarse tessellation,
+/// how far its measured box may reach past it, and its shells, at a few hundredths of a measure.
+fn first_look_json(b: &solidcraft_doc::ModelBody) -> Value {
+    match solidcraft_kernel::measure_box(&b.body) {
+        Ok((bbox, tolerance)) => json!({
+            "name": b.name,
+            "bbox": {"min": bbox.min, "max": bbox.max},
+            "bbox_tolerance": tolerance,
+            "kernel": {"shells": b.body.shell_count()},
+        }),
+        Err(e) => json!({"name": b.name, "error": e.to_string()}),
+    }
+}
+
 pub fn measure_json(b: &solidcraft_doc::ModelBody) -> Value {
     match b.measure() {
         Ok(m) => {
@@ -123,6 +137,17 @@ fn measure(s: &mut Session, p: &Value) -> Result<Value> {
     let want = string_list(cmd, p, "bodies")?;
     let st = s.world_state();
     let selected: Vec<_> = st.bodies.iter().filter(|b| want.is_empty() || want.contains(&b.name)).collect();
+    if bool_(p, "quick").unwrap_or(false) {
+        let bodies: Vec<Value> = solidcraft_kernel::map_on_threads(&selected, 16, |b| first_look_json(b))
+            .into_iter()
+            .zip(&selected)
+            .map(|(m, b)| m.unwrap_or_else(|| json!({"name": b.name, "error": "looking at this body failed"})))
+            .collect();
+        if !want.is_empty() && bodies.len() != want.len() {
+            return Err(bad("inspect.measure", "unknown body name"));
+        }
+        return Ok(measure_reply(bodies, true));
+    }
     // Each body is measured on its own: on all cores, in body order.
     let mut bodies: Vec<Value> = solidcraft_kernel::map_on_threads(&selected, 16, |b| measure_json(b))
         .into_iter()
@@ -173,6 +198,17 @@ fn measure(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
     }
+    Ok(measure_reply(bodies, false))
+}
+
+/// `inspect.measure`'s reply for its bodies, each as it measures one (`bodies`, in the design's
+/// order): their count, and their totals (none for a `quick` look). Bodies measured one at a
+/// time (the browser measures a big design over several frames) make the same reply as
+/// measured together.
+pub fn measure_reply(bodies: Vec<Value>, quick: bool) -> Value {
+    if quick {
+        return json!({"body_count": bodies.len(), "bodies": bodies});
+    }
     let skipped = bodies.iter().filter(|b| b["closed"] == false).count();
     let tv: f64 = bodies.iter().filter_map(|b| b["volume_mm3"].as_f64()).sum();
     let ta: f64 = bodies.iter().filter_map(|b| b["area_mm2"].as_f64()).sum();
@@ -180,9 +216,7 @@ fn measure(s: &mut Session, p: &Value) -> Result<Value> {
     let te: u64 = bodies.iter().filter_map(|b| b["edges"].as_u64()).sum();
     let tvx: u64 = bodies.iter().filter_map(|b| b["vertices"].as_u64()).sum();
     let tm: f64 = bodies.iter().filter_map(|b| b["mass_g"].as_f64()).sum();
-    Ok(
-        json!({"body_count": bodies.len(), "bodies": bodies, "total": {"open_bodies_skipped": skipped, "volume_mm3": tv, "area_mm2": ta, "mass_g": tm, "faces": tf, "edges": te, "vertices": tvx}}),
-    )
+    json!({"body_count": bodies.len(), "bodies": bodies, "total": {"open_bodies_skipped": skipped, "volume_mm3": tv, "area_mm2": ta, "mass_g": tm, "faces": tf, "edges": te, "vertices": tvx}})
 }
 
 fn sketch_json(s: &Session, id: u64) -> Option<Value> {

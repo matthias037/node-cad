@@ -4532,6 +4532,8 @@
   "ui.ai_tool_details": "詳細",
   "ui.ai_tool_done": "完了",
   "ui.ai_tool_failed": "失敗",
+  "ui.ai_tool_measured": "{done} / {total} ボディを測定済み",
+  "ui.ai_tool_progress": "{done} / {total} コマンド",
   "ui.ai_tool_result": "結果",
   "ui.ai_tool_running": "実行中",
   "ui.ai_tool_sum_bodies_one": "{count} ボディ",
