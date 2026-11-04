@@ -40,6 +40,148 @@ pub fn is_node_ia(base_url: &str) -> bool {
     base_url.trim().trim_end_matches('/').ends_with("/api/cad/ia/v1")
 }
 
+/// The header that names a chat request to the relay, so that what NØDE IA does meanwhile can be
+/// read while the app waits for the answer (`/progres`): its plan, its tries, its reasoning.
+pub const REQUEST_HEADER: &str = "X-NodeIA-Requete";
+/// How often the progress of a request is read while it runs.
+pub const PROGRESS_EVERY: std::time::Duration = std::time::Duration::from_secs(1);
+/// Reads in a row that get no progress back (a relay without the route, say) before the app
+/// stops reading it for that request.
+const PROGRESS_FAILURES: u32 = 3;
+/// A read still unanswered after this long counts as failed (the browser's `fetch` has no
+/// timeout of its own), and the next one goes.
+const PROGRESS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+/// Lines taken from one progress answer, and characters from one line.
+const PROGRESS_LINES: usize = 200;
+const PROGRESS_LINE_CHARS: usize = 4_000;
+
+/// A new id for one request to the relay: 32 hexadecimal digits, different for every request.
+/// On the desktop the standard library's random keys make it unguessable; in the browser, the
+/// clock, a counter and an address make it unique (the relay ties it to the account anyway).
+pub fn request_id() -> String {
+    use std::fmt::Write;
+    use std::hash::{BuildHasher, Hasher};
+    static COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let wall = web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let here = Box::new(n);
+    let mut id = String::with_capacity(32);
+    for salt in [0x6e6f_6465_u64, 0x6961_6469_7265_6374] {
+        let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+        h.write_u64(salt);
+        h.write_u64(n);
+        h.write_u128(wall);
+        h.write_usize(std::ptr::from_ref::<u64>(&here) as usize);
+        #[cfg(not(target_arch = "wasm32"))]
+        h.write_u32(std::process::id());
+        let _ = write!(id, "{:016x}", h.finish());
+    }
+    id
+}
+
+/// What NØDE IA does while a request runs, read from the relay about every second (`/progres`)
+/// until the answer comes: one read at a time, and none once the relay says the request is done
+/// or a few reads in a row got nothing back. Its lines go to the chat as dimmed thoughts.
+#[derive(Debug)]
+pub struct Follow {
+    id: String,
+    every: std::time::Duration,
+    /// The number of the last line shown.
+    after: u64,
+    /// Lines shown so far: each one after the first goes on a line of its own.
+    shown: usize,
+    /// When the last read was sent or answered (the start, before the first).
+    since: web_time::Instant,
+    asking: bool,
+    failures: u32,
+    done: bool,
+}
+
+impl Follow {
+    pub fn new(id: String, every: std::time::Duration) -> Follow {
+        Follow { id, every, after: 0, shown: 0, since: web_time::Instant::now(), asking: false, failures: 0, done: false }
+    }
+
+    /// The follow of `req`, when it names itself to the relay ([`REQUEST_HEADER`]).
+    pub fn of(req: &super::backend::HttpRequest, every: std::time::Duration) -> Option<Follow> {
+        req.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case(REQUEST_HEADER)).map(|(_, id)| Follow::new(id.clone(), every))
+    }
+
+    /// How long until the next read is due, or until the read in flight counts as failed; `None`
+    /// once no read will come.
+    pub fn wait(&self) -> Option<std::time::Duration> {
+        if self.done || self.failures >= PROGRESS_FAILURES {
+            return None;
+        }
+        Some((if self.asking { PROGRESS_TIMEOUT } else { self.every }).saturating_sub(self.since.elapsed()))
+    }
+
+    /// Whether a read is due now ([`Follow::ask`]). A read left unanswered too long counts as
+    /// failed first.
+    pub fn due(&mut self) -> bool {
+        if self.asking && self.since.elapsed() >= PROGRESS_TIMEOUT {
+            self.asking = false;
+            self.failures += 1;
+        }
+        !self.asking && self.wait().is_some_and(|w| w.is_zero())
+    }
+
+    /// The read to send now (`base_url`: the relay's; `token`: the account's); it is in flight
+    /// until [`Follow::answered`].
+    pub fn ask(&mut self, base_url: &str, token: Option<&str>) -> super::backend::HttpRequest {
+        self.asking = true;
+        self.since = web_time::Instant::now();
+        let mut headers = Vec::new();
+        if let Some(t) = token {
+            headers.push(("Authorization".to_string(), format!("Bearer {t}")));
+        }
+        super::backend::HttpRequest {
+            method: "GET",
+            url: format!("{}/progres?requete={}&depuis={}", base_url.trim_end_matches('/'), self.id, self.after),
+            headers,
+            body: None,
+            timeout_s: 15,
+        }
+    }
+
+    /// The answer of the read in flight: the texts to show, in order (dimmed thoughts).
+    pub fn answered(&mut self, answer: &super::backend::HttpAnswer) -> Vec<String> {
+        self.asking = false;
+        self.since = web_time::Instant::now();
+        let read = answer.as_ref().ok().filter(|(status, _)| *status == 200).and_then(|(_, body)| serde_json::from_slice::<Value>(body).ok());
+        let Some((v, lines)) = read.as_ref().and_then(|v| Some((v, v.get("lignes")?.as_array()?))) else {
+            self.failures += 1;
+            return Vec::new();
+        };
+        self.failures = 0;
+        self.done = v.get("fini").and_then(Value::as_bool).unwrap_or(false);
+        let mut new: Vec<(u64, bool, &str)> = lines
+            .iter()
+            .take(PROGRESS_LINES)
+            .filter_map(|l| {
+                let n = l.get("n").and_then(Value::as_u64).filter(|n| *n > self.after)?;
+                let text = l.get("texte").and_then(Value::as_str).unwrap_or("").trim();
+                Some((n, l.get("genre").and_then(Value::as_str) == Some("reflexion"), text))
+            })
+            .collect();
+        new.sort_by_key(|(n, ..)| *n);
+        new.dedup_by_key(|(n, ..)| *n);
+        let mut texts = Vec::with_capacity(new.len());
+        for (n, reasoning, text) in new {
+            self.after = n;
+            if text.is_empty() {
+                continue;
+            }
+            let text: String = text.chars().take(PROGRESS_LINE_CHARS).collect();
+            // The model's own reasoning between quotes; the steps as the relay words them.
+            let line = if reasoning { format!("« {text} »") } else { text };
+            texts.push(if self.shown == 0 { line } else { format!("\n{line}") });
+            self.shown += 1;
+        }
+        texts
+    }
+}
+
 /// The page that sells the subscription and manages it.
 pub fn subscribe_page() -> String {
     format!("{}/cad#ia", site())
@@ -429,6 +571,91 @@ mod tests {
         assert!(is_node_ia("http://localhost:3998/api/cad/ia/v1/"));
         assert!(!is_node_ia("https://api.mistral.ai/v1"));
         assert!(base_url().ends_with("/api/cad/ia/v1") && subscribe_page().ends_with("/cad#ia"));
+    }
+
+    #[test]
+    fn each_request_gets_an_id_of_its_own_in_the_relays_format() {
+        let ids: Vec<String> = (0..64).map(|_| request_id()).collect();
+        assert!(ids.iter().all(|id| id.len() == 32 && id.chars().all(|c| c.is_ascii_hexdigit())), "{ids:?}");
+        assert_eq!(ids.iter().collect::<std::collections::HashSet<_>>().len(), ids.len());
+    }
+
+    fn progress(lines: Value, done: bool) -> super::super::backend::HttpAnswer {
+        Ok((200, json!({"lignes": lines, "fini": done}).to_string().into_bytes()))
+    }
+
+    /// A request names itself; its progress is read one read at a time, once the interval is up;
+    /// each line comes once, in order, the model's reasoning between quotes, and no read is due
+    /// once the relay says the request is done.
+    #[test]
+    fn the_progress_of_a_request_is_read_one_read_at_a_time_and_each_line_comes_once() {
+        use super::super::backend::HttpRequest;
+        use std::time::Duration;
+        let id = "0123456789abcdef0123456789abcdef";
+        let chat = HttpRequest {
+            method: "POST",
+            url: format!("{}/chat/completions", base_url()),
+            headers: vec![(REQUEST_HEADER.into(), id.into())],
+            body: None,
+            timeout_s: 300,
+        };
+        assert!(
+            Follow::of(&HttpRequest { headers: Vec::new(), ..chat.clone() }, Duration::ZERO).is_none(),
+            "a request that does not name itself is not followed"
+        );
+        let mut later = Follow::of(&chat, Duration::from_secs(3600)).unwrap();
+        assert!(!later.due() && later.wait().is_some_and(|w| w > Duration::from_secs(3000)), "not before its time");
+        let mut f = Follow::of(&chat, Duration::ZERO).unwrap();
+        assert!(f.due());
+        let read = f.ask("https://node-os.fr/api/cad/ia/v1/", Some("jeton"));
+        assert_eq!(
+            (read.method, read.url.as_str()),
+            ("GET", "https://node-os.fr/api/cad/ia/v1/progres?requete=0123456789abcdef0123456789abcdef&depuis=0")
+        );
+        assert!(read.headers.contains(&("Authorization".to_string(), "Bearer jeton".to_string())) && read.body.is_none());
+        assert!(!f.due(), "one read at a time");
+        let texts = f.answered(&progress(
+            json!([
+                {"n": 2, "t": 900, "genre": "reflexion", "texte": "Un bâti au sol, puis le vérin."},
+                {"n": 1, "t": 0, "genre": "plan", "texte": "Plan en cours…"},
+                {"n": 3, "t": 950, "genre": "info", "texte": "  "},
+            ]),
+            false,
+        ));
+        assert_eq!(texts, ["Plan en cours…", "\n« Un bâti au sol, puis le vérin. »"]);
+        assert!(f.due());
+        assert!(f.ask(&base_url(), None).url.ends_with("&depuis=3"), "an empty line is not asked for again");
+        let texts = f.answered(&progress(
+            json!([{"n": 2, "texte": "déjà vue"}, {"n": 4, "genre": "controle", "texte": "Essai 1 : 1 pièce en l'air, correction…"}]),
+            true,
+        ));
+        assert_eq!(texts, ["\nEssai 1 : 1 pièce en l'air, correction…"]);
+        assert!(!f.due() && f.wait().is_none(), "the request is done: no more reads");
+    }
+
+    /// A relay without the progress route (or one that fails) is left alone after a few reads; a
+    /// read that never answers counts as failed after a while, and the next one goes.
+    #[test]
+    fn a_relay_without_progress_is_left_alone_after_a_few_reads() {
+        use std::time::Duration;
+        let mut f = Follow::new("0123456789abcdef".into(), Duration::ZERO);
+        f.ask("http://127.0.0.1:3998/api/cad/ia/v1", None);
+        f.since = web_time::Instant::now().checked_sub(PROGRESS_TIMEOUT + Duration::from_secs(1)).unwrap();
+        assert!(f.due(), "a read left unanswered too long counts as failed");
+        for answer in [Err("refused".to_string()), Ok((404, b"<html>".to_vec()))] {
+            assert!(f.due());
+            f.ask("http://127.0.0.1:3998/api/cad/ia/v1", None);
+            assert!(f.answered(&answer).is_empty());
+        }
+        assert!(!f.due() && f.wait().is_none(), "three failures in a row: no more reads");
+        let mut g = Follow::new("0123456789abcdef".into(), Duration::ZERO);
+        for _ in 0..2 {
+            g.ask("http://127.0.0.1:3998/api/cad/ia/v1", None);
+            g.answered(&Ok((200, b"{\"autre\": 1}".to_vec())));
+        }
+        g.ask("http://127.0.0.1:3998/api/cad/ia/v1", None);
+        assert!(g.answered(&progress(json!([]), false)).is_empty());
+        assert!(g.due(), "an answer of the route starts the count again");
     }
 
     #[test]

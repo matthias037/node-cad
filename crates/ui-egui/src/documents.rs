@@ -368,6 +368,18 @@ pub fn active_is_blank(app: &SolveApp) -> bool {
     s.path.is_none() && s.doc.features.is_empty() && s.doc.params.is_empty() && s.doc.components.is_empty() && !s.is_dirty()
 }
 
+/// The name of the NØDE logo NØDE CAD opens on when no design is given (built from
+/// `solidcraft_engine::sample::logo` by the desktop and the web app). The same sample opened from
+/// Home is named after the sample.
+pub const LOGO_NAME: &str = "Logo NØDE";
+
+/// Is the active design the logo as NØDE CAD opened on it: never saved, nothing changed in it
+/// (an edit, a rename or a save makes it a design like any other)?
+pub fn active_is_untouched_logo(app: &SolveApp) -> bool {
+    let s = &app.session;
+    s.path.is_none() && s.doc.name == LOGO_NAME && !s.doc.features.is_empty() && !s.is_dirty()
+}
+
 /// Show `session` (a design built or read elsewhere): in place of a blank active design,
 /// otherwise in a new tab.
 pub fn adopt(app: &mut SolveApp, session: Session) {

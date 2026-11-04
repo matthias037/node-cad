@@ -37,6 +37,8 @@ const DROPPED_THINKING_NOTE: &str = "[earlier reasoning, removed with older hist
 const TOOL_TIMEOUT: Duration = Duration::from_secs(330);
 /// How often a waiting request or tool call looks at the cancel flag.
 const CANCEL_POLL: Duration = Duration::from_millis(40);
+/// How often NØDE IA's progress is read while its request runs (tests read it more often).
+const PROGRESS_EVERY: Duration = if cfg!(test) { Duration::from_millis(30) } else { super::node_ia::PROGRESS_EVERY };
 /// The Anthropic Messages API requires `max_tokens`; it caps one answer, which is plenty for a
 /// chat reply and for the tool calls in it.
 const ANTHROPIC_MAX_TOKENS: u64 = 8192;
@@ -1295,6 +1297,11 @@ impl Worker {
                 Protocol::Anthropic => headers.push(("x-api-key".into(), k.clone())),
             }
         }
+        // NØDE IA says what it does while it works: each request names itself, and `send` reads
+        // its progress until the answer comes.
+        if self.cfg.protocol == Protocol::OpenAi && super::node_ia::is_node_ia(&self.cfg.base_url) {
+            headers.push((super::node_ia::REQUEST_HEADER.to_string(), super::node_ia::request_id()));
+        }
         self.post_to(url, headers, body)
     }
 
@@ -1313,11 +1320,13 @@ impl Worker {
     }
 
     /// The request runs on a thread of its own so that Stop does not wait for the model: a
-    /// cancelled one is abandoned (the host's own timeout ends it) and its answer dropped.
+    /// cancelled one is abandoned (the host's own timeout ends it) and its answer dropped. A
+    /// request to NØDE IA that names itself has its progress read meanwhile ([`Worker::follow`]).
     fn send(&self, req: HttpRequest) -> Result<(u16, Value), String> {
         let (tx, rx) = channel();
         let http = self.cfg.http.clone();
         let started = std::time::Instant::now();
+        let mut follow = super::node_ia::Follow::of(&req, PROGRESS_EVERY).map(|f| (f, None));
         std::thread::spawn(move || {
             let _ = tx.send(http(&req));
         });
@@ -1334,8 +1343,38 @@ impl Worker {
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => return Err(timed_out(self.limit_s())),
                 Err(_) => return Err("the request ended without an answer".into()),
             }
+            if let Some((f, reading)) = follow.as_mut() {
+                self.follow(f, reading);
+            }
         };
         Ok((status, serde_json::from_slice(&bytes).unwrap_or(Value::Null)))
+    }
+
+    /// What NØDE IA does while its request runs: the answer of the read in flight (`reading`), its
+    /// new lines shown as dimmed thoughts, and the next read once it is due, on a thread of its own
+    /// so that neither Stop nor the answer waits for it. A read still running when the answer
+    /// comes, or replaced after its timeout, is left to end on its own.
+    fn follow(&self, f: &mut super::node_ia::Follow, reading: &mut Option<Receiver<super::backend::HttpAnswer>>) {
+        let answer = match reading.as_ref().map(Receiver::try_recv) {
+            Some(Ok(answer)) => Some(answer),
+            Some(Err(std::sync::mpsc::TryRecvError::Disconnected)) => Some(Err("the progress read ended without an answer".into())),
+            Some(Err(std::sync::mpsc::TryRecvError::Empty)) | None => None,
+        };
+        if let Some(answer) = answer {
+            *reading = None;
+            for text in f.answered(&answer) {
+                self.emit(Event::Text { thought: true, text });
+            }
+        }
+        if f.due() {
+            let req = f.ask(&self.cfg.base_url, self.cfg.key.as_deref());
+            let (tx, rx) = channel();
+            let http = self.cfg.http.clone();
+            std::thread::spawn(move || {
+                let _ = tx.send(http(&req));
+            });
+            *reading = Some(rx);
+        }
     }
 }
 
@@ -1706,6 +1745,115 @@ mod tests {
         let sent = seen.lock().unwrap();
         assert_eq!(sent.len(), 2);
         assert_eq!(sent[1]["messages"].as_array().unwrap().last().unwrap()["role"], "tool");
+        b.shutdown(true);
+    }
+
+    /// NØDE IA says what it does while it works: the request names itself, its progress is read
+    /// meanwhile with the account's token, each new line is a dimmed thought shown before the
+    /// answer, and the reads stop with the answer.
+    #[test]
+    fn node_ia_shows_what_it_does_while_its_request_runs() {
+        use super::super::node_ia::REQUEST_HEADER;
+        let reads = Arc::new(std::sync::Mutex::new(Vec::<HttpRequest>::new()));
+        let named = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+        let (third_tx, third_rx) = channel::<()>();
+        let (third_tx, third_rx) = (std::sync::Mutex::new(third_tx), std::sync::Mutex::new(third_rx));
+        let (log, ids) = (reads.clone(), named.clone());
+        let http: HttpFn = Arc::new(move |r: &HttpRequest| {
+            if r.url.ends_with("/models") {
+                return Ok((200, b"{\"data\":[]}".to_vec()));
+            }
+            if r.method == "GET" {
+                let n = {
+                    let mut l = log.lock().unwrap();
+                    l.push(r.clone());
+                    l.len()
+                };
+                let lines = match n {
+                    1 => {
+                        json!([{"n": 1, "t": 0, "genre": "plan", "texte": "Plan en cours…"}, {"n": 2, "t": 700, "genre": "reflexion", "texte": "Un bâti, puis le vérin."}])
+                    }
+                    2 => json!([{"n": 3, "t": 900, "genre": "controle", "texte": "Essai 1 : 1 pièce en l'air, correction…"}]),
+                    _ => {
+                        // The second read was shown: the answer may come.
+                        let _ = third_tx.lock().unwrap().send(());
+                        json!([])
+                    }
+                };
+                return Ok((200, json!({"lignes": lines, "fini": false}).to_string().into_bytes()));
+            }
+            ids.lock().unwrap().extend(r.headers.iter().filter(|(k, _)| k == REQUEST_HEADER).map(|(_, v)| v.clone()));
+            let _ = third_rx.lock().unwrap().recv_timeout(Duration::from_secs(20));
+            Ok((200, json!({"choices": [{"message": {"role": "assistant", "content": "La presse est faite."}}]}).to_string().into_bytes()))
+        });
+        let cfg = ApiConfig {
+            name: "NØDE IA".into(),
+            protocol: Protocol::OpenAi,
+            base_url: "http://127.0.0.1:1/api/cad/ia/v1".into(),
+            model: "mistral-large-latest".into(),
+            key: Some("jeton".into()),
+            http,
+            request_timeout_s: 300,
+        };
+        let ctx = StartContext { cwd: std::env::temp_dir(), bridge: None, tools: None, wake: Box::new(|| {}) };
+        let mut b = ApiBackend::start(cfg, ctx).unwrap();
+        b.prompt(&[PromptPart::Text("une presse".into())]);
+        let events = wait_for_turn(&mut b);
+        let texts: Vec<(bool, &str)> =
+            events.iter().filter_map(|e| if let Event::Text { thought, text } = e { Some((*thought, text.as_str())) } else { None }).collect();
+        assert_eq!(
+            texts,
+            [
+                (true, "Plan en cours…"),
+                (true, "\n« Un bâti, puis le vérin. »"),
+                (true, "\nEssai 1 : 1 pièce en l'air, correction…"),
+                (false, "La presse est faite."),
+            ]
+        );
+        let id = named.lock().unwrap().first().cloned().unwrap_or_default();
+        assert!(id.len() == 32 && id.chars().all(|c| c.is_ascii_hexdigit()), "the request names itself: {id:?}");
+        let sent: Vec<HttpRequest> = reads.lock().unwrap().clone();
+        assert_eq!(sent[0].url, format!("http://127.0.0.1:1/api/cad/ia/v1/progres?requete={id}&depuis=0"));
+        assert_eq!(sent[1].url, format!("http://127.0.0.1:1/api/cad/ia/v1/progres?requete={id}&depuis=2"));
+        assert!(sent.iter().all(|r| r.headers.contains(&("Authorization".to_string(), "Bearer jeton".to_string()))));
+        // The answer came: the reads stop (one may have been on its way), where reading went on
+        // every 30 ms before.
+        std::thread::sleep(Duration::from_millis(200));
+        let count = reads.lock().unwrap().len();
+        std::thread::sleep(Duration::from_millis(300));
+        assert_eq!(reads.lock().unwrap().len(), count, "no read after the answer");
+        b.shutdown(true);
+    }
+
+    /// Another endpoint is not asked for progress, and its requests do not name themselves.
+    #[test]
+    fn other_endpoints_get_no_progress_reads() {
+        let seen = Arc::new(std::sync::Mutex::new(Vec::<HttpRequest>::new()));
+        let log = seen.clone();
+        let http: HttpFn = Arc::new(move |r: &HttpRequest| {
+            log.lock().unwrap().push(r.clone());
+            if r.method == "GET" {
+                return Ok((200, b"{\"data\":[]}".to_vec()));
+            }
+            std::thread::sleep(Duration::from_millis(150));
+            Ok((200, json!({"choices": [{"message": {"role": "assistant", "content": "ok"}}]}).to_string().into_bytes()))
+        });
+        let cfg = ApiConfig {
+            name: "Test".into(),
+            protocol: Protocol::OpenAi,
+            base_url: "http://localhost:1/v1".into(),
+            model: "m".into(),
+            key: None,
+            http,
+            request_timeout_s: 300,
+        };
+        let ctx = StartContext { cwd: std::env::temp_dir(), bridge: None, tools: None, wake: Box::new(|| {}) };
+        let mut b = ApiBackend::start(cfg, ctx).unwrap();
+        b.prompt(&[PromptPart::Text("bonjour".into())]);
+        let events = wait_for_turn(&mut b);
+        assert!(!events.iter().any(|e| matches!(e, Event::Text { thought: true, .. })), "{events:?}");
+        let sent = seen.lock().unwrap();
+        assert!(!sent.iter().any(|r| r.url.contains("/progres") || r.headers.iter().any(|(k, _)| k == super::super::node_ia::REQUEST_HEADER)));
         b.shutdown(true);
     }
 

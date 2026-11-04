@@ -333,8 +333,9 @@ pub struct AgentChat {
     pub node_ia_only: bool,
     /// The NØDE account part of Preferences > AI.
     pub node_ia: node_ia::State,
-    /// Only while dispatching this conversation's own admitted tool request. Window state:
-    /// creating/opening a design may carry the conversation, but a person's tab switch may not.
+    /// Only while dispatching this conversation's own admitted tool request, or while a message to
+    /// NØDE IA leaves the logo NØDE CAD opened on (`leave_the_logo`). Window state: creating or
+    /// opening a design may carry the conversation, but a person's tab switch may not.
     pub(crate) following_document: bool,
     pub items: Vec<Item>,
     pub input: String,
@@ -1310,6 +1311,7 @@ pub fn send(app: &mut SolveApp, ctx: &egui::Context, text: String) {
         }
         return;
     }
+    leave_the_logo(app, &context);
     let files = std::mem::take(&mut app.agent_chat.attachments);
     // Messages left waiting by Stop go first, in one prompt with this one.
     if !app.agent_chat.pending.is_empty() {
@@ -1318,6 +1320,20 @@ pub fn send(app: &mut SolveApp, ctx: &egui::Context, text: String) {
         return;
     }
     submit(app, ctx, text, image, context, files, false);
+}
+
+/// NØDE CAD opens on the NØDE logo, built as a part. A message to NØDE IA sent on that logo as it
+/// opened (nothing changed in it, nothing picked or selected in it for the message) goes to an
+/// empty design in a new tab, which the conversation follows as it follows a design its agent
+/// opens: NØDE IA does not build around the logo, and the logo stays in its tab. A message about
+/// the logo itself goes with what it points at in it, and stays there.
+fn leave_the_logo(app: &mut SolveApp, context: &Context) {
+    if !context.is_empty() || !agents::current(app).is_some_and(|e| e.id == node_ia::ID) || !crate::documents::active_is_untouched_logo(app) {
+        return;
+    }
+    let following = std::mem::replace(&mut app.agent_chat.following_document, true);
+    crate::documents::new_design(app);
+    app.agent_chat.following_document = following;
 }
 
 /// Put `text` in the conversation and send it with its files (`interrupted`: the agent is told it

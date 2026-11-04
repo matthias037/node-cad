@@ -991,7 +991,7 @@ mod web {
                             if let Err(e) = app.session.run_script(&solidcraft_engine::sample::logo()) {
                                 app.set_status(format!("logo: {e}"), true);
                             }
-                            app.session.doc_mut().name = "Logo NØDE".into();
+                            app.session.doc_mut().name = solidcraft_ui_egui::documents::LOGO_NAME.into();
                             app.session.mark_saved();
                         }
                         if launch.open.is_none() && empty {
