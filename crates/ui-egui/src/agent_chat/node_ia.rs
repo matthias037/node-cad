@@ -30,6 +30,12 @@ pub fn site() -> String {
     }
 }
 
+/// How long one NØDE IA request may take. Its server plans, writes a program, has the engine judge
+/// it and asks for corrections, all in one request, and stops asking after 170 s; one correction
+/// takes 30 to 90 s. At 300 s (the other agents' default) a CNC lathe's sixth try came too late
+/// and the work was lost (04/11/2026).
+pub const REQUEST_TIMEOUT_S: u64 = 420;
+
 /// The relay, as an OpenAI-compatible base URL.
 pub fn base_url() -> String {
     format!("{}/api/cad/ia/v1", site())
@@ -215,7 +221,7 @@ pub fn entry(app: &crate::SolveApp) -> Entry {
         base_url: base_url(),
         model: app.preferences.agent_models.get(ID).cloned().filter(|m| !m.is_empty()).unwrap_or_else(|| DEFAULT_MODEL.to_string()),
         key: signed_in(app),
-        request_timeout_s: super::agents::DEFAULT_REQUEST_TIMEOUT_S,
+        request_timeout_s: REQUEST_TIMEOUT_S,
         problem: None,
         install: "",
     }
