@@ -88,6 +88,14 @@ pub struct Core {
     budget_ms: f64,
     /// Since when the calls wait for the next frame.
     paused: Option<Clock>,
+    /// What NØDE IA does while the request in flight runs, read from the relay
+    /// ([`Core::read_progress`]), and how often ([`super::node_ia::PROGRESS_EVERY`]; tests read
+    /// it at once).
+    follow: Option<super::node_ia::Follow>,
+    progress_every: std::time::Duration,
+    /// Where `fetch` leaves the progress answers, each with the number of the request it follows
+    /// (a late one, of a request answered meanwhile, is dropped).
+    progress: Rc<RefCell<Vec<(u64, HttpAnswer)>>>,
 }
 
 /// The tool calls of an answer, run in order over as many frames as they take.
@@ -240,6 +248,9 @@ impl Core {
             work: None,
             budget_ms: FRAME_BUDGET_MS,
             paused: None,
+            follow: None,
+            progress_every: super::node_ia::PROGRESS_EVERY,
+            progress: Rc::default(),
         };
         c.ready();
         c
@@ -289,10 +300,19 @@ impl Core {
         if !self.tools.is_empty() {
             body["tools"] = Value::Array(self.tools.clone());
         }
+        let mut headers = vec![("Content-Type".into(), "application/json".into()), ("Authorization".into(), format!("Bearer {}", self.cfg.token))];
+        // NØDE IA says what it does while it works: the request names itself, and its progress
+        // is read until the answer comes (`read_progress`).
+        self.follow = None;
+        if super::node_ia::is_node_ia(&self.cfg.base_url) {
+            let id = super::node_ia::request_id();
+            headers.push((super::node_ia::REQUEST_HEADER.into(), id.clone()));
+            self.follow = Some(super::node_ia::Follow::new(id, self.progress_every));
+        }
         let request = HttpRequest {
             method: "POST",
             url: format!("{}/chat/completions", self.cfg.base_url),
-            headers: vec![("Content-Type".into(), "application/json".into()), ("Authorization".into(), format!("Bearer {}", self.cfg.token))],
+            headers,
             body: Some(body.to_string().into_bytes()),
             timeout_s: REQUEST_TIMEOUT_S,
         };
@@ -317,6 +337,8 @@ impl Core {
             return None;
         }
         self.waiting = None;
+        // The answer is here: its progress is no longer read.
+        self.follow = None;
         let fail = |c: &mut Core, e: String| {
             c.events.push(Event::Error(e));
             c.events.push(Event::TurnEnded { reason: "error".into() });
@@ -367,10 +389,38 @@ impl Core {
     }
 
     fn cancel(&mut self) {
+        self.follow = None;
         if self.waiting.take().is_some() {
             self.history.truncate(self.sound);
             self.events.push(Event::TurnEnded { reason: "cancelled".into() });
         }
+    }
+
+    /// What NØDE IA does while the request in flight runs: the answer of the last read, its new
+    /// lines as dimmed thoughts, and the next read once it is due, through the page's `fetch`
+    /// (the window draws on meanwhile). How long until the next read, when one is to come: a
+    /// read in flight wakes the window itself when its answer arrives.
+    fn read_progress(&mut self) -> Option<std::time::Duration> {
+        let answers = std::mem::take(&mut *self.progress.borrow_mut());
+        let follow = self.follow.as_mut()?;
+        let waiting = self.waiting?;
+        for (_, answer) in answers.iter().filter(|(serial, _)| *serial == waiting) {
+            for text in follow.answered(answer) {
+                self.events.push(Event::Text { thought: true, text });
+            }
+        }
+        if follow.due() {
+            let request = follow.ask(&self.cfg.base_url, Some(&self.cfg.token));
+            let (inbox, wake) = (self.progress.clone(), self.cfg.wake.clone());
+            (self.cfg.fetch)(
+                request,
+                Box::new(move |answer| {
+                    inbox.borrow_mut().push((waiting, answer));
+                    wake();
+                }),
+            );
+        }
+        follow.wait()
     }
 }
 
@@ -504,6 +554,11 @@ impl solidcraft_mcp::Backend for InPage<'_> {
 /// ([`FRAME_BUDGET_MS`]), then ask the model again. Called each frame.
 pub fn pump(app: &mut SolveApp, ctx: &egui::Context) {
     let Some(core) = app.agent_chat.web.clone() else { return };
+    // While the model works, what it does (NØDE IA), read about every second.
+    let next_read = core.borrow_mut().read_progress();
+    if let Some(wait) = next_read {
+        ctx.request_repaint_after(wait);
+    }
     let kept = core.borrow_mut().work.take();
     let Some(mut work) = kept.or_else(|| core.borrow_mut().answered().map(Work::new)) else { return };
     let (budget_ms, paused) = {

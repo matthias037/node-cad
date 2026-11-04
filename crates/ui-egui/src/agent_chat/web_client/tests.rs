@@ -85,6 +85,47 @@ fn a_message_goes_to_the_relay_and_a_plain_answer_ends_the_turn() {
     assert_eq!(net.count(), 1, "nothing more was asked");
 }
 
+/// NØDE IA says what it does while it works: the request names itself, the page reads its
+/// progress through `fetch` while it waits (one read at a time, nothing held between frames),
+/// each new line shows as a dimmed thought before the answer, and the reads stop with the answer.
+#[test]
+fn what_node_ia_does_shows_while_the_page_waits_for_its_answer() {
+    let net = Net::default();
+    let (mut app, ctx) = app_with_web(&net);
+    app.agent_chat.web.as_ref().unwrap().borrow_mut().progress_every = std::time::Duration::ZERO;
+    send(&mut app, &ctx, "une presse".into());
+    let id = net.sent.borrow()[0].0.headers.iter().find(|(k, _)| k == super::super::node_ia::REQUEST_HEADER).map(|(_, v)| v.clone()).unwrap();
+    assert_eq!(id.len(), 32);
+    poll(&mut app, &ctx);
+    assert_eq!(net.count(), 2, "a progress read went");
+    let read = net.sent.borrow()[1].0.clone();
+    assert_eq!((read.method, read.url), ("GET", format!("https://node-os.fr/api/cad/ia/v1/progres?requete={id}&depuis=0")));
+    assert!(read.headers.iter().any(|(k, v)| k == "Authorization" && v == "Bearer jeton"));
+    poll(&mut app, &ctx);
+    assert_eq!(net.count(), 2, "one read at a time");
+    let lines = json!([{"n": 1, "t": 0, "genre": "plan", "texte": "Plan en cours…"}, {"n": 2, "t": 800, "genre": "reflexion", "texte": "Un bâti, un vérin."}]);
+    net.answer(1, 200, json!({"lignes": lines, "fini": false}));
+    poll(&mut app, &ctx);
+    assert!(
+        app.agent_chat.items.iter().any(|i| matches!(i, Item::Agent { thought: true, text } if text == "Plan en cours…\n« Un bâti, un vérin. »")),
+        "{:?}",
+        app.agent_chat.items
+    );
+    assert_eq!(app.agent_chat.state(), State::Busy);
+    assert_eq!(net.count(), 3, "the next read");
+    assert!(net.sent.borrow()[2].0.url.ends_with("&depuis=2"));
+    // The answer comes: the reads stop, and a late progress answer changes nothing.
+    net.answer(0, 200, says("La presse est faite."));
+    poll(&mut app, &ctx);
+    net.answer(2, 200, json!({"lignes": [{"n": 3, "t": 900, "genre": "controle", "texte": "Trop tard."}], "fini": true}));
+    poll(&mut app, &ctx);
+    poll(&mut app, &ctx);
+    assert_eq!(net.count(), 3, "no read after the answer");
+    assert_eq!(app.agent_chat.state(), State::Ready);
+    assert!(!format!("{:?}", app.agent_chat.items).contains("Trop tard."));
+    assert!(app.agent_chat.items.iter().any(|i| matches!(i, Item::Agent { thought: false, text } if text == "La presse est faite.")));
+}
+
 /// A tool call runs in the page through the gate and changes the design; its result goes back
 /// to the model with the next request, and the turn ends on the model's last answer.
 #[test]

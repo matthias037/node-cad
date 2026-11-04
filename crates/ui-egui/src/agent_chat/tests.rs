@@ -1066,6 +1066,65 @@ fn texts(app: &SolveApp) -> Vec<String> {
     app.agent_chat.pending.iter().map(|p| p.text.clone()).collect()
 }
 
+/// The NØDE logo as NØDE CAD opens on it (the desktop and the web app do the same).
+fn opening_logo(app: &mut SolveApp) {
+    app.session.run_script(&solidcraft_engine::sample::logo()).unwrap();
+    app.session.doc_mut().name = crate::documents::LOGO_NAME.into();
+    app.session.mark_saved();
+    app.session.undo.clear();
+}
+
+/// A message to NØDE IA on the logo NØDE CAD opened on goes to an empty design in a new tab, with
+/// the conversation and its agent: the logo stays in its tab, untouched, with a chat of its own.
+#[test]
+fn a_message_to_node_ia_on_the_opening_logo_starts_on_an_empty_design() {
+    let (mut app, script, ctx) = app_with_script();
+    app.agent_chat.node_ia_only = true;
+    app.agent_chat.open = true;
+    opening_logo(&mut app);
+    assert!(crate::documents::active_is_untouched_logo(&app));
+    send(&mut app, &ctx, "Fais-moi une bride DN50".into());
+    assert_eq!(app.docs.count(), 2, "an empty tab opened");
+    assert!(app.session.doc.features.is_empty() && app.session.path.is_none() && !app.session.is_dirty(), "the message goes on an empty design");
+    assert_eq!(script.calls(), ["prompt: Fais-moi une bride DN50"], "the same agent got it");
+    assert!(app.agent_chat.backend.is_some() && app.agent_chat.open);
+    assert!(app.agent_chat.items.iter().any(|i| matches!(i, Item::User { text, .. } if text == "Fais-moi une bride DN50")));
+    assert!(app.agent_chat.turn.as_ref().is_some_and(|t| t.started_empty), "the view is framed on what it builds");
+    let logo = app.docs.background().find(|s| s.doc.name == crate::documents::LOGO_NAME);
+    assert!(logo.is_some_and(|s| !s.doc.features.is_empty() && !s.is_dirty()), "the logo stays as it was");
+    // Its next message stays in the design it works in.
+    ended(&script, "");
+    poll(&mut app, &ctx);
+    send(&mut app, &ctx, "Ajoute 4 trous".into());
+    assert_eq!(app.docs.count(), 2);
+}
+
+/// A message stays on the logo when it is not the logo as it opened (changed, or the sample opened
+/// from Home), when it points at something in it, or when the agent is not NØDE IA.
+#[test]
+fn a_message_stays_on_a_changed_logo_on_what_it_points_at_and_with_other_agents() {
+    for case in ["changed", "picked", "other agent", "sample from Home"] {
+        let (mut app, script, ctx) = app_with_script();
+        app.agent_chat.node_ia_only = case != "other agent";
+        opening_logo(&mut app);
+        match case {
+            "changed" => {
+                app.run("parameters.change", json!({"name": "relief", "expression": "14 mm"})).unwrap();
+            }
+            "picked" => app.agent_chat.picked_context = Context { items: Vec::new(), omitted: 1 },
+            "sample from Home" => {
+                app.session.doc_mut().name = "NØDE Logo".into();
+                app.session.mark_saved();
+            }
+            _ => {}
+        }
+        send(&mut app, &ctx, "Change la couleur de la barre".into());
+        assert_eq!(app.docs.count(), 1, "{case}");
+        assert!(!app.session.doc.features.is_empty(), "{case}");
+        assert_eq!(script.calls().len(), 1, "{case}");
+    }
+}
+
 /// While the agent works a message is queued, not dropped and not sent; it is not in the
 /// transcript as a sent message, but waits as a pending one that can be edited and removed.
 #[test]
