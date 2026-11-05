@@ -1,7 +1,9 @@
 //! Mistral, NØDE's AI provider, through its OpenAI-compatible chat endpoint, and its OCR for the
 //! documents a person attaches: a PDF, a Word or PowerPoint file goes to `POST /v1/ocr`, and the
 //! agent receives the pages as Markdown plus the pictures found in them (a scanned plan, a
-//! drawing), which the chat model then looks at like any attached picture.
+//! drawing), which the chat model then looks at like any attached picture. NØDE IA's relay
+//! answers the same route with its own reading: a plan's pages drawn large with their exact text,
+//! a DXF's entities; it is told the file's name.
 use serde_json::{Value, json};
 
 use super::backend::{HttpFn, HttpRequest, PromptPart};
@@ -28,15 +30,20 @@ pub fn is_mistral(base_url: &str) -> bool {
     host == "api.mistral.ai" || host.starts_with("api.mistral.ai/")
 }
 
-/// The OCR request for one document.
-pub fn ocr_request(base_url: &str, key: Option<&str>, mime: &str, base64: &str) -> HttpRequest {
+/// The OCR request for one document; `name`, the file's name, goes only to NØDE IA's relay (it
+/// names the plan it reads), never to Mistral's own API.
+pub fn ocr_request(base_url: &str, key: Option<&str>, mime: &str, base64: &str, name: Option<&str>) -> HttpRequest {
     let mut headers = vec![("Content-Type".to_string(), "application/json".to_string())];
     if let Some(k) = key {
         headers.push(("Authorization".to_string(), format!("Bearer {k}")));
     }
+    let mut document = json!({"type": "document_url", "document_url": format!("data:{mime};base64,{base64}")});
+    if let Some(n) = name.filter(|_| super::node_ia::is_node_ia(base_url)) {
+        document["document_name"] = json!(n);
+    }
     let body = json!({
         "model": OCR_MODEL,
-        "document": {"type": "document_url", "document_url": format!("data:{mime};base64,{base64}")},
+        "document": document,
         "include_image_base64": true,
     });
     HttpRequest {
@@ -53,19 +60,25 @@ pub fn ocr_request(base_url: &str, key: Option<&str>, mime: &str, base64: &str) 
 /// like the API agents that call it.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn read_document(http: &HttpFn, base_url: &str, key: Option<&str>, name: &str, mime: &str, base64: &str) -> Vec<PromptPart> {
-    let answer = http(&ocr_request(base_url, key, mime, base64)).and_then(|(status, body)| {
+    let answer = http(&ocr_request(base_url, key, mime, base64, Some(name))).and_then(|(status, body)| {
         let v: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
         if status == 200 { Ok(v) } else { Err(super::api_client::http_error(status, &v)) }
     });
+    let reader = if super::node_ia::is_node_ia(base_url) { "NØDE IA" } else { "l'OCR de Mistral" };
     match answer {
-        Ok(v) => ocr_parts(name, &v),
-        Err(e) => vec![PromptPart::Text(format!("\n\nLe document `{name}` n'a pas pu être lu par l'OCR de Mistral : {e}."))],
+        Ok(v) => ocr_parts_by(name, &v, reader),
+        Err(e) => vec![PromptPart::Text(format!("\n\nLe document `{name}` n'a pas pu être lu par {reader} : {e}."))],
     }
 }
 
 /// The parts for an OCR answer: the pages as Markdown (cut past [`MAX_OCR_CHARS`]), then up to
 /// [`MAX_OCR_PICTURES`] of the pictures found in them.
 pub fn ocr_parts(name: &str, answer: &Value) -> Vec<PromptPart> {
+    ocr_parts_by(name, answer, "l'OCR de Mistral")
+}
+
+/// [`ocr_parts`], the text naming who read the document (`reader`).
+pub fn ocr_parts_by(name: &str, answer: &Value, reader: &str) -> Vec<PromptPart> {
     let pages = answer.get("pages").and_then(Value::as_array).cloned().unwrap_or_default();
     let mut text = String::new();
     let mut pictures = Vec::new();
@@ -89,7 +102,7 @@ pub fn ocr_parts(name: &str, answer: &Value) -> Vec<PromptPart> {
     } else {
         text
     };
-    let mut head = format!("\n\nDocument `{name}` lu par l'OCR de Mistral ({} page{}).", pages.len(), if pages.len() > 1 { "s" } else { "" });
+    let mut head = format!("\n\nDocument `{name}` lu par {reader} ({} page{}).", pages.len(), if pages.len() > 1 { "s" } else { "" });
     if !pictures.is_empty() {
         head += &format!(" Les {} image(s) qu'il contient suivent ce texte.", pictures.len());
     }
@@ -125,13 +138,19 @@ mod tests {
 
     #[test]
     fn the_ocr_request_sends_the_document_as_a_data_url() {
-        let r = ocr_request("https://api.mistral.ai/v1/", Some("k"), "application/pdf", "QUJD");
+        let r = ocr_request("https://api.mistral.ai/v1/", Some("k"), "application/pdf", "QUJD", Some("plan.pdf"));
         assert_eq!(r.url, "https://api.mistral.ai/v1/ocr");
         assert!(r.headers.iter().any(|(k, v)| k == "Authorization" && v == "Bearer k"));
         let body: Value = serde_json::from_slice(r.body.as_deref().unwrap_or_default()).unwrap_or(Value::Null);
         assert_eq!(body["model"], OCR_MODEL);
         assert_eq!(body["document"]["document_url"], "data:application/pdf;base64,QUJD");
         assert_eq!(body["include_image_base64"], true);
+        assert!(body["document"].get("document_name").is_none(), "Mistral's own API is not sent the name");
+        // NØDE IA's relay is told the file's name (it names the plan it reads), a DXF as well.
+        let r = ocr_request("https://node-os.fr/api/cad/ia/v1", Some("t"), "image/vnd.dxf", "QUJD", Some("bride.dxf"));
+        let body: Value = serde_json::from_slice(r.body.as_deref().unwrap_or_default()).unwrap_or(Value::Null);
+        assert_eq!(body["document"]["document_name"], "bride.dxf");
+        assert_eq!(body["document"]["document_url"], "data:image/vnd.dxf;base64,QUJD");
     }
 
     #[test]
@@ -164,6 +183,10 @@ mod tests {
         let http: HttpFn = std::sync::Arc::new(|_| Ok((401, br#"{"message":"Unauthorized"}"#.to_vec())));
         let parts = read_document(&http, BASE_URL, Some("bad"), "devis.pdf", "application/pdf", "QUJD");
         let PromptPart::Text(t) = &parts[0] else { panic!("text") };
-        assert!(t.contains("`devis.pdf`") && t.contains("HTTP 401"), "{t}");
+        assert!(t.contains("`devis.pdf`") && t.contains("HTTP 401") && t.contains("l'OCR de Mistral"), "{t}");
+        let ok: HttpFn = std::sync::Arc::new(|_| Ok((200, br#"{"pages":[{"index":0,"markdown":"Plan","images":[]}]}"#.to_vec())));
+        let parts = read_document(&ok, "https://node-os.fr/api/cad/ia/v1", Some("t"), "plan.pdf", "application/pdf", "QUJD");
+        let PromptPart::Text(t) = &parts[0] else { panic!("text") };
+        assert!(t.contains("Document `plan.pdf` lu par NØDE IA (1 page)."), "{t}");
     }
 }

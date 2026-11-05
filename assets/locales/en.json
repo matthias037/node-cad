@@ -4342,6 +4342,7 @@
   "ui.agent_chat_file_empty_picture": "{name}: an empty picture",
   "ui.agent_chat_file_error": "{name}: {error}",
   "ui.agent_chat_file_heic": "{name}: HEIC pictures can't be read here; export it as JPEG or PNG first",
+  "ui.agent_chat_file_dwg": "{name}: DWG drawings can't be read (a closed format); save it as DXF or PDF from your CAD software, then attach that file",
   "ui.agent_chat_file_importing": "Importing into the design…",
   "ui.agent_chat_file_kinds": "{name}: pictures (PNG, JPEG, GIF, WebP, BMP, TIFF), text files (SVG too) and CAD files (STEP, IGES, FreeCAD, Rhino, STL, 3MF, OBJ, glTF) can be attached",
   "ui.agent_chat_file_loading": "Reading the file…",

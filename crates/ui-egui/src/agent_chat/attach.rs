@@ -1,10 +1,13 @@
 //! Files a person adds to a message (the + button, a drop on the chat, a paste): pictures go to the
 //! agent with it, text files go in as text, PDFs and Word or PowerPoint files go as documents to
-//! agents that take them (Mistral reads them with its OCR), spreadsheets go in as tables of text,
-//! CNC programs as text with the control they are probably written for, CAD files are imported
-//! into the design, and any other file is named by reference (its type, size and place on this
-//! machine) for the agent to read with its own tools. The agent is told what arrived. Each file is
-//! checked and bounded before it is kept; a refused one says why.
+//! agents that take them (Mistral reads them with its OCR), a DXF drawing goes as a document to
+//! NØDE IA (its server reads the entities and draws it) and by reference to any other agent,
+//! spreadsheets go in as tables of text, CNC programs as text with the control they are probably
+//! written for, CAD files (and NØDE CAD designs) are imported into the design, and any other file
+//! is named by reference (its type, size and place on this machine) for the agent to read with its
+//! own tools. A DWG is refused with what to send instead; a HEIC photo is converted to JPEG on a
+//! Mac (`sips`). The agent is told what arrived. Each file is checked and bounded before it is
+//! kept; a refused one says why.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -44,12 +47,15 @@ const MAX_DECODE_SIDE: u32 = 20_000;
 /// The chip's picture.
 const THUMB: u32 = 64;
 
-/// Pictures the agents read as they are; BMP and TIFF are sent as PNG.
-const PICTURE_EXTS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff"];
+/// Pictures the agents read as they are; BMP and TIFF are sent as PNG, HEIC (an iPhone's photos)
+/// as JPEG once the Mac has converted it.
+const PICTURE_EXTS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff", "heic", "heif"];
 /// Text sent in full; SVG goes as its source, which the agents read well.
 const TEXT_EXTS: &[&str] = &["svg", "txt", "md", "markdown", "json", "csv", "tsv", "yaml", "yml", "toml", "xml", "log", "ini", "cfg"];
 /// Documents sent whole to the agents that read them, like a PDF: Mistral's OCR takes these.
 const DOCUMENT_EXTS: &[&str] = &["pdf", "docx", "pptx"];
+/// 2D drawings sent whole to NØDE IA, whose server reads their entities (and to no other agent).
+const DRAWING_EXTS: &[&str] = &["dxf"];
 /// Spreadsheets, sent as tables of text.
 const SHEET_EXTS: &[&str] = &["xlsx", "xlsm", "xls", "ods"];
 /// CNC programs, sent as text with the control they are probably written for.
@@ -60,12 +66,28 @@ const MAX_SHEET_BYTES: u64 = 20 * 1024 * 1024;
 const MAX_SHEET_ROWS: usize = 500;
 const MAX_SHEET_COLS: usize = 40;
 /// CAD files and meshes, imported into the design (the file picker's list; [`kind`] asks the
-/// importers themselves).
-const CAD_EXTS: &[&str] = &["step", "stp", "igs", "iges", "FCStd", "3dm", "stl", "3mf", "obj", "glb", "gltf"];
+/// importers themselves). A NØDE CAD design comes in as a component linked to its file.
+const CAD_EXTS: &[&str] = &["step", "stp", "igs", "iges", "FCStd", "3dm", "stl", "3mf", "obj", "glb", "gltf", "nodecad"];
+/// NØDE CAD's own designs, inserted as a linked component (`component.insert_design`).
+pub const DESIGN_EXTS: &[&str] = &["nodecad"];
 
 /// Every extension the file picker lists first, pictures first (any other file can be chosen too).
 pub fn extensions() -> Vec<&'static str> {
-    PICTURE_EXTS.iter().chain(TEXT_EXTS).chain(CAD_EXTS).chain(DOCUMENT_EXTS).chain(SHEET_EXTS).chain(PROGRAM_EXTS).copied().collect()
+    PICTURE_EXTS
+        .iter()
+        .chain(TEXT_EXTS)
+        .chain(CAD_EXTS)
+        .chain(DOCUMENT_EXTS)
+        .chain(DRAWING_EXTS)
+        .chain(SHEET_EXTS)
+        .chain(PROGRAM_EXTS)
+        .copied()
+        .collect()
+}
+
+/// Whether a path is a NØDE CAD design (`.nodecad`, any case).
+pub fn is_design_path(path: &Path) -> bool {
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| DESIGN_EXTS.iter().any(|d| e.eq_ignore_ascii_case(d)))
 }
 
 /// What a file is, by its extension.
@@ -76,6 +98,10 @@ pub enum Kind {
     Cad,
     /// A PDF, or a Word or PowerPoint document read like one.
     Pdf,
+    /// A DXF drawing: a document to NØDE IA, a reference to any other agent.
+    Drawing,
+    /// A DWG drawing: refused, with what to send instead (no free reader exists for it).
+    Dwg,
     /// An Excel or OpenDocument spreadsheet.
     Sheet,
     /// A CNC program (G-code, Heidenhain, Sinumerik…).
@@ -90,6 +116,9 @@ pub fn kind(path: &Path) -> Kind {
         e if PICTURE_EXTS.contains(&e) => Kind::Picture,
         e if TEXT_EXTS.contains(&e) => Kind::Text,
         e if DOCUMENT_EXTS.contains(&e) => Kind::Pdf,
+        e if DRAWING_EXTS.contains(&e) => Kind::Drawing,
+        "dwg" => Kind::Dwg,
+        e if DESIGN_EXTS.contains(&e) => Kind::Cad,
         e if SHEET_EXTS.contains(&e) => Kind::Sheet,
         e if PROGRAM_EXTS.contains(&e) => Kind::Program,
         _ => {
@@ -225,6 +254,9 @@ pub fn read(path: &Path) -> Result<Attachment, String> {
             if meta.len() > MAX_PICTURE_BYTES {
                 return Err(refused("ui.agent_chat_file_picture_too_big", &name, &[("max", &(MAX_PICTURE_BYTES / 1024 / 1024).to_string())]));
             }
+            if is_heic(path) {
+                return heic(path, name);
+            }
             let bytes = std::fs::read(path).map_err(|e| failed(&name, e))?;
             picture(name, &bytes)
         }
@@ -255,18 +287,21 @@ pub fn read(path: &Path) -> Result<Attachment, String> {
             let text = format!("Programme CN — commande probable : {}\n\n{text}", cnc_control(&text));
             Ok(Attachment { id: 0, name, content: Content::Text(Arc::new(text)), thumb: None })
         }
-        Kind::Pdf => {
+        Kind::Pdf | Kind::Drawing => {
             let path = absolute(path);
             // Too big to send: the agent is pointed to it instead.
             if meta.len() > MAX_PDF_BYTES {
-                return Ok(Attachment { id: 0, name, content: Content::Reference { path, size: meta.len(), mime: "application/pdf" }, thumb: None });
+                return Ok(Attachment {
+                    id: 0,
+                    name,
+                    content: Content::Reference { path: path.clone(), size: meta.len(), mime: mime_of(&path) },
+                    thumb: None,
+                });
             }
             let bytes = std::fs::read(&path).map_err(|e| failed(&name, e))?;
             Ok(Attachment { id: 0, name, content: Content::Pdf { bytes: Arc::new(bytes), path }, thumb: None })
         }
-        Kind::Other if matches!(path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).as_deref(), Some("heic" | "heif")) => {
-            Err(refused("ui.agent_chat_file_heic", &name, &[]))
-        }
+        Kind::Dwg => Err(refused("ui.agent_chat_file_dwg", &name, &[])),
         Kind::Other => {
             Ok(Attachment { id: 0, name, content: Content::Reference { path: absolute(path), size: meta.len(), mime: mime_of(path) }, thumb: None })
         }
@@ -319,6 +354,50 @@ pub fn cnc_control(program: &str) -> &'static str {
     } else {
         "ISO / RS-274 (G-code générique)"
     }
+}
+
+/// Whether a path is a HEIC or HEIF photo (an iPhone's).
+fn is_heic(path: &Path) -> bool {
+    matches!(path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).as_deref(), Some("heic" | "heif"))
+}
+
+/// Whether a path is a 2D drawing NØDE IA reads ([`DRAWING_EXTS`]).
+fn is_drawing(path: &Path) -> bool {
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| DRAWING_EXTS.iter().any(|d| e.eq_ignore_ascii_case(d)))
+}
+
+/// A HEIC photo converted to JPEG by the Mac's own `sips` (part of macOS), then sent like any
+/// picture. Elsewhere, or if the conversion fails, it is refused with what to do: no free decoder
+/// of HEIC ships with the app.
+fn heic(path: &Path, name: String) -> Result<Attachment, String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static N: AtomicU64 = AtomicU64::new(0);
+        let dir = std::env::temp_dir().join(format!("solidcraft-heic-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+        let jpeg = (|| {
+            std::fs::create_dir_all(&dir).ok()?;
+            let out = dir.join("photo.jpg");
+            let ok = std::process::Command::new("/usr/bin/sips")
+                .args(["-s", "format", "jpeg", "-s", "formatOptions", "90"])
+                .arg(path)
+                .arg("--out")
+                .arg(&out)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .ok()?
+                .success();
+            if ok { std::fs::read(&out).ok() } else { None }
+        })();
+        let _ = std::fs::remove_dir_all(&dir);
+        if let Some(bytes) = jpeg {
+            return picture(name, &bytes);
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = path;
+    Err(refused("ui.agent_chat_file_heic", &name, &[]))
 }
 
 /// The path as an absolute one, so the agent (working in another folder) finds the file.
@@ -424,10 +503,11 @@ fn thumbnail(img: &image::DynamicImage) -> Option<Arc<egui::ColorImage>> {
 
 /// What the message says about its files, after the person's words: the text files' text, and the
 /// pictures and imported parts by name (the agent sees the pictures themselves as images).
-/// `pictures_sent` and `documents_sent`: whether this agent takes pictures and PDFs. The text files share `budget` characters
+/// `pictures_sent`, `documents_sent` and `drawings_sent`: whether this agent takes pictures, PDFs
+/// and DXF drawings (NØDE IA only). The text files share `budget` characters
 /// in order: one that doesn't fit is cut and says how much is missing, and one past the budget
 /// is named only, so the message stays within the prompt cap.
-pub fn note(files: &[Attachment], pictures_sent: bool, documents_sent: bool, budget: usize) -> String {
+pub fn note(files: &[Attachment], pictures_sent: bool, documents_sent: bool, drawings_sent: bool, budget: usize) -> String {
     let mut out = String::new();
     let pictures: Vec<&str> = files.iter().filter(|f| f.is_picture()).map(|f| f.name.as_str()).collect();
     if !pictures.is_empty() {
@@ -455,7 +535,7 @@ pub fn note(files: &[Attachment], pictures_sent: bool, documents_sent: bool, bud
                     left = 0;
                 }
             }
-            Content::Pdf { path, bytes } if documents_sent => {
+            Content::Pdf { path, bytes } if (if is_drawing(path) { drawings_sent } else { documents_sent }) => {
                 out += &format!(
                     "\n\nAttached document `{}` ({}, at {}): sent with this message as a document.",
                     f.name,
@@ -463,11 +543,12 @@ pub fn note(files: &[Attachment], pictures_sent: bool, documents_sent: bool, bud
                     path.display()
                 );
             }
-            // An agent that takes no documents is pointed to the file, as for any other file.
+            // An agent that takes no documents (or no drawings) is pointed to the file, as for any other file.
             Content::Pdf { path, bytes } => {
                 out += &format!(
-                    "\n\nAttached file `{}` (PDF, {}, at {}): read it with your own tools; it is not in this message.",
+                    "\n\nAttached file `{}` ({}, {}, at {}): read it with your own tools; it is not in this message.",
                     f.name,
+                    if is_drawing(path) { "DXF" } else { "PDF" },
                     size_text(bytes.len() as u64),
                     path.display()
                 );
@@ -487,13 +568,13 @@ pub fn note(files: &[Attachment], pictures_sent: bool, documents_sent: bool, bud
     out
 }
 
-/// The pictures and PDFs as parts of the message, to the agents that take them.
-pub fn parts(files: &[Attachment], pictures: bool, documents: bool) -> Vec<PromptPart> {
+/// The pictures, PDFs and DXF drawings as parts of the message, to the agents that take them.
+pub fn parts(files: &[Attachment], pictures: bool, documents: bool, drawings: bool) -> Vec<PromptPart> {
     files
         .iter()
         .filter_map(|f| match &f.content {
             Content::Picture { mime, bytes, .. } if pictures => Some(PromptPart::Image { mime: (*mime).to_string(), base64: backend::base64(bytes) }),
-            Content::Pdf { bytes, path } if documents => Some(PromptPart::Document {
+            Content::Pdf { bytes, path } if (if is_drawing(path) { drawings } else { documents }) => Some(PromptPart::Document {
                 name: f.name.clone(),
                 uri: file_uri(path),
                 mime: mime_of(path).to_string(),
@@ -677,12 +758,12 @@ mod tests {
     fn attached_text_is_kept_within_the_prompt_budget() {
         let file = |n: &str, len: usize| Attachment { id: 0, name: n.into(), content: Content::Text(Arc::new("x".repeat(len))), thumb: None };
         let files = vec![file("a.md", 600), file("b.md", 600), file("c.md", 600)];
-        let n = note(&files, true, false, 1000);
+        let n = note(&files, true, false, false, 1000);
         assert!(n.contains("`a.md`") && n.contains("`b.md`") && n.contains("`c.md`"), "every file is named: {n}");
         assert!(n.matches('x').count() <= 1000, "the files' text stays within the budget");
         assert!(n.contains("200 more characters"), "a cut file says how much is missing: {n}");
         assert!(n.contains("left out"), "a file past the budget is named only: {n}");
-        assert_eq!(note(&files, true, false, usize::MAX).matches('x').count(), 1800, "with room, every file goes whole");
+        assert_eq!(note(&files, true, false, false, usize::MAX).matches('x').count(), 1800, "with room, every file goes whole");
     }
 
     #[test]
@@ -691,12 +772,12 @@ mod tests {
         let text = Attachment { id: 0, name: "brief.md".into(), content: Content::Text(Arc::new("wall 2 mm\n".into())), thumb: None };
         let part = Attachment::imported("motor.step".into());
         let files = vec![pic, text, part];
-        let n = note(&files, true, false, usize::MAX);
+        let n = note(&files, true, false, false, usize::MAX);
         assert!(n.contains("Attached pictures: target.png."), "{n}");
         assert!(n.contains("Attached file `brief.md`:\n```\nwall 2 mm\n```"), "{n}");
         assert!(n.contains("`motor.step` to the design"), "{n}");
-        assert!(note(&files, false, false, usize::MAX).contains("not sent"));
-        let p = parts(&files, true, true);
+        assert!(note(&files, false, false, false, usize::MAX).contains("not sent"));
+        let p = parts(&files, true, true, false);
         assert_eq!(p.len(), 1);
         assert!(matches!(&p[0], PromptPart::Image { mime, base64 } if mime == "image/png" && base64.starts_with("iVBORw0KGgo")));
     }
@@ -708,22 +789,25 @@ mod tests {
         let d = dir("reference");
         let zip = d.join("fixtures.zip");
         std::fs::write(&zip, vec![0u8; 3000]).unwrap();
-        let dxf = d.join("outline.DXF");
-        std::fs::write(&dxf, b"0\nSECTION\n").unwrap();
+        let step_like = d.join("outline.SAT");
+        std::fs::write(&step_like, b"700 0 1 0\n").unwrap();
         let a = read(&zip).unwrap();
         let Content::Reference { path, size, mime } = &a.content else { panic!("a reference") };
         assert_eq!((*size, *mime), (3000, "application/zip"));
         assert!(path.is_absolute() && path.ends_with("fixtures.zip"));
         assert!(a.thumb.is_none() && a.mark() == "ZIP");
-        assert!(matches!(read(&dxf).unwrap().content, Content::Reference { mime: "image/vnd.dxf", .. }), "by extension, in any case");
+        assert!(
+            matches!(read(&step_like).unwrap().content, Content::Reference { mime: "application/octet-stream", .. }),
+            "by extension, in any case"
+        );
         let bare = d.join("LICENSE_BLOB");
         std::fs::write(&bare, b"x").unwrap();
         assert!(matches!(read(&bare).unwrap().content, Content::Reference { mime: "application/octet-stream", .. }), "no extension");
         let files = vec![a];
-        let n = note(&files, true, true, usize::MAX);
+        let n = note(&files, true, true, false, usize::MAX);
         assert!(n.contains("Attached file `fixtures.zip` (application/zip, 3 KB, at "), "{n}");
         assert!(n.contains("fixtures.zip): read it with your own tools"), "{n}");
-        assert!(parts(&files, true, true).is_empty(), "a reference sends nothing but the note");
+        assert!(parts(&files, true, true, false).is_empty(), "a reference sends nothing but the note");
         assert!(read(&d).unwrap_err().contains("not a file"), "a folder is refused");
         assert!(read(&d.join("missing.bin")).is_err());
         let _ = std::fs::remove_dir_all(&d);
@@ -740,20 +824,20 @@ mod tests {
         assert!(matches!(&a.content, Content::Pdf { bytes, .. } if bytes.starts_with(b"%PDF")));
         assert_eq!(a.mark(), "PDF");
         let files = vec![a];
-        let sent = parts(&files, false, true);
+        let sent = parts(&files, false, true, false);
         let [PromptPart::Document { name, uri, mime, base64 }] = sent.as_slice() else { panic!("one document: {sent:?}") };
         assert_eq!((name.as_str(), mime.as_str()), ("brief 1.pdf", "application/pdf"));
         assert!(uri.starts_with("file://") && uri.ends_with("/brief%201.pdf"), "{uri}");
         assert!(base64.starts_with("JVBERi0"), "the PDF's bytes: {base64}");
-        assert!(note(&files, false, true, usize::MAX).contains("sent with this message as a document"));
-        assert!(parts(&files, true, false).is_empty(), "an agent with no documents gets none");
-        let n = note(&files, true, false, usize::MAX);
+        assert!(note(&files, false, true, false, usize::MAX).contains("sent with this message as a document"));
+        assert!(parts(&files, true, false, false).is_empty(), "an agent with no documents gets none");
+        let n = note(&files, true, false, false, usize::MAX);
         assert!(n.contains("(PDF, 15 bytes, at ") && n.contains("read it with your own tools"), "{n}");
         let big = d.join("drawing set.pdf");
         std::fs::write(&big, vec![b'x'; usize::try_from(MAX_PDF_BYTES).unwrap() + 1]).unwrap();
         let b = read(&big).unwrap();
         assert!(matches!(b.content, Content::Reference { mime: "application/pdf", .. }), "too big to send: by reference");
-        assert!(parts(&[b], true, true).is_empty());
+        assert!(parts(&[b], true, true, false).is_empty());
         let _ = std::fs::remove_dir_all(&d);
     }
 
@@ -840,6 +924,58 @@ mod tests {
         assert!(matches!(&a.content, Content::Text(t) if t.starts_with("Programme CN — commande probable : Heidenhain") && t.contains("TOOL CALL")));
     }
 
+    /// A DXF goes whole to NØDE IA (its server reads the entities and draws the sheet), and by
+    /// reference to any other agent; a DWG is refused with what to send instead; a NØDE CAD design
+    /// is imported like a CAD file.
+    #[test]
+    fn a_dxf_goes_to_node_ia_and_a_dwg_says_what_to_send_instead() {
+        let d = dir("drawing");
+        let dxf = d.join("outline.DXF");
+        std::fs::write(&dxf, b"0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n").unwrap();
+        assert_eq!(kind(&dxf), Kind::Drawing);
+        let a = read(&dxf).unwrap();
+        assert!(matches!(&a.content, Content::Pdf { bytes, .. } if bytes.starts_with(b"0\nSECTION")));
+        let files = vec![a];
+        let to_node_ia = parts(&files, true, true, true);
+        let [PromptPart::Document { mime, base64, .. }] = to_node_ia.as_slice() else { panic!("one document: {to_node_ia:?}") };
+        assert_eq!(mime, "image/vnd.dxf");
+        assert!(base64.starts_with("MApTRUNUSU9O"), "the DXF's bytes: {base64}");
+        assert!(note(&files, true, true, true, usize::MAX).contains("sent with this message as a document"));
+        assert!(parts(&files, true, true, false).is_empty(), "another agent gets no DXF document");
+        let n = note(&files, true, true, false, usize::MAX);
+        assert!(n.contains("(DXF, ") && n.contains("read it with your own tools"), "{n}");
+        let dwg = d.join("plan.DWG");
+        std::fs::write(&dwg, b"AC1032").unwrap();
+        assert_eq!(kind(&dwg), Kind::Dwg);
+        let e = read(&dwg).unwrap_err();
+        assert!(e.contains("plan.DWG") && e.contains("DXF") && e.contains("PDF"), "{e}");
+        assert_eq!(kind(Path::new("support.nodecad")), Kind::Cad);
+        assert!(is_design_path(Path::new("support.NODECAD")) && !is_design_path(Path::new("support.step")));
+        for ext in ["dxf", "nodecad", "heic"] {
+            assert!(extensions().contains(&ext), "{ext} can be chosen");
+        }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// An iPhone's HEIC photo: on a Mac, converted to JPEG by `sips` and sent like any picture.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_heic_photo_is_converted_on_a_mac() {
+        let d = dir("heic");
+        let png = d.join("source.png");
+        image::RgbImage::from_pixel(120, 80, image::Rgb([200, 120, 40])).save(&png).unwrap();
+        let heic = d.join("photo.HEIC");
+        let made = std::process::Command::new("/usr/bin/sips").args(["-s", "format", "heic"]).arg(&png).arg("--out").arg(&heic).output();
+        if !made.is_ok_and(|o| o.status.success()) {
+            return; // A Mac without the HEIC encoder: nothing to check here.
+        }
+        assert_eq!(kind(&heic), Kind::Picture);
+        let a = read(&heic).unwrap();
+        let Content::Picture { mime, size, .. } = &a.content else { panic!("a picture") };
+        assert_eq!((*mime, *size), ("image/jpeg", [120, 80]));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     #[test]
     fn word_and_powerpoint_files_go_as_documents_with_their_own_type() {
         assert_eq!(kind(Path::new("notice.docx")), Kind::Pdf);
@@ -848,7 +984,7 @@ mod tests {
         let path = d.join("notice.docx");
         std::fs::write(&path, b"PK fake docx").unwrap();
         let a = read(&path).unwrap();
-        let parts = parts(std::slice::from_ref(&a), true, true);
+        let parts = parts(std::slice::from_ref(&a), true, true, false);
         assert!(matches!(&parts[0], PromptPart::Document { mime, .. } if mime.contains("wordprocessingml")));
     }
 }

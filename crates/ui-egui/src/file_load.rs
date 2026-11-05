@@ -111,6 +111,11 @@ impl Request {
 
 /// Route drawing files to the same commands as the sketch's Insert DXF and Insert SVG.
 pub(crate) fn insert_command(path: &str) -> &'static str {
+    // A NØDE CAD design comes in as a component linked to its file (a file joined to an agent's
+    // message, or chosen in Insert), never as STEP text it is not.
+    if crate::agent_chat::attach::is_design_path(std::path::Path::new(path)) {
+        return "component.insert_design";
+    }
     solidcraft_engine::cmd::drawing_import_command(path)
         .unwrap_or_else(|| if solidcraft_engine::io::is_mesh_path(path) { "file.insert_mesh" } else { "file.insert_step" })
 }

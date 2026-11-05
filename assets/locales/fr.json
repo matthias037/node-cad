@@ -4338,6 +4338,7 @@
   "ui.agent_chat_file_empty_picture": "{name} : image vide",
   "ui.agent_chat_file_error": "{name} : {error}",
   "ui.agent_chat_file_heic": "{name} : les images HEIC ne peuvent pas être lues ici ; les exporter d'abord en JPEG ou PNG",
+  "ui.agent_chat_file_dwg": "{name} : un DWG ne se lit pas (format fermé) ; enregistrez-le en DXF ou en PDF depuis votre logiciel de CAO, puis joignez ce fichier",
   "ui.agent_chat_file_importing": "Importation dans la conception…",
   "ui.agent_chat_file_kinds": "{name} : vous pouvez joindre des images (PNG, JPEG, GIF, WebP, BMP, TIFF), des fichiers texte (SVG compris) et des fichiers CAO (STEP, IGES, FreeCAD, Rhino, STL, 3MF, OBJ, glTF)",
   "ui.agent_chat_file_loading": "Lecture du fichier…",
