@@ -7,7 +7,8 @@
 
 use std::cell::Cell;
 
-use solidcraft_geom::{Loop2, MAX_BEZIER_CTRL, Plane, Region2, Seg2, Vec2, Vec3};
+use solidcore_record::{Loop2, MAX_BEZIER_CTRL, Plane, Region2, Seg2, Vec2, Vec3};
+use solidcraft_geom::prelude::*;
 
 use crate::error::{ManufactureError, Result, invalid};
 use crate::job::{Direction, DrillPoints, Entry, EntryMode, OpKind, Operation, Setup, Side};

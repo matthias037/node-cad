@@ -219,6 +219,8 @@ pub fn entry(app: &crate::SolveApp) -> Entry {
         name: NAME.to_string(),
         kind: Kind::Api,
         argv: Vec::new(),
+        allow_insecure_http: false,
+        reasoning_effort: String::new(),
         version: None,
         login: "",
         found: false,

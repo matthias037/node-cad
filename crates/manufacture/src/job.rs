@@ -3,7 +3,8 @@
 //! design; a design without a job has none.
 
 use serde::{Deserialize, Serialize};
-use solidcraft_geom::{Plane, Vec3};
+use solidcore_record::{Plane, Vec3};
+use solidcraft_geom::prelude::*;
 
 use crate::error::{Result, finite, invalid};
 use crate::tool::{MAX_NAME_BYTES, Tool};

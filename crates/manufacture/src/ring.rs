@@ -1,7 +1,8 @@
 //! Small 2D helpers on closed polylines (rings). A ring is a list of points; the last point
 //! joins back to the first and is not repeated.
 
-use solidcraft_geom::Vec2;
+use solidcore_record::Vec2;
+use solidcraft_geom::prelude::*;
 
 /// Signed area: positive when the ring runs counter-clockwise.
 pub(crate) fn signed_area(r: &[Vec2]) -> f64 {

@@ -343,7 +343,8 @@ fn strip_target(app: &SolveApp, available: Rect, at: egui::Pos2) -> Option<&'sta
 /// Same grip and highlighted docking vocabulary as History; no document state changes.
 fn strip_drag(app: &mut SolveApp, ui: &mut egui::Ui, available: Rect) {
     let grip = ui_kit::panel_grip(ui);
-    let drag = ui.interact(grip.rect, ui.id().with("drawing_sheet_grip"), Sense::drag()).on_hover_text(crate::i18n::tr_label("Dock sheet tabs"));
+    let drag =
+        ui.interact(grip.rect, ui.scope_id().with("drawing_sheet_grip"), Sense::drag()).on_hover_text(crate::i18n::tr_label("Dock sheet tabs"));
     crate::scenario::publish_target("drawing:sheets:grip", drag.rect);
     if drag.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
@@ -357,7 +358,7 @@ fn strip_drag(app: &mut SolveApp, ui: &mut egui::Ui, available: Rect) {
             let size = strip_size(app, ui, target);
             let zone = Rect::from_min_size(strip_position(app, available, target, size), size);
             let t = Tokens::get();
-            let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Foreground, ui.id().with("drawing_dock_preview")));
+            let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Foreground, ui.scope_id().with("drawing_dock_preview")));
             painter.rect(zone, t.radius_lg, t.accent.gamma_multiply(0.18), Stroke::new(t.space_2, t.accent), egui::StrokeKind::Inside);
             crate::scenario::publish_rect("drawing:sheets:dock_preview", zone);
         }
@@ -413,7 +414,7 @@ pub fn chrome(app: &mut SolveApp, ui: &mut egui::Ui) {
     let (label, has_sheet) = (sheet_label(app), crate::drawing_window::sheet(app).is_some());
     let container = Container::new(ui.ctx(), Surface::Panel);
     let frame = container.frame(ui.ctx(), Tokens::get().panel, crate::frame::Side::Left).inner_margin(4);
-    let card = container.area(egui::Id::new("sc_drawing_sheets")).fixed_pos(position).show(ui.ctx(), |ui| {
+    let card = container.area(egui::Id::unique("sc_drawing_sheets")).fixed_pos(position).show(ui.ctx(), |ui| {
         container.show_frame(ui, frame, available, |ui| {
             let buttons = |app: &mut SolveApp, ui: &mut egui::Ui| {
                 icon_action(ui, "drawing:sheets:add", "plus", "Add sheet (not implemented)", false);
@@ -500,7 +501,7 @@ fn floating_panel(app: &mut SolveApp, ui: &mut egui::Ui, left: bool, width: f32)
     let inner = (bounds.size() - frame.total_margin().sum()).max(egui::Vec2::ZERO);
     let anchor = if left { bounds.left_top() } else { bounds.right_top() };
     let panel =
-        ui_kit::Panel::new(crate::i18n::tr_label("Sheet Settings"), egui::Id::new("sc_drawing_settings_floating"), anchor, available, side, frame)
+        ui_kit::Panel::new(crate::i18n::tr_label("Sheet Settings"), egui::Id::unique("sc_drawing_settings_floating"), anchor, available, side, frame)
             .width(width);
     if let Some(card) = panel.window(&ctx).fixed_size(inner).show(&ctx, |ui| {
         ui.set_min_size(inner);
@@ -516,7 +517,7 @@ fn floating_panel(app: &mut SolveApp, ui: &mut egui::Ui, left: bool, width: f32)
             Rect::from_x_y_ranges(rect.left()..=rect.left() + t.space_4, rect.y_range())
         };
         let response =
-            ui.interact(rail, egui::Id::new("sc_drawing_settings_resize"), Sense::drag()).on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
+            ui.interact(rail, egui::Id::unique("sc_drawing_settings_resize"), Sense::drag()).on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
         crate::scenario::publish_target("drawing:settings:resize", rail);
         if response.dragged() {
             let delta = ui.input(|i| i.pointer.delta().x) * if left { 1.0 } else { -1.0 };
@@ -547,7 +548,7 @@ fn unavailable_row(ui: &mut egui::Ui, label: &str, value: &str) {
                 ui_kit::dropdown_menu(ui, label, crate::i18n::tr_label(value), |_| {});
             } else {
                 let mut text = crate::i18n::tr_label(value).to_string();
-                ui_kit::cell_editor(ui, ui.id().with(label), &mut text, "", false);
+                ui_kit::cell_editor(ui, ui.scope_id().with(label), &mut text, "", false);
             }
         });
     });
@@ -630,7 +631,7 @@ fn sheet_rows(ui: &mut egui::Ui, form: &mut Form) {
     ui.heading(crate::i18n::tr_label("Drawing & title block"));
     for ((key, label), value) in TITLE_FIELDS.iter().zip(form.title.iter_mut()) {
         ui_kit::row(ui, crate::i18n::tr_label(label), |ui| {
-            ui_kit::cell_editor(ui, egui::Id::new(("drawing_title", *key)), value, "", false);
+            ui_kit::cell_editor(ui, egui::Id::unique(("drawing_title", *key)), value, "", false);
         });
     }
     ui_kit::text(ui, crate::i18n::tr_label("Material and mass come from the design when left empty."), ui_kit::Text::Note("drawing_title_note"));

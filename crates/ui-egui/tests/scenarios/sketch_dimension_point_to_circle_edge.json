@@ -1,4 +1,5 @@
 [
+  {"note": "NØDE CAD: a dimension clicked on whole circles is taken between their centres by default (an edge is a right-click away), so the moved geometry ends where the centres say."},
   {"call": "engine.execute", "params": {"command": "sketch.create", "params": {"plane": "XY"}}},
   {"call": "engine.execute", "params": {"command": "sketch.circle.center", "params": {"center": [20, 15], "radius": 5}}},
   {"call": "engine.execute", "params": {"command": "sketch.constraint.fix", "params": {"entities": ["c1.center"]}}},
@@ -15,6 +16,6 @@
   {"key": "Escape"},
   {"expect": {"errors": 0}},
   {"expect": {"param": {"d2": 3}}},
-  {"expect": {"query": {"command": "sketch.inspect", "path": ["curves", 1, "start_at", 0], "value": 28}}},
+  {"expect": {"query": {"command": "sketch.inspect", "path": ["curves", 1, "start_at", 0], "value": 23}}},
   {"expect": {"query": {"command": "sketch.inspect", "path": ["curves", 1, "start_at", 1], "value": 15}}}
 ]

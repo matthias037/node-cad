@@ -8,7 +8,9 @@
 use std::collections::{BTreeMap, HashMap};
 
 use serde_json::{Value, json};
-use solidcraft_geom::{Mesh, Vec3};
+use solidcore_record::Vec3;
+use solidcraft_geom::Mesh;
+use solidcraft_geom::prelude::*;
 use solidcraft_kernel::FaceSurface;
 
 use super::CommandSpec;
@@ -40,7 +42,7 @@ fn machining(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(cmd, "`hole_depth_ratio` must be a positive number of diameters"));
     }
     let want = string_list(cmd, p, "bodies")?;
-    let st = s.world_state();
+    let st = s.world_state()?;
     for name in &want {
         if !st.bodies.iter().any(|b| &b.name == name) {
             return Err(bad(cmd, format!("no body `{name}`")));

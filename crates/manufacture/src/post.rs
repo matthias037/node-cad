@@ -15,7 +15,7 @@
 //! The text is all ASCII, comments are in parentheses, and numbers have three decimals.
 
 use serde::{Deserialize, Serialize};
-use solidcraft_geom::Vec3;
+use solidcore_record::Vec3;
 
 use crate::error::{Result, invalid};
 use crate::job::{Operation, Setup};

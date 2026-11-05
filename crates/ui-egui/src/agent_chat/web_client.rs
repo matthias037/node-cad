@@ -195,7 +195,7 @@ impl Measuring {
         }
         // The bodies as the command picks them (a list it refuses runs at once, to say why).
         let Ok(want) = solidcraft_engine::params::string_list("inspect.measure", &params, "bodies") else { return None };
-        let st = app.session.world_state();
+        let Ok(st) = app.session.world_state() else { return None };
         let mut seen = std::collections::HashSet::new();
         if !st.bodies.iter().all(|b| seen.insert(b.name.as_str())) {
             return None;

@@ -10,7 +10,8 @@
 
 use egui::{Color32, Pos2, RichText, Shape, Stroke};
 use serde_json::{Value, json};
-use solidcraft_engine::geom::Vec3;
+use solidcore_record::Vec3;
+use solidcraft_engine::geom::prelude::*;
 use solidcraft_engine::manufacture::{Grid, Stock};
 use solidcraft_engine::{WatchRun, watch_run};
 
@@ -297,7 +298,7 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
         }
     }
     let (mut play, mut rewind) = (false, false);
-    let closed = crate::ui_kit::Window::new(egui::Id::new("sc_machining_simulation"), "gear", crate::i18n::tr_label("Machining Simulation"))
+    let closed = crate::ui_kit::Window::new(egui::Id::unique("sc_machining_simulation"), "gear", crate::i18n::tr_label("Machining Simulation"))
         .cards(2.0)
         .show_body(
         ctx,
@@ -415,7 +416,7 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
 fn gcode_window(ctx: &egui::Context, d: &mut MfgPanel, t: &Tokens) {
     let current = current_line(d);
     let mut dialect = d.dialect;
-    let closed = crate::ui_kit::Window::new(egui::Id::new("sc_simulation_gcode"), "gear", crate::i18n::tr_label("G-code"))
+    let closed = crate::ui_kit::Window::new(egui::Id::unique("sc_simulation_gcode"), "gear", crate::i18n::tr_label("G-code"))
         .cards(2.0)
         .tall(440.0)
         .show_body(ctx, |ui| {

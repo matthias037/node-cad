@@ -156,7 +156,7 @@ fn a_tool_call_runs_in_the_page_and_its_result_goes_back() {
     let batch = json!({"commands": [{"command": "solid.box", "params": {"length": 120, "width": 80, "height": 10, "body_name": "Platine"}}]});
     net.answer(0, 200, calls("c1", "batch", batch));
     poll(&mut app, &ctx);
-    assert_eq!(app.session.world_state().bodies.iter().filter(|b| b.name == "Platine").count(), 1, "the batch ran in the page");
+    assert_eq!(app.session.world_state().unwrap().bodies.iter().filter(|b| b.name == "Platine").count(), 1, "the batch ran in the page");
     assert_eq!(net.count(), 2, "the result went back at once");
     let body = net.body(1);
     let last = body["messages"].as_array().unwrap().last().unwrap().clone();
@@ -209,7 +209,7 @@ fn a_refusal_is_shown_and_a_late_answer_dropped() {
     poll(&mut app, &ctx);
     net.answer(1, 200, calls("c9", "batch", json!({"commands": [{"command": "solid.box", "params": {"length": 1, "width": 1, "height": 1}}]})));
     poll(&mut app, &ctx);
-    assert!(app.session.world_state().bodies.is_empty(), "nothing ran after the stop");
+    assert!(app.session.world_state().unwrap().bodies.is_empty(), "nothing ran after the stop");
     assert_eq!(net.count(), 2);
 }
 
@@ -281,7 +281,7 @@ fn a_big_batch_runs_a_few_steps_a_frame_and_answers_as_at_once() {
     let (mut bodies, mut counted) = (Vec::new(), Vec::new());
     while net.count() < 2 && bodies.len() < 1000 {
         poll(&mut app, &ctx);
-        bodies.push(app.session.world_state().bodies.len());
+        bodies.push(app.session.world_state().unwrap().bodies.len());
         if let Some(Item::Tool { progress: Some(p), status: Some(ToolStatus::InProgress), .. }) = app.agent_chat.items.last() {
             counted.push(p.clone());
         }
@@ -319,7 +319,7 @@ fn a_batch_that_fails_over_frames_answers_as_at_once() {
     let read = tool_result(&net, 1);
     assert_eq!(read, at_once("batch", &args, &[]).0);
     assert_eq!((&read["failed"]["index"], &read["rolled_back"]), (&json!(5), &json!(true)), "{read}");
-    assert!(app.session.world_state().bodies.is_empty());
+    assert!(app.session.world_state().unwrap().bodies.is_empty());
 }
 
 /// The calls of one answer run in order: a measure after a batch runs once the batch's last
@@ -358,10 +358,10 @@ fn stop_halfway_takes_the_batch_back() {
     for _ in 0..8 {
         poll(&mut app, &ctx);
     }
-    let made = app.session.world_state().bodies.len();
+    let made = app.session.world_state().unwrap().bodies.len();
     assert!((1..12).contains(&made), "{made} bodies");
     super::super::cancel(&mut app);
-    assert!(app.session.world_state().bodies.is_empty(), "the batch is not taken back");
+    assert!(app.session.world_state().unwrap().bodies.is_empty(), "the batch is not taken back");
     for _ in 0..3 {
         poll(&mut app, &ctx);
     }
@@ -395,7 +395,7 @@ fn an_edit_between_two_frames_stops_the_batch() {
     let read = tool_result(&net, 1);
     assert_eq!((&read["ok"], &read["rolled_back"]), (&json!(false), &json!(true)), "{read}");
     assert!(read["failed"]["error"].as_str().is_some_and(|e| e.contains("changed")), "{read}");
-    assert!(app.session.world_state().bodies.is_empty());
+    assert!(app.session.world_state().unwrap().bodies.is_empty());
 }
 
 /// A measure of many bodies runs a few bodies a frame and says what the measure at once says.
@@ -434,10 +434,10 @@ fn a_page_drawn_seldom_gives_its_calls_more_time() {
     net.answer(0, 200, calls("c1", "batch", boxes(12)));
     poll(&mut app, &ctx);
     poll(&mut app, &ctx);
-    assert_eq!(app.session.world_state().bodies.len(), 1, "a step a frame");
+    assert_eq!(app.session.world_state().unwrap().bodies.len(), 1, "a step a frame");
     std::thread::sleep(std::time::Duration::from_millis(250));
     poll(&mut app, &ctx);
-    let made = app.session.world_state().bodies.len();
+    let made = app.session.world_state().unwrap().bodies.len();
     assert!(made > 2, "the frame after a long wait ran one step: {made} bodies");
 }
 
@@ -469,7 +469,7 @@ fn frozen_page_while_a_big_batch_runs() {
     let result = body["messages"].as_array().unwrap().last().unwrap()["content"].as_str().unwrap_or_default().to_string();
     println!(
         "{steps} steps, {} bodies: {} frames, longest {:.0} ms (then {:?}), all {total:.0} ms",
-        app.session.world_state().bodies.len(),
+        app.session.world_state().unwrap().bodies.len(),
         frames.len(),
         longest[0],
         longest.iter().skip(1).take(4).map(|ms| ms.round()).collect::<Vec<_>>()

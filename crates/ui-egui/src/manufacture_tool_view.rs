@@ -5,7 +5,8 @@
 //! are drawn on it and turn with the spindle.
 
 use egui::{Color32, Pos2, Shape, Stroke};
-use solidcraft_engine::geom::Vec3;
+use solidcore_record::Vec3;
+use solidcraft_engine::geom::prelude::*;
 use solidcraft_engine::manufacture::{Tool, ToolKind};
 
 use crate::viewport::Proj;

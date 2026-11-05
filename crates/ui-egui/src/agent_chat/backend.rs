@@ -86,6 +86,8 @@ pub enum Event {
     Permission {
         key: u64,
         title: String,
+        /// The tool call's kind, as the agent gives it.
+        kind: Option<String>,
         options: Vec<PermissionOption>,
     },
     /// It needs the user to sign in; `methods` are its own ways to do so.
@@ -104,6 +106,11 @@ pub enum Event {
         current: String,
         available: Vec<super::acp::ModelInfo>,
     },
+    /// Why an endpoint's models could not be listed (`None`: they could). It comes before the
+    /// [`Event::Models`] of that listing, which then holds only the configured model.
+    ModelsNote(Option<String>),
+    /// The agent refused the model it was just sent, and says why.
+    ModelRejected(String),
     ConfigOptions(Vec<ConfigOption>),
     ConfigOptionFinished {
         id: String,
@@ -145,6 +152,9 @@ pub trait ChatBackend {
     /// Start a fresh conversation on the running backend (no restart); [`Event::Ready`] follows.
     /// A message being answered is cancelled first.
     fn new_session(&mut self);
+    /// The user's custom instructions (#8220), added to the system note of every session that
+    /// starts after this call. The panel sets them before the first session and before New chat.
+    fn set_instructions(&mut self, _text: &str) {}
     /// Answer an [`Event::Permission`] with one of its options (`None`: cancelled).
     fn answer_permission(&mut self, key: u64, option: Option<&str>);
     /// Ask the backend to sign in by itself with one of its methods (it opens the browser).
@@ -158,6 +168,8 @@ pub trait ChatBackend {
     /// Mark the conversation confidential or not, from the next request on: NØDE IA then keeps
     /// it on Mistral, in Europe ([`super::node_ia::CONFIDENTIAL_HEADER`]). Other agents ignore it.
     fn set_confidential(&mut self, _on: bool) {}
+    /// An endpoint's new reasoning effort (empty: send nothing), from the next request on.
+    fn set_reasoning_effort(&mut self, _effort: &str) {}
     fn set_config_option(&mut self, _id: &str, _value: &str) {}
     /// Its process, for status and tests.
     fn pid(&self) -> Option<u32> {

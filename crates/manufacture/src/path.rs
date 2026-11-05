@@ -2,7 +2,8 @@
 //! work coordinates (millimetres, Z up along the tool axis).
 
 use serde::{Deserialize, Serialize};
-use solidcraft_geom::Vec3;
+use solidcore_record::Vec3;
+use solidcraft_geom::prelude::*;
 
 /// A drilling cycle at one position. Posts either emit a canned cycle or spell it out.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]

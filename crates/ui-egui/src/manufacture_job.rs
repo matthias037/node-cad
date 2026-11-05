@@ -10,7 +10,8 @@
 
 use egui::{Align2, Pos2, RichText, Shape, Stroke};
 use serde_json::{Value, json};
-use solidcraft_engine::geom::{Plane, Vec3};
+use solidcore_record::{Plane, Vec3};
+use solidcraft_engine::geom::prelude::*;
 
 use crate::SolveApp;
 use crate::theme::Tokens;
@@ -1004,7 +1005,7 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
             let screen = ctx.content_rect();
             let at = screen.left_top() + egui::vec2(120.0 + 40.0 * tab as f32, 80.0 + 24.0 * tab as f32);
             let room = (screen.height() - 160.0 - 24.0 * tab as f32).clamp(200.0, 900.0);
-            let closed = crate::ui_kit::Window::new(egui::Id::new(("sc_manufacture_window", tab)), "gear", crate::i18n::tr_label(TABS[tab]))
+            let closed = crate::ui_kit::Window::new(egui::Id::unique(("sc_manufacture_window", tab)), "gear", crate::i18n::tr_label(TABS[tab]))
                 .cards(2.0)
                 .tall(room)
                 .placed(egui::Align2::LEFT_TOP, at)

@@ -11,7 +11,7 @@ const TARGET: &str = "node-cad-cli";
 /// Run `node-cad-cli` in place of this alias (named by its binary target).
 pub fn forward() -> ExitCode {
     let name = env!("CARGO_BIN_NAME");
-    eprintln!("{name} is deprecated and will be removed in a later release: use {TARGET}");
+    solidcraft_engine::note!("{name} is deprecated and will be removed in a later release: use {TARGET}");
     let sibling = std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(|dir| dir.join(format!("{TARGET}{}", std::env::consts::EXE_SUFFIX))))
@@ -23,7 +23,7 @@ pub fn forward() -> ExitCode {
             None => ExitCode::FAILURE,
         },
         Err(e) => {
-            eprintln!("{name}: could not run {}: {e}", program.to_string_lossy());
+            solidcraft_engine::note!("{name}: could not run {}: {e}", program.to_string_lossy());
             ExitCode::FAILURE
         }
     }

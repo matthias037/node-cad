@@ -8,7 +8,9 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use solidcraft_geom::{Aabb3, Vec2, Vec3};
+use solidcore_record::{Vec2, Vec3};
+use solidcraft_geom::Aabb3;
+use solidcraft_geom::prelude::*;
 use solidcraft_io::{DxfEntity, DxfLayer, DxfLinetype, DxfShape};
 use solidcraft_render::{Camera, StandardView};
 
@@ -193,7 +195,7 @@ impl Hole {
 }
 
 fn holes(s: &Session) -> Vec<Hole> {
-    let st = s.world_state();
+    let Ok(st) = s.world_state() else { return Vec::new() };
     let mut out: Vec<Hole> = Vec::new();
     for b in st.bodies.iter().filter(|b| !b.body.is_mesh()).take(500) {
         let mesh = b.mesh();
@@ -279,7 +281,7 @@ fn sketch_dims(
     left: &mut usize,
 ) -> Vec<(Dim, f64, Option<Vec3>)> {
     use solidcraft_sketch::DimFrame;
-    let st = s.world_state();
+    let Ok(st) = s.world_state() else { return Vec::new() };
     let used: std::collections::BTreeSet<u64> =
         s.doc.features.iter().flat_map(|f| f.kind.profile_sels().into_iter().map(|(sketch, _)| sketch)).collect();
     let mut out = Vec::new();
@@ -297,11 +299,17 @@ fn sketch_dims(
             let (Some(frame), Some(value)) = (solidcraft_sketch::dim_frame(sk, &c.kind), solidcraft_sketch::measure_dimension(sk, &c.kind)) else {
                 continue;
             };
+            // An ellipse's half axis is drawn as the linear dimension from its centre to its end
+            // (its stored text is placed from the centre, so the sheet takes the default place).
+            let (frame, text) = match frame {
+                DimFrame::HalfAxis { center, dir, len } => (DimFrame::Linear { p0: center, p1: center + dir * len, dir }, None),
+                other => (other, c.text),
+            };
             match frame {
                 DimFrame::Linear { p0, p1, dir } => {
                     let n = dir.perp();
                     let m = (p0 + p1) * 0.5;
-                    let placed = c.text.or_else(|| solidcraft_sketch::default_text(&frame, middle, 1.0)).unwrap_or(Vec2::new(0.0, 1.0));
+                    let placed = text.or_else(|| solidcraft_sketch::default_text(&frame, middle, 1.0)).unwrap_or(Vec2::new(0.0, 1.0));
                     let h = if placed.y < 0.0 { -1.0 } else { 1.0 } * placed.y.abs().max(7.0 / scale);
                     let (q0, q1) = (p0 + n * (h - (p0 - m).dot(n)), p1 + n * (h - (p1 - m).dot(n)));
                     let (a, b, qa, qb) = (on_sheet(p0), on_sheet(p1), on_sheet(q0), on_sheet(q1));
@@ -350,7 +358,7 @@ fn sketch_dims(
                     };
                     out.push((d, value, None));
                 }
-                DimFrame::Angular { .. } | DimFrame::ArcLength { .. } => *left += 1,
+                DimFrame::Angular { .. } | DimFrame::ArcLength { .. } | DimFrame::HalfAxis { .. } => *left += 1,
             }
         }
     }
@@ -414,7 +422,7 @@ fn create(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let meshes = super::meshes::prepare(s, 0.01)?;
     let mut bounds = Aabb3::EMPTY;
-    for b in s.world_state().bodies.iter().filter(|b| !b.body.is_mesh()) {
+    for b in s.world_state()?.bodies.iter().filter(|b| !b.body.is_mesh()) {
         bounds = bounds.union(&b.mesh().bounds());
     }
     let center = bounds.center();
@@ -619,7 +627,7 @@ fn create(s: &mut Session, p: &Value) -> Result<Value> {
     // Material and mass from the model when its bodies have a material and the title does
     // not say otherwise.
     let (mut materials, mut grams) = (Vec::<String>::new(), 0.0);
-    for b in s.world_state().bodies.iter().filter(|b| !b.body.is_mesh()) {
+    for b in s.world_state()?.bodies.iter().filter(|b| !b.body.is_mesh()) {
         if let Some(m) = s.doc.materials.get(&b.name) {
             let m = french_material(m);
             if !materials.contains(&m) {

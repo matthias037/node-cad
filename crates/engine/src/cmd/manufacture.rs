@@ -8,8 +8,8 @@ use std::sync::Arc;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value, json};
+use solidcore_record::{Plane, Vec3};
 use solidcraft_doc::{FeatureKind, ProfileSel, select_profiles};
-use solidcraft_geom::{Plane, Vec3};
 use solidcraft_manufacture as mf;
 
 use super::CommandSpec;
@@ -452,7 +452,7 @@ fn post(s: &mut Session, p: &Value) -> Result<Value> {
 pub struct WatchRun {
     pub runner: mf::Runner,
     /// Work coordinates to model coordinates: origin and the X, Y and Z axes.
-    pub frame: [solidcraft_geom::Vec3; 4],
+    pub frame: [Vec3; 4],
     pub stock: mf::Stock,
     pub setup: u32,
     /// Spindle speed of each operation of the runner (rpm).
@@ -552,8 +552,8 @@ fn simulate(s: &mut Session, p: &Value) -> Result<Value> {
             }
             Some(_) => return Err(bad(cmd, "`bodies` is a list of names")),
         };
-        let world = s.world_state();
-        let mut triangles: Vec<[solidcraft_geom::Vec3; 3]> = Vec::new();
+        let world = s.world_state()?;
+        let mut triangles: Vec<[Vec3; 3]> = Vec::new();
         for body in &world.bodies {
             if names.as_ref().is_some_and(|n| !n.contains(&body.name)) {
                 continue;
@@ -576,7 +576,7 @@ fn simulate(s: &mut Session, p: &Value) -> Result<Value> {
     let ops: Vec<mf::SimOp> = planned.iter().map(|(op, tool, plan)| mf::SimOp { operation: op.id, tool, toolpath: &plan.toolpath }).collect();
     let sim = mf::simulate(&stock, part.as_ref(), &ops, &mf::SimOptions { cell, tolerance, until, clearance: setup.clearance })
         .map_err(|e| bad(cmd, e.to_string()))?;
-    let at = |v: solidcraft_geom::Vec3| json!([v.x, v.y, v.z]);
+    let at = |v: Vec3| json!([v.x, v.y, v.z]);
     let collisions: Vec<Value> =
         sim.collisions.iter().map(|c| json!({"operation": c.operation, "step": c.step, "kind": c.kind, "at": at(c.at), "depth": c.depth})).collect();
     let mut out = json!({

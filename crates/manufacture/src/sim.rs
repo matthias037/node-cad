@@ -16,7 +16,8 @@
 //! The `tolerance` (default: one cell, at least 0.05 mm) is how deep an overlap must be to count.
 
 use serde::Serialize;
-use solidcraft_geom::Vec3;
+use solidcore_record::Vec3;
+use solidcraft_geom::prelude::*;
 
 use crate::error::{ManufactureError, Result, finite, invalid};
 use crate::job::Stock;

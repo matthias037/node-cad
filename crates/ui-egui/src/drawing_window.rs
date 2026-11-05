@@ -168,7 +168,7 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
     let mut export: Option<&'static str> = None;
     let mut redo = false;
     let title = crate::i18n::tr_label("Drawing");
-    let closed = crate::ui_kit::Window::new(egui::Id::new("sc_drawing"), "export", title).cards(4.0).show_body(ctx, |ui| {
+    let closed = crate::ui_kit::Window::new(egui::Id::unique("sc_drawing"), "export", title).cards(4.0).show_body(ctx, |ui| {
         ui.horizontal_wrapped(|ui| {
             ui.label(crate::i18n::format(
                 "ui.drawing_summary",
