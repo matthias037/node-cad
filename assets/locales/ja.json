@@ -4319,6 +4319,8 @@
   "ui.agent_chat_choose_model": "モデルを選択",
   "ui.agent_chat_close": "閉じる",
   "ui.agent_chat_command": "エージェントのコマンド",
+  "ui.agent_chat_confidential": "機密",
+  "ui.agent_chat_confidential_tip": "NØDE IA はこの会話を最後まで欧州の Mistral で扱います。添付した資料は常にそこに留まります。送信前にチェックしてください。",
   "ui.agent_chat_connect": "接続",
   "ui.agent_chat_copy": "コピー",
   "ui.agent_chat_ctx_bodies": "ボディ",

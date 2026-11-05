@@ -978,6 +978,20 @@ fn desktop_body(app: &mut SolveApp, ui: &mut egui::Ui) {
                             .on_hover_text(tr("ui.agent_chat_pick_context_tip"));
                         crate::scenario::publish_handle("agent_chat:pick_context", picker.rect.center());
                         pick_clicked = picker.clicked();
+                        // NØDE IA: a confidential conversation stays with Mistral, in Europe (the
+                        // relay keeps it there to the end once a message went so).
+                        if app.agent_chat.node_ia_only || super::node_ia::is_node_ia(&app.agent_chat.running_endpoint) {
+                            let mut on = app.agent_chat.confidential;
+                            let r =
+                                ui_kit::checkbox(ui, tr("ui.agent_chat_confidential"), &mut on).on_hover_text(tr("ui.agent_chat_confidential_tip"));
+                            crate::scenario::publish_handle("agent_chat:confidential", r.rect.center());
+                            if on != app.agent_chat.confidential {
+                                app.agent_chat.confidential = on;
+                                if let Some(b) = app.agent_chat.backend.as_mut() {
+                                    b.set_confidential(on);
+                                }
+                            }
+                        }
                         if let Some(turn) = &app.agent_chat.turn {
                             let n = turn.changes.to_string();
                             let count = match app.preferences.agent_chat_turn_limit {

@@ -4034,6 +4034,8 @@
   "ui.agent_chat_choose_model": "Modell wählen",
   "ui.agent_chat_close": "Schließen",
   "ui.agent_chat_command": "Agentenbefehl",
+  "ui.agent_chat_confidential": "Vertraulich",
+  "ui.agent_chat_confidential_tip": "NØDE IA behält dieses Gespräch bis zum Ende bei Mistral in Europa. Ein angehängtes Dokument bleibt immer dort. Vor dem Senden ankreuzen.",
   "ui.agent_chat_connect": "Verbinden",
   "ui.agent_chat_copy": "Kopieren",
   "ui.agent_chat_ctx_bodies": "Körper",

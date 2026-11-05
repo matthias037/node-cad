@@ -350,6 +350,9 @@ pub struct AgentChat {
     pub attach_view: bool,
     /// Send what is selected in the model with the next message.
     pub attach_selection: bool,
+    /// The conversation is confidential: NØDE IA answers it with Mistral, in Europe, to the end
+    /// ([`ChatBackend::set_confidential`]). Kept for this tab's conversations until unticked.
+    pub confidential: bool,
     /// How many things the current selection is by clicks, kept while the selection and the design
     /// stay as they are: (the selection, the design's address, the count).
     selected_count: Option<(Vec<solidcraft_engine::Sel>, usize, usize)>,
@@ -715,7 +718,15 @@ impl AgentChat {
                         *o = output;
                     }
                 } else {
-                    self.push(Item::Tool { id, title: title.unwrap_or_default(), kind: kind.unwrap_or_default(), status, input, output, progress: None });
+                    self.push(Item::Tool {
+                        id,
+                        title: title.unwrap_or_default(),
+                        kind: kind.unwrap_or_default(),
+                        status,
+                        input,
+                        output,
+                        progress: None,
+                    });
                 }
             }
             Event::Progress { id, done, total, text } => {
@@ -1018,7 +1029,9 @@ pub fn connect(app: &mut SolveApp, ctx: &egui::Context) {
 /// The agent that started (or why it did not), as the chat runs it; true when it started.
 fn install(chat: &mut AgentChat, entry: &agents::Entry, started: Result<Box<dyn ChatBackend>, String>) -> bool {
     match started {
-        Ok(b) => {
+        Ok(mut b) => {
+            // A conversation marked confidential stays so with the agent that starts for it.
+            b.set_confidential(chat.confidential);
             chat.backend = Some(b);
             chat.argv = entry.argv.clone();
             chat.running_id = entry.id.clone();

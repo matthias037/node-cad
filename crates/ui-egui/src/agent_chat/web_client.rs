@@ -93,6 +93,9 @@ pub struct Core {
     /// it at once).
     follow: Option<super::node_ia::Follow>,
     progress_every: std::time::Duration,
+    /// The conversation is confidential: NØDE IA is told so with each request
+    /// ([`super::node_ia::CONFIDENTIAL_HEADER`]).
+    confidential: bool,
     /// Where `fetch` leaves the progress answers, each with the number of the request it follows
     /// (a late one, of a request answered meanwhile, is dropped).
     progress: Rc<RefCell<Vec<(u64, HttpAnswer)>>>,
@@ -250,6 +253,7 @@ impl Core {
             paused: None,
             follow: None,
             progress_every: super::node_ia::PROGRESS_EVERY,
+            confidential: false,
             progress: Rc::default(),
         };
         c.ready();
@@ -308,6 +312,10 @@ impl Core {
             let id = super::node_ia::request_id();
             headers.push((super::node_ia::REQUEST_HEADER.into(), id.clone()));
             self.follow = Some(super::node_ia::Follow::new(id, self.progress_every));
+            // A confidential conversation stays with Mistral, in Europe.
+            if self.confidential {
+                headers.push((super::node_ia::CONFIDENTIAL_HEADER.into(), "1".into()));
+            }
         }
         let request = HttpRequest {
             method: "POST",
@@ -460,6 +468,9 @@ impl ChatBackend for WebBackend {
     fn authenticate(&mut self, _method: &str) {}
     fn set_model(&mut self, model: &str) {
         self.core.borrow_mut().cfg.model = model.to_string();
+    }
+    fn set_confidential(&mut self, on: bool) {
+        self.core.borrow_mut().confidential = on;
     }
     fn shutdown(&mut self, _wait: bool) {
         self.core.borrow_mut().cancel();

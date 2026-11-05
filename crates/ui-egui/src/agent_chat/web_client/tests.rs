@@ -85,6 +85,26 @@ fn a_message_goes_to_the_relay_and_a_plain_answer_ends_the_turn() {
     assert_eq!(net.count(), 1, "nothing more was asked");
 }
 
+/// A conversation marked confidential tells the relay so with its next requests; unmarked,
+/// nothing is said.
+#[test]
+fn a_confidential_conversation_tells_the_relay() {
+    let net = Net::default();
+    let (mut app, ctx) = app_with_web(&net);
+    let marked = |net: &Net| -> Vec<bool> {
+        let sent = net.sent.borrow();
+        let posts = sent.iter().filter(|(r, _)| r.method == "POST");
+        posts.map(|(r, _)| r.headers.iter().any(|(k, v)| k == super::super::node_ia::CONFIDENTIAL_HEADER && v == "1")).collect()
+    };
+    send(&mut app, &ctx, "bonjour".into());
+    net.answer(0, 200, says("Bonjour !"));
+    poll(&mut app, &ctx);
+    assert_eq!(app.agent_chat.state(), State::Ready);
+    app.agent_chat.backend.as_mut().unwrap().set_confidential(true);
+    send(&mut app, &ctx, "la bride du client".into());
+    assert_eq!(marked(&net), [false, true]);
+}
+
 /// NØDE IA says what it does while it works: the request names itself, the page reads its
 /// progress through `fetch` while it waits (one read at a time, nothing held between frames),
 /// each new line shows as a dimmed thought before the answer, and the reads stop with the answer.

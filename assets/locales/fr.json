@@ -4315,6 +4315,8 @@
   "ui.agent_chat_choose_model": "Choisir un modèle",
   "ui.agent_chat_close": "Fermer",
   "ui.agent_chat_command": "Commande de l'agent",
+  "ui.agent_chat_confidential": "Confidentiel",
+  "ui.agent_chat_confidential_tip": "NØDE IA garde cette discussion chez Mistral, en Europe, jusqu'à la fin. Un document joint y reste toujours. Cochez avant d'envoyer.",
   "ui.agent_chat_connect": "Connecter",
   "ui.agent_chat_copy": "Copier",
   "ui.agent_chat_ctx_bodies": "Corps",

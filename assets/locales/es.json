@@ -3770,6 +3770,8 @@
   "ui.agent_chat_choose_model": "Elige un modelo",
   "ui.agent_chat_close": "Cerrar",
   "ui.agent_chat_command": "Comando del agente",
+  "ui.agent_chat_confidential": "Confidencial",
+  "ui.agent_chat_confidential_tip": "NØDE IA mantiene esta conversación con Mistral, en Europa, hasta el final. Un documento adjunto siempre se queda allí. Márquela antes de enviar.",
   "ui.agent_chat_connect": "Conectar",
   "ui.agent_chat_copy": "Copiar",
   "ui.agent_chat_ctx_bodies": "Cuerpos",

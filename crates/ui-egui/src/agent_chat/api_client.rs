@@ -654,6 +654,9 @@ pub struct ApiBackend {
     cmds: Option<Sender<Cmd>>,
     events: Receiver<Event>,
     cancel: Arc<AtomicBool>,
+    /// The conversation is confidential ([`ChatBackend::set_confidential`]): read by the worker
+    /// at each request, so that a box ticked during a message counts from its next request.
+    confidential: Arc<AtomicBool>,
     mcp: Option<ProcessHandle>,
 }
 
@@ -681,6 +684,8 @@ impl ApiBackend {
         let (ev_tx, events) = channel::<Event>();
         let cancel = Arc::new(AtomicBool::new(false));
         let stop = cancel.clone();
+        let confidential = Arc::new(AtomicBool::new(false));
+        let marked = confidential.clone();
         let wake: Arc<dyn Fn() + Send + Sync> = Arc::from(ctx.wake);
         std::thread::spawn(move || {
             let mut w = Worker {
@@ -695,11 +700,12 @@ impl ApiBackend {
                 events: ev_tx,
                 wake,
                 cancel: stop,
+                confidential: marked,
                 no_reasoning: Default::default(),
             };
             w.run(cmd_rx);
         });
-        Ok(ApiBackend { cmds: Some(cmd_tx), events, cancel, mcp: handle })
+        Ok(ApiBackend { cmds: Some(cmd_tx), events, cancel, confidential, mcp: handle })
     }
 }
 
@@ -725,6 +731,9 @@ impl ChatBackend for ApiBackend {
         if let Some(c) = &self.cmds {
             let _ = c.send(Cmd::SetRequestTimeout(secs));
         }
+    }
+    fn set_confidential(&mut self, on: bool) {
+        self.confidential.store(on, Ordering::Relaxed);
     }
     fn new_session(&mut self) {
         // A running turn is cancelled; the worker resets the history once it has ended.
@@ -771,6 +780,8 @@ struct Worker {
     events: Sender<Event>,
     wake: Arc<dyn Fn() + Send + Sync>,
     cancel: Arc<AtomicBool>,
+    /// The conversation is confidential: NØDE IA is told so with each request.
+    confidential: Arc<AtomicBool>,
     /// Set once the endpoint refused tools together with a reasoning effort: later requests ask for none.
     no_reasoning: std::cell::Cell<bool>,
 }
@@ -1301,6 +1312,10 @@ impl Worker {
         // its progress until the answer comes.
         if self.cfg.protocol == Protocol::OpenAi && super::node_ia::is_node_ia(&self.cfg.base_url) {
             headers.push((super::node_ia::REQUEST_HEADER.to_string(), super::node_ia::request_id()));
+            // A confidential conversation stays with Mistral, in Europe.
+            if self.confidential.load(Ordering::Relaxed) {
+                headers.push((super::node_ia::CONFIDENTIAL_HEADER.to_string(), "1".to_string()));
+            }
         }
         self.post_to(url, headers, body)
     }
@@ -1823,6 +1838,48 @@ mod tests {
         std::thread::sleep(Duration::from_millis(300));
         assert_eq!(reads.lock().unwrap().len(), count, "no read after the answer");
         b.shutdown(true);
+    }
+
+    /// A conversation marked confidential tells NØDE IA so with each request, from the next one
+    /// on; unmarked, nothing is said; another endpoint is never told.
+    #[test]
+    fn a_confidential_conversation_tells_node_ia_and_no_one_else() {
+        use super::super::node_ia::CONFIDENTIAL_HEADER;
+        let marked = |base_url: &str, steps: &[Option<bool>]| -> Vec<bool> {
+            let seen = Arc::new(std::sync::Mutex::new(Vec::<HttpRequest>::new()));
+            let log = seen.clone();
+            let http: HttpFn = Arc::new(move |r: &HttpRequest| {
+                if r.method == "GET" {
+                    return Ok((200, b"{\"data\":[]}".to_vec()));
+                }
+                log.lock().unwrap().push(r.clone());
+                Ok((200, json!({"choices": [{"message": {"role": "assistant", "content": "ok"}}]}).to_string().into_bytes()))
+            });
+            let cfg = ApiConfig {
+                name: "NØDE IA".into(),
+                protocol: Protocol::OpenAi,
+                base_url: base_url.into(),
+                model: "mistral-large-latest".into(),
+                key: Some("jeton".into()),
+                http,
+                request_timeout_s: 300,
+            };
+            let ctx = StartContext { cwd: std::env::temp_dir(), bridge: None, tools: None, wake: Box::new(|| {}) };
+            let mut b = ApiBackend::start(cfg, ctx).unwrap();
+            for step in steps {
+                if let Some(on) = step {
+                    b.set_confidential(*on);
+                }
+                b.prompt(&[PromptPart::Text("une bride".into())]);
+                wait_for_turn(&mut b);
+            }
+            b.shutdown(true);
+            let sent = seen.lock().unwrap();
+            sent.iter().map(|r| r.headers.contains(&(CONFIDENTIAL_HEADER.to_string(), "1".to_string()))).collect()
+        };
+        let node_ia = "http://127.0.0.1:1/api/cad/ia/v1";
+        assert_eq!(marked(node_ia, &[None, Some(true), None, Some(false)]), [false, true, true, false]);
+        assert_eq!(marked("http://localhost:1/v1", &[Some(true), None]), [false, false]);
     }
 
     /// Another endpoint is not asked for progress, and its requests do not name themselves.
@@ -2602,6 +2659,7 @@ mod tests {
             events,
             wake: Arc::new(|| {}),
             cancel: Arc::new(AtomicBool::new(false)),
+            confidential: Arc::new(AtomicBool::new(false)),
             no_reasoning: Default::default(),
         };
         (w, seen)

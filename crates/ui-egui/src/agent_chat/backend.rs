@@ -155,6 +155,9 @@ pub trait ChatBackend {
     fn set_mode(&mut self, _mode: &str) {}
     /// An endpoint's new request timeout, in seconds, from the next request on.
     fn set_request_timeout(&mut self, _secs: u64) {}
+    /// Mark the conversation confidential or not, from the next request on: NØDE IA then keeps
+    /// it on Mistral, in Europe ([`super::node_ia::CONFIDENTIAL_HEADER`]). Other agents ignore it.
+    fn set_confidential(&mut self, _on: bool) {}
     fn set_config_option(&mut self, _id: &str, _value: &str) {}
     /// Its process, for status and tests.
     fn pid(&self) -> Option<u32> {

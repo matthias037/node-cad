@@ -4030,6 +4030,8 @@
   "ui.agent_chat_choose_model": "Scegli un modello",
   "ui.agent_chat_close": "Chiudi",
   "ui.agent_chat_command": "Comando dell'agente",
+  "ui.agent_chat_confidential": "Riservato",
+  "ui.agent_chat_confidential_tip": "NØDE IA tiene questa conversazione su Mistral, in Europa, fino alla fine. Un documento allegato resta sempre lì. Spunta prima di inviare.",
   "ui.agent_chat_connect": "Connetti",
   "ui.agent_chat_copy": "Copia",
   "ui.agent_chat_ctx_bodies": "Corpi",

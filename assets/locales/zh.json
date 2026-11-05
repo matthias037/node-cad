@@ -4319,6 +4319,8 @@
   "ui.agent_chat_choose_model": "选择模型",
   "ui.agent_chat_close": "关闭",
   "ui.agent_chat_command": "智能体命令",
+  "ui.agent_chat_confidential": "机密",
+  "ui.agent_chat_confidential_tip": "NØDE IA 会将此对话始终保留在欧洲的 Mistral 上。附加的文档始终留在那里。请在发送前勾选。",
   "ui.agent_chat_connect": "连接",
   "ui.agent_chat_copy": "复制",
   "ui.agent_chat_ctx_bodies": "实体",

@@ -49,6 +49,10 @@ pub fn is_node_ia(base_url: &str) -> bool {
 /// The header that names a chat request to the relay, so that what NØDE IA does meanwhile can be
 /// read while the app waits for the answer (`/progres`): its plan, its tries, its reasoning.
 pub const REQUEST_HEADER: &str = "X-NodeIA-Requete";
+/// The header by which the app marks a conversation confidential (`1`): NØDE IA then answers it
+/// with Mistral, in Europe, to the end, like a conversation with a document attached. Without it,
+/// the relay may answer with another model (its `routage.ts`).
+pub const CONFIDENTIAL_HEADER: &str = "X-NodeIA-Confidentiel";
 /// How often the progress of a request is read while it runs.
 pub const PROGRESS_EVERY: std::time::Duration = std::time::Duration::from_secs(1);
 /// Reads in a row that get no progress back (a relay without the route, say) before the app
