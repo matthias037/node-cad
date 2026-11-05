@@ -4342,6 +4342,7 @@
   "ui.agent_chat_file_empty_picture": "{name}: 空の画像です",
   "ui.agent_chat_file_error": "{name}: {error}",
   "ui.agent_chat_file_heic": "{name}: HEIC 画像はここでは読めません。先に JPEG か PNG に書き出してください",
+  "ui.agent_chat_file_dwg": "{name}: DWG 図面は読めません（非公開形式）。CAD ソフトで DXF か PDF に保存してから、そのファイルを添付してください",
   "ui.agent_chat_file_importing": "デザインにインポート中…",
   "ui.agent_chat_file_kinds": "{name}: 添付できるのは画像 (PNG、JPEG、GIF、WebP、BMP、TIFF)、テキストファイル (SVG も)、CAD ファイル (STEP、IGES、FreeCAD、Rhino、STL、3MF、OBJ、glTF) です",
   "ui.agent_chat_file_loading": "ファイルを読み込み中…",

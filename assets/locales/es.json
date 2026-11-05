@@ -3793,6 +3793,7 @@
   "ui.agent_chat_file_empty_picture": "{name}: una imagen vacía",
   "ui.agent_chat_file_error": "{name}: {error}",
   "ui.agent_chat_file_heic": "{name}: aquí no se pueden leer imágenes HEIC; expórtala antes como JPEG o PNG",
+  "ui.agent_chat_file_dwg": "{name}: los planos DWG no se pueden leer (formato cerrado); guárdalo como DXF o PDF desde tu software CAD y adjunta ese archivo",
   "ui.agent_chat_file_importing": "Importando al diseño…",
   "ui.agent_chat_file_kinds": "{name}: se pueden adjuntar imágenes (PNG, JPEG, GIF, WebP, BMP, TIFF), archivos de texto (también SVG) y archivos CAD (STEP, IGES, FreeCAD, Rhino, STL, 3MF, OBJ, glTF)",
   "ui.agent_chat_file_loading": "Leyendo el archivo…",

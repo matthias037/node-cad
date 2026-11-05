@@ -1490,13 +1490,16 @@ fn start_turn(app: &mut SolveApp, text: String, image: bool, at: Option<usize>, 
 /// that takes them. `at` is the message's place in the conversation, where its picture is kept.
 fn start_turn_with(app: &mut SolveApp, text: String, image: bool, at: Option<usize>, files: Vec<attach::Attachment>, note: Option<&str>) {
     let (pictures, documents) = (app.agent_chat.images, app.agent_chat.documents);
+    // A DXF drawing goes whole only to NØDE IA, whose server reads its entities; any other agent
+    // is pointed to the file.
+    let drawings = documents && agents::current(app).is_some_and(|e| e.id == node_ia::ID);
     let lead = match note {
         Some(n) => format!("{n}\n\n{text}"),
         None => text.clone(),
     };
     // The whole message stays within the cap: the files' text gets what the words leave.
     let budget = MAX_PROMPT.saturating_sub(lead.chars().count() + FILE_NAMES_ROOM);
-    let about_files = attach::note(&files, pictures, documents, budget);
+    let about_files = attach::note(&files, pictures, documents, drawings, budget);
     let sent: String = format!("{lead}{about_files}").chars().take(MAX_PROMPT).collect();
     let mut parts = vec![PromptPart::Text(sent)];
     if image {
@@ -1508,7 +1511,7 @@ fn start_turn_with(app: &mut SolveApp, text: String, image: bool, at: Option<usi
             Err(e) => log::warn!("the view's picture is left out of the prompt: {e}"),
         }
     }
-    parts.extend(attach::parts(&files, pictures, documents));
+    parts.extend(attach::parts(&files, pictures, documents, drawings));
     // The undo step is named after the message, or its first file when it has no words.
     let first_line = text.lines().find(|l| !l.trim().is_empty()).or_else(|| files.first().map(|f| f.name.as_str())).unwrap_or("");
     let label: String = first_line.chars().take(48).collect();
@@ -1560,7 +1563,7 @@ pub fn attach_path(app: &mut SolveApp, path: &str) -> std::result::Result<String
         // A picture is decoded and a PDF read off the window thread: a large one takes long enough
         // to stop it.
         #[cfg(not(target_arch = "wasm32"))]
-        if matches!(attach::kind(p), attach::Kind::Picture | attach::Kind::Pdf) {
+        if matches!(attach::kind(p), attach::Kind::Picture | attach::Kind::Pdf | attach::Kind::Drawing) {
             // A missing file is said at once; reading and decoding wait for the worker.
             if !p.is_file() {
                 return Err(trf("ui.agent_chat_file_not_a_file", &[("name", &attach::name_of(p))]));

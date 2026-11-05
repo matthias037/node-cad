@@ -4053,6 +4053,7 @@
   "ui.agent_chat_file_empty_picture": "{name}: immagine vuota",
   "ui.agent_chat_file_error": "{name}: {error}",
   "ui.agent_chat_file_heic": "{name}: le immagini HEIC non possono essere lette qui; esportala prima in JPEG o PNG",
+  "ui.agent_chat_file_dwg": "{name}: i disegni DWG non possono essere letti (formato chiuso); salvalo in DXF o PDF dal tuo software CAD, poi allega quel file",
   "ui.agent_chat_file_importing": "Importazione nel progetto…",
   "ui.agent_chat_file_kinds": "{name}: si possono allegare immagini (PNG, JPEG, GIF, WebP, BMP, TIFF), file di testo (anche SVG) e file CAD (STEP, IGES, FreeCAD, Rhino, STL, 3MF, OBJ, glTF)",
   "ui.agent_chat_file_loading": "Lettura del file…",
