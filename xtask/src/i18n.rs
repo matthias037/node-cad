@@ -25,7 +25,8 @@ const DIR: &str = "assets/locales";
 /// Catalogs delivered complete: a missing message here fails `--check`. English is the source
 /// catalog and is checked implicitly; keep this in step with `COMPLETE` in `ui-egui::i18n`.
 /// NØDE CAD's own messages are not in Arabic, Hebrew or Vietnamese yet: those are reported.
-const COMPLETE: &[&str] = &["ja", "zh"];
+/// French is NØDE CAD's first language: a merge that brings new English messages translates them.
+const COMPLETE: &[&str] = &["fr", "ja", "zh"];
 
 /// What `run` found.
 #[derive(Default)]

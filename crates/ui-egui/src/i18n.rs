@@ -708,9 +708,9 @@ mod tests {
     /// are kept partial so a new label doesn't need more translations), so their gaps fall back
     /// to English and are reported by `cargo xtask i18n` without failing the build, while
     /// nothing in the complete catalogs may regress. In NØDE CAD, Arabic, Hebrew and Vietnamese
-    /// lack its own messages (NØDE IA, Drawing, Manufacture…), so only Japanese and Chinese are
-    /// held complete; French, its first language, is complete by hand.
-    const COMPLETE: &[&str] = &["ja", "zh"];
+    /// lack its own messages (NØDE IA, Drawing, Manufacture…), so French (its first language),
+    /// Japanese and Chinese are the ones held complete.
+    const COMPLETE: &[&str] = &["fr", "ja", "zh"];
 
     /// `text()` falls back to English silently, so a message a complete locale never received is
     /// shown in English inside an otherwise translated UI, with nothing in the build to say so.
