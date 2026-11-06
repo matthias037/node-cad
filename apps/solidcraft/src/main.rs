@@ -643,7 +643,8 @@ fn agent_http(r: &solidcraft_ui_egui::agent_chat::backend::HttpRequest) -> Resul
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .tls_config(tls)
         .http_status_as_error(false)
-        .timeout_global(Some(Duration::from_secs(r.timeout_s.clamp(1, 3600))))
+        // Up to an hour, or NØDE IA's day (no time limit, 06/11/2026).
+        .timeout_global(Some(Duration::from_secs(r.timeout_s.clamp(1, solidcraft_ui_egui::agent_chat::agents::UNLIMITED_REQUEST_TIMEOUT_S))))
         .timeout_connect(Some(Duration::from_secs(10)))
         .user_agent("NODE CAD")
         .max_redirects(0)

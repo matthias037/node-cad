@@ -30,11 +30,12 @@ pub fn site() -> String {
     }
 }
 
-/// How long one NØDE IA request may take. Its server plans, writes a program, has the engine judge
-/// it and asks for corrections, all in one request, and stops asking after 170 s; one correction
-/// takes 30 to 90 s. At 300 s (the other agents' default) a CNC lathe's sixth try came too late
-/// and the work was lost (04/11/2026).
-pub const REQUEST_TIMEOUT_S: u64 = 420;
+/// How long one NØDE IA request may take: no time limit (06/11/2026). Its server plans, writes a
+/// program, has the engine judge it and asks for corrections, all in one request. At 300 s a CNC
+/// lathe's sixth try came too late (04/11/2026); at 420 s a mountain bike from Claude was cut at
+/// its third round and all its work was lost. The relay now waits for its model without a limit
+/// too; the app waits as long (a day, only against a relay that never answers).
+pub const REQUEST_TIMEOUT_S: u64 = super::agents::UNLIMITED_REQUEST_TIMEOUT_S;
 
 /// The relay, as an OpenAI-compatible base URL.
 pub fn base_url() -> String {

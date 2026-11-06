@@ -1450,10 +1450,20 @@ impl Worker {
 }
 
 impl Worker {
-    /// The endpoint's request timeout, in range.
+    /// The endpoint's request timeout, in range; NØDE IA's has no limit
+    /// ([`super::agents::UNLIMITED_REQUEST_TIMEOUT_S`]).
     fn limit_s(&self) -> u64 {
-        self.cfg.request_timeout_s.clamp(super::agents::MIN_REQUEST_TIMEOUT_S, super::agents::MAX_REQUEST_TIMEOUT_S)
+        limit_of(self.cfg.request_timeout_s)
     }
+}
+
+/// A request timeout as the worker uses it: in range, unless it is the unlimited one.
+fn limit_of(request_timeout_s: u64) -> u64 {
+    use super::agents::{MAX_REQUEST_TIMEOUT_S, MIN_REQUEST_TIMEOUT_S, UNLIMITED_REQUEST_TIMEOUT_S};
+    if request_timeout_s >= UNLIMITED_REQUEST_TIMEOUT_S {
+        return UNLIMITED_REQUEST_TIMEOUT_S;
+    }
+    request_timeout_s.clamp(MIN_REQUEST_TIMEOUT_S, MAX_REQUEST_TIMEOUT_S)
 }
 
 /// What the chat says when a request ran out of time: the limit, and where to raise it.
@@ -1629,6 +1639,18 @@ pub fn test_endpoint(http: &HttpFn, base_url: &str, key: Option<&str>, model: &s
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// NØDE IA waits without a time limit (06/11/2026: a mountain bike was cut at 420 s and its
+    /// work lost); an endpoint people add still waits half a minute to an hour.
+    #[test]
+    fn node_ia_waits_without_a_limit_and_other_endpoints_within_an_hour() {
+        use super::super::agents::{MAX_REQUEST_TIMEOUT_S, MIN_REQUEST_TIMEOUT_S, UNLIMITED_REQUEST_TIMEOUT_S};
+        assert_eq!(super::super::node_ia::REQUEST_TIMEOUT_S, UNLIMITED_REQUEST_TIMEOUT_S);
+        assert_eq!(limit_of(super::super::node_ia::REQUEST_TIMEOUT_S), UNLIMITED_REQUEST_TIMEOUT_S);
+        assert_eq!(limit_of(420), 420);
+        assert_eq!(limit_of(7200), MAX_REQUEST_TIMEOUT_S);
+        assert_eq!(limit_of(1), MIN_REQUEST_TIMEOUT_S);
+    }
 
     #[test]
     fn a_tools_pictures_reach_the_model_then_leave_with_the_step() {

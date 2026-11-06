@@ -144,6 +144,10 @@ pub const DEFAULT_REQUEST_TIMEOUT_S: u64 = 300;
 pub const MIN_REQUEST_TIMEOUT_S: u64 = 30;
 /// The longest request timeout an endpoint can have (an hour).
 pub const MAX_REQUEST_TIMEOUT_S: u64 = 3600;
+/// No time limit, for NØDE IA only (06/11/2026): a day, past any request, kept only so a relay
+/// that never answers still ends one some day. Endpoints people add stay within
+/// [`MAX_REQUEST_TIMEOUT_S`]; this one is never read from a preferences file.
+pub const UNLIMITED_REQUEST_TIMEOUT_S: u64 = 86_400;
 
 /// A request timeout in range: seconds from a preferences file, the dialog or the control
 /// channel, rounded and clamped; anything not a finite number is the default.
