@@ -4816,7 +4816,7 @@
   "ui.agent_chat_close": "Close",
   "ui.agent_chat_command": "Agent command",
   "ui.agent_chat_confidential": "Confidential",
-  "ui.agent_chat_confidential_tip": "NØDE IA keeps this conversation with Mistral, in Europe, to the end. An attached document always stays there. Tick before sending.",
+  "ui.agent_chat_confidential_tip": "NØDE IA keeps this conversation with Mistral, in Europe, to the end. Without it, Claude answers, attached photos, drawings and documents included. Tick before sending.",
   "ui.agent_chat_connect": "Connect",
   "ui.agent_chat_copy": "Copy",
   "ui.agent_chat_copy_message": "Copy message",
