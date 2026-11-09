@@ -446,20 +446,30 @@ impl ContactGeometry {
 
     /// The pairs of set members whose bodies pass through each other in `s`, with how deep the
     /// first two bodies found go (every pair, or the first found when `all` is false). `work`
-    /// adds up the cost, refused past `budget`.
-    pub(super) fn hits(&self, s: &Session, work: &mut usize, budget: usize, all: bool) -> Result<Vec<(Member, Member, f64)>> {
+    /// adds up the cost, refused past `budget`; past `deadline` the check stops too, inside the
+    /// work of a pair (#7855).
+    pub(super) fn hits(
+        &self,
+        s: &Session,
+        work: &mut usize,
+        budget: usize,
+        deadline: Option<web_time::Instant>,
+        all: bool,
+    ) -> Result<Vec<(Member, Member, f64)>> {
         let mut out: Vec<(Member, Member, f64)> = Vec::new();
         // The member pairs found so far (lower id first).
         let mut found: BTreeSet<(u64, u64)> = BTreeSet::new();
         let meshes = self.placed(s)?;
-        // Each mesh's box once, not once per pair it is in.
+        // Each mesh's box once, not once per pair it is in; its surface likewise, when asked.
         let boxes: Vec<Aabb3> = meshes.iter().map(Mesh::bounds).collect();
+        let mut surfaces: Vec<Option<super::Surface>> = vec![None; meshes.len()];
+        let mut meter = super::Meter::new(work, budget, deadline);
         for (i, (_, _, oa, ob)) in self.pairs.iter().enumerate() {
             // Members already found colliding need no more of their bodies tested.
             if found.contains(&(oa.0.min(ob.0), oa.0.max(ob.0))) {
                 continue;
             }
-            if let Some(depth) = self.depth(i, &meshes, &boxes, work, budget)? {
+            if let Some(depth) = self.depth(i, &meshes, &boxes, &mut surfaces, &mut meter)? {
                 found.insert((oa.0.min(ob.0), oa.0.max(ob.0)));
                 out.push((oa.clone(), ob.clone(), depth));
                 if !all {
@@ -475,7 +485,9 @@ impl ContactGeometry {
     pub(super) fn depths(&self, s: &Session, work: &mut usize, budget: usize) -> Result<Vec<f64>> {
         let meshes = self.placed(s)?;
         let boxes: Vec<Aabb3> = meshes.iter().map(Mesh::bounds).collect();
-        (0..self.pairs.len()).map(|i| Ok(self.depth(i, &meshes, &boxes, work, budget)?.unwrap_or(0.0))).collect()
+        let mut surfaces: Vec<Option<super::Surface>> = vec![None; meshes.len()];
+        let mut meter = super::Meter::new(work, budget, None);
+        (0..self.pairs.len()).map(|i| Ok(self.depth(i, &meshes, &boxes, &mut surfaces, &mut meter)?.unwrap_or(0.0))).collect()
     }
 
     /// The set members pair `i` is between.
@@ -495,8 +507,17 @@ impl ContactGeometry {
     }
 
     /// How deep the bodies of pair `i` (placed as `meshes`, in `boxes`) pass into each other,
-    /// when more than a touch.
-    fn depth(&self, i: usize, meshes: &[Mesh], boxes: &[Aabb3], work: &mut usize, budget: usize) -> Result<Option<f64>> {
+    /// when more than a touch. Each body's [`super::Surface`] is made once in `surfaces`, for
+    /// every pair it is in; `meter` counts the work (its triangles and the points asked) and
+    /// stops the check past its budget or its deadline.
+    fn depth(
+        &self,
+        i: usize,
+        meshes: &[Mesh],
+        boxes: &[Aabb3],
+        surfaces: &mut [Option<super::Surface>],
+        meter: &mut super::Meter<'_>,
+    ) -> Result<Option<f64>> {
         let Some((a, b, _, _)) = self.pairs.get(i) else { return Err(limit("invalid contact geometry pair")) };
         let (Some(ma), Some(mb), Some(ba), Some(bb)) = (meshes.get(*a), meshes.get(*b), self.bodies.get(*a), self.bodies.get(*b)) else {
             return Err(limit("invalid contact geometry pair"));
@@ -516,18 +537,20 @@ impl ContactGeometry {
         {
             return Ok(None);
         }
-        let cost = ma
-            .positions
-            .len()
-            // 4 sample points and 3 edges to probe per triangle of `a` against each triangle of `b` (#3323), and the other way round.
-            .saturating_add(ma.triangles.len().saturating_mul(7))
-            .saturating_mul(mb.triangles.len())
-            .saturating_add(mb.positions.len().saturating_add(mb.triangles.len().saturating_mul(7)).saturating_mul(ma.triangles.len()));
-        *work = work.saturating_add(cost);
-        if *work > budget {
-            return Err(limit("motion exceeds contact sweep collision budget; simplify the contact set or use smaller increments"));
+        let spent = |_: super::Spent| limit("motion exceeds contact sweep collision budget; simplify the contact set or use smaller increments");
+        // Each surface once per placement: making one costs its triangles.
+        for k in [*a, *b] {
+            if let (Some(slot @ None), Some(m)) = (surfaces.get_mut(k), meshes.get(k)) {
+                meter.add(m.triangles.len()).map_err(spent)?;
+                *slot = Some(super::Surface::new(m));
+            }
         }
-        Ok(super::mesh_overlap(ma, mb, tol))
+        let (Some(Some(sa)), Some(Some(sb))) = (surfaces.get(*a), surfaces.get(*b)) else {
+            return Err(limit("invalid contact geometry pair"));
+        };
+        // 4 sample points and 3 edges to probe per triangle of `a` against `b` (#3323), and the
+        // other way round: the meter counts each, and the boxes and triangles each one asks.
+        super::mesh_overlap_in(ma, mb, sa, sb, tol, meter).map_err(spent)
     }
 }
 

@@ -399,7 +399,10 @@ list the `occurrences` to check (an arm, with `against` the parts it must miss).
 runs out it says `truncated` and the step it `checked_to`, and it is not `clear`, even when nothing
 collided in the steps it checked. A mechanism with detailed parts, such as a gear train, can need
 more than that fixed work budget: give it `budget_s` (seconds, at most 86400) and the check runs
-until that time instead, looked at between samples.
+until that time instead, looked at all along the check (inside a sample too, so it stops within
+moments of it). Each point of a part is checked against the triangles of the other part that can
+reach it (a hierarchy of their boxes), not against every triangle: the same answers, in a fraction
+of the time.
 `joint.sweep {joint, from, to, index?, step?, refine?, occurrences?, against?, contact_sets?,
 report_gaps?, apply?}` drives one joint value from `from` toward `to` and answers how far it gets
 before parts touch: `stopped_at` (the last value clear of contact), `stopped_by` (the two parts

@@ -270,9 +270,68 @@ fn key_from(name: &str) -> Option<egui::Key> {
     })
 }
 
+/// The checks whose time a `budget_s` bounds (`motion.interference`, `inspect.interference`).
+fn timed_check(id: &str) -> bool {
+    matches!(id, "motion.interference" | "inspect.interference")
+}
+
+/// The longest a check run through the control channel may take where the window is drawn (a
+/// step of a batch, or a reading when the copies are all busy): the window waits for it. The
+/// collision check of a 38-body engine kept NØDE CAD frozen for minutes (09/11/2026).
+pub(crate) const WINDOW_BUDGET_S: f64 = 30.0;
+
+/// The longest a check may compute on a copy, off the window thread: an agent waits for its tool
+/// a few minutes, and a check no one waits for is not left computing unseen.
+pub(crate) const COPY_BUDGET_S: f64 = 300.0;
+
+/// What a check bounded by [`WINDOW_BUDGET_S`] says about it, in its reply.
+const WINDOW_NOTE: &str = "NØDE CAD ran this check where its window is drawn, so through the control channel it gets at most 30 s \
+     (budget_s): check fewer parts (occurrences, against) or fewer samples, or run it on its own rather than in a batch, where it \
+     computes off the window";
+
+/// `budget_s` past `cap` brought down to it; `absent` also gives one where none is. A `budget_s`
+/// the command would refuse is left for it to refuse. Whether it changed.
+fn bounded(id: &str, params: &mut Value, cap: f64, absent: bool) -> bool {
+    if !timed_check(id) {
+        return false;
+    }
+    let Some(o) = params.as_object_mut() else { return false };
+    let bound = match o.get("budget_s").filter(|v| !v.is_null()) {
+        None => absent,
+        Some(v) => v.as_f64().is_some_and(|s| s.is_finite() && s > cap && s <= 86_400.0),
+    };
+    if bound {
+        o.insert("budget_s".into(), json!(cap));
+    }
+    bound
+}
+
+/// `params` of command `id` for a run where the window is drawn: a timed check gets at most
+/// [`WINDOW_BUDGET_S`], given or not. Whether it was bounded.
+pub(crate) fn bounded_for_the_window(id: &str, mut params: Value) -> (Value, bool) {
+    let bound = bounded(id, &mut params, WINDOW_BUDGET_S, true);
+    (params, bound)
+}
+
+/// `params` of command `id` for a run on a copy: a timed check given more than
+/// [`COPY_BUDGET_S`] gets that.
+pub(crate) fn bounded_for_a_copy(id: &str, mut params: Value) -> Value {
+    bounded(id, &mut params, COPY_BUDGET_S, false);
+    params
+}
+
 /// Run one command as `engine.execute` does: through `app.run`, then the first-body fit and the
 /// camera the command asked for.
 fn execute(app: &mut SolveApp, id: &str, params: Value) -> Result<Value, String> {
+    // A long check here keeps the window waiting: its time is bounded, and its reply says so.
+    if timed_check(id) {
+        let (params, bound) = bounded_for_the_window(id, params);
+        let mut r = app.run(id, params);
+        if bound && let Ok(Some(o)) = r.as_mut().map(Value::as_object_mut) {
+            o.insert("window_note".into(), json!(WINDOW_NOTE));
+        }
+        return r;
+    }
     if solidcraft_engine::panels::commands::is_command(id) {
         // No first-body meshing, camera-follow or fit tail for application layout.
         return app.run(id, params);
@@ -1759,6 +1818,28 @@ pub(crate) fn write_screenshot(image: &egui::ColorImage, path: &str) -> Result<(
 
 #[cfg(test)]
 mod tests {
+    /// A timed check gets at most `WINDOW_BUDGET_S` where the window is drawn, given or not, and
+    /// at most `COPY_BUDGET_S` on a copy; a `budget_s` the command refuses is left to it, and
+    /// other commands are left alone.
+    #[test]
+    fn a_timed_check_is_bounded_for_the_window_and_for_a_copy() {
+        use super::{COPY_BUDGET_S, WINDOW_BUDGET_S, bounded_for_a_copy, bounded_for_the_window};
+        use serde_json::json;
+        let study = json!({"study": "Deux tours"});
+        assert_eq!(bounded_for_the_window("motion.interference", study.clone()), (json!({"study": "Deux tours", "budget_s": WINDOW_BUDGET_S}), true));
+        assert_eq!(bounded_for_the_window("motion.interference", json!({"study": 1, "budget_s": 600})).0["budget_s"], json!(WINDOW_BUDGET_S));
+        assert_eq!(bounded_for_the_window("inspect.interference", json!({})), (json!({"budget_s": WINDOW_BUDGET_S}), true), "its 240 s default too");
+        assert_eq!(bounded_for_the_window("inspect.interference", json!({"budget_s": 5})), (json!({"budget_s": 5}), false), "shorter: kept");
+        for refused in [json!(-1), json!(1e9), json!("soon")] {
+            let (p, bound) = bounded_for_the_window("motion.interference", json!({"study": 1, "budget_s": refused}));
+            assert!(!bound && p["budget_s"] == refused, "{p}");
+        }
+        assert_eq!(bounded_for_the_window("solid.box", json!({"length": 10})), (json!({"length": 10}), false));
+        assert_eq!(bounded_for_a_copy("motion.interference", study.clone()), study, "on a copy its work budget holds");
+        assert_eq!(bounded_for_a_copy("motion.interference", json!({"budget_s": 86_400})), json!({"budget_s": COPY_BUDGET_S}));
+        assert_eq!(bounded_for_a_copy("inspect.interference", json!({"budget_s": 120})), json!({"budget_s": 120}));
+    }
+
     fn panel_command_app() -> crate::SolveApp {
         use crate::panel_runtime::*;
         let h = PanelMountHarness::new(false).unwrap();

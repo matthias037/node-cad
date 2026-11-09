@@ -82,6 +82,13 @@ const READ_ON_A_COPY: &[&str] = &[
     // Physical properties of a component or placement: every body of every placement (#8706).
     "component.properties",
     "occurrence.properties",
+    // A motion study played and checked at every sample, and the contact sets' check: they only
+    // read. The collision check of a 38-body engine's study kept the window frozen for minutes,
+    // its Stop out of reach (09/11/2026).
+    "motion.interference",
+    "motion.plot",
+    "motion.trace",
+    "contact.check",
 ];
 
 /// Exports and readings computing at once; more run here.
@@ -438,6 +445,8 @@ impl SolveApp {
         // The copy has no history and no file (#9624): an inspection reports the design's own.
         let s = &self.session;
         let own = (id == "document.inspect").then(|| (s.undo.len(), s.redo.len(), s.path.clone()));
+        // An agent waits for its tool a few minutes: a check is not left computing unseen for longer.
+        let params = crate::control::bounded_for_a_copy(id, params);
         let rx = spawn(scope, move || {
             let mut reply = match copy.execute(id, &params) {
                 Ok(mut v) => {

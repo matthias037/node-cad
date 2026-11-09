@@ -561,6 +561,14 @@ Timeouts and `control.pending` work as described above. A slow command is still 
 is done, from a later frame. With the preference off, commands run on the window thread, and the
 window waits for each one.
 
+Readings that only read the design and can take long run on a copy of it off the window thread,
+whatever the preference: `inspect.measure`, `inspect.clearance`, `inspect.interference`,
+`document.inspect`, `component.properties`, `occurrence.properties`, and a motion study's
+`motion.interference`, `motion.plot`, `motion.trace` and `contact.check` (the collision check of a
+38-body engine's study had kept the window frozen for minutes). A check that still runs on the
+window thread, as a step of an `engine.batch`, gets a `budget_s` of at most 30 s, and its reply
+says so (`window_note`); one on a copy, at most 300 s.
+
 Product images use `render.preflight/start/status/cancel/export` through `engine.execute`.
 Keep the returned session-scoped job ID for subsequent calls; status does not block or
 render. See [render jobs](render-jobs.md) for capture, cancellation and export semantics.

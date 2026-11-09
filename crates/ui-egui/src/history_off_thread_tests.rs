@@ -962,6 +962,63 @@ fn a_clearance_check_reads_a_copy_off_the_window_thread() {
     assert!(h.app.control_answering.is_empty());
 }
 
+/// Cube B slides 10 mm toward cube A over the 15 steps of study "Push" (as the engine's
+/// interference tests make it), driven over the control channel.
+fn sliding_cubes() -> (Harness, std::sync::mpsc::Sender<crate::ControlRequest>) {
+    let mut h = Harness::new();
+    h.app.home.open = false;
+    for (name, x) in [("A", 0), ("B", 20)] {
+        h.app.run("component.activate", json!({"component": "root"})).unwrap();
+        h.app.run("component.create", json!({"name": name})).unwrap();
+        h.app.run("solid.box", json!({"length": 10, "width": 10, "height": 10, "corner": [x, 0, 0]})).unwrap();
+    }
+    h.app.run("component.activate", json!({"component": "root"})).unwrap();
+    let doc = &h.app.session.doc;
+    let a = doc.find_component("A").and_then(|c| doc.occurrence_of(c)).map(|o| o.id).unwrap();
+    h.app.run("occurrence.ground", json!({"occurrence": a, "grounded": true})).unwrap();
+    h.app.run("joint.create", json!({"type": "slider", "a": {"face": [10, 5, 5]}, "b": {"face": [20, 5, 5]}, "name": "Rail"})).unwrap();
+    h.app.run("joint.drive", json!({"joint": "Rail", "value": 10})).unwrap();
+    h.app.run("motion.study", json!({"name": "Push", "steps": 15, "keys": [{"joint": "Rail", "points": [[0, 10], [15, 0]]}]})).unwrap();
+    h.app.apply_off_thread = Some(Duration::ZERO);
+    let (tx, rx) = std::sync::mpsc::channel();
+    h.app.control_rx = Some(rx);
+    (h, tx)
+}
+
+/// A motion study's collision check and its plot only read: on a copy, off the window thread,
+/// with the preference off too, giving the answers running them here gives. The check of a
+/// 38-body engine's study kept the window frozen for minutes, its Stop out of reach (09/11/2026).
+#[test]
+fn a_motion_check_reads_a_copy_off_the_window_thread() {
+    let (mut h, tx) = sliding_cubes();
+    h.app.preferences.agent_off_thread = false;
+    let study = json!({"study": "Push"});
+    let check_here = h.app.run("motion.interference", study.clone()).unwrap();
+    let plot_here = h.app.run("motion.plot", study.clone()).unwrap();
+    let check = ask(&tx, "engine.execute", json!({"command": "motion.interference", "params": study}));
+    let plot = ask(&tx, "engine.execute", json!({"command": "motion.plot", "params": study}));
+    let view = ask(&tx, "ui.inspect", json!({}));
+    h.frames(1);
+    assert!(view.try_recv().is_ok_and(|v| v["ok"] == true), "ui.* answered meanwhile");
+    assert_eq!(h.app.control_answering.len(), 2, "both read a copy");
+    let r = reply_to(&mut h, &check);
+    assert!(r["result"] == check_here && check_here["clear"] == true, "{r}");
+    let r = reply_to(&mut h, &plot);
+    assert_eq!(r["result"], plot_here, "{r}");
+}
+
+/// In a batch, a collision check runs where the window is drawn: its time is bounded there
+/// (`WINDOW_BUDGET_S`), and its reply says why.
+#[test]
+fn a_motion_check_in_a_batch_is_bounded_for_the_window() {
+    let (mut h, tx) = sliding_cubes();
+    let batch = ask(&tx, "engine.batch", json!({"commands": [{"command": "motion.interference", "params": {"study": "Push", "budget_s": 600}}]}));
+    let r = reply_to(&mut h, &batch);
+    let step = r.to_string();
+    assert!(r["ok"] == true && step.contains("window_note"), "{r}");
+    assert!(step.contains(&format!("\"budget_s\":{:?}", crate::control::WINDOW_BUDGET_S)), "{r}");
+}
+
 /// With the preference off (Preferences > AI, the default) an agent's design change runs on the
 /// window thread, as before: answered in the frame it arrives.
 #[test]

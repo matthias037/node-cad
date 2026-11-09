@@ -254,8 +254,25 @@ fn overlap(a: &Body, b: &Body) -> Option<f64> {
     mesh_overlap(&ma, &mb, 1e-4 * a.size().max(b.size()).max(1.0))
 }
 
+/// [`mesh_overlap_in`] with no bound on its work or its time.
 fn mesh_overlap(ma: &solidcraft_geom::Mesh, mb: &solidcraft_geom::Mesh, tol: f64) -> Option<f64> {
-    let (ba, bb) = (ma.bounds(), mb.bounds());
+    let mut work = 0;
+    let (sa, sb) = (Surface::new(ma), Surface::new(mb));
+    mesh_overlap_in(ma, mb, &sa, &sb, tol, &mut Meter::new(&mut work, usize::MAX, None)).ok().flatten()
+}
+
+/// How deep the meshes `ma` and `mb` pass into each other, when more than a touch (`None`: apart
+/// or touching), asked of their surfaces `sa` and `sb` ([`Surface::new`] of each). `meter`
+/// counts the work and stops the check past its budget or its deadline ([`Spent`]).
+pub(super) fn mesh_overlap_in(
+    ma: &solidcraft_geom::Mesh,
+    mb: &solidcraft_geom::Mesh,
+    sa: &Surface,
+    sb: &Surface,
+    tol: f64,
+    meter: &mut Meter<'_>,
+) -> std::result::Result<Option<f64>, Spent> {
+    let (ba, bb) = (sa.bounds, sb.bounds);
     if ba.max.x < bb.min.x + tol
         || bb.max.x < ba.min.x + tol
         || ba.max.y < bb.min.y + tol
@@ -263,20 +280,200 @@ fn mesh_overlap(ma: &solidcraft_geom::Mesh, mb: &solidcraft_geom::Mesh, tol: f64
         || ba.max.z < bb.min.z + tol
         || bb.max.z < ba.min.z + tol
     {
-        return None;
+        return Ok(None);
     }
-    let depth = deepest(ma, mb, tol).max(deepest(mb, ma, tol));
-    (depth > tol).then_some(depth)
+    let depth = deepest(ma, sb, tol, meter)?.max(deepest(mb, sa, tol, meter)?);
+    Ok((depth > tol).then_some(depth))
 }
 
 fn tris(m: &solidcraft_geom::Mesh) -> Vec<[Vec3; 3]> {
     m.triangles.iter().filter_map(|t| m.tri(t)).collect()
 }
 
-/// The deepest any sample point of `a` lies inside `b` (0 if none).
-fn deepest(a: &solidcraft_geom::Mesh, b: &solidcraft_geom::Mesh, tol: f64) -> f64 {
-    let tb = tris(b);
-    let bx = b.bounds();
+/// What a collision check may still spend, asked all along its work, inside one sample too
+/// (#7855): its work (`budget`, in points, boxes and triangles looked at) and its time
+/// (`deadline`, from a `budget_s`; the clock is read every [`CLOCK_EVERY`] units of work). Past
+/// either the check stops with [`Spent`]: never a partial answer taken for a clear one.
+pub(super) struct Meter<'a> {
+    work: &'a mut usize,
+    budget: usize,
+    deadline: Option<web_time::Instant>,
+    /// Work since the clock was last read.
+    since: usize,
+}
+
+/// A collision check its [`Meter`] stopped: its work, or its time, ran out.
+#[derive(Debug)]
+pub(super) struct Spent;
+
+/// Units of work between two readings of the clock: a few milliseconds of checking.
+const CLOCK_EVERY: usize = 1 << 15;
+
+impl<'a> Meter<'a> {
+    pub(super) fn new(work: &'a mut usize, budget: usize, deadline: Option<web_time::Instant>) -> Meter<'a> {
+        Meter { work, budget, deadline, since: 0 }
+    }
+
+    /// `n` more units of work: past the budget, or once the deadline has passed, the check stops.
+    pub(super) fn add(&mut self, n: usize) -> std::result::Result<(), Spent> {
+        *self.work = self.work.saturating_add(n);
+        if *self.work > self.budget {
+            return Err(Spent);
+        }
+        self.since = self.since.saturating_add(n);
+        if self.since >= CLOCK_EVERY {
+            self.since = 0;
+            if self.deadline.is_some_and(|d| web_time::Instant::now() >= d) {
+                return Err(Spent);
+            }
+        }
+        Ok(())
+    }
+}
+
+/// A closed mesh's triangles in a hierarchy over their boxes ([`solidcraft_geom::Bvh`]), for the
+/// three questions a collision check asks of a point or an edge: how far the surface is, whether
+/// the point is inside it (ray parity), and where the edge passes through it. The answers are a
+/// scan of every triangle's, value for value; only the triangles whose boxes can matter are looked
+/// at. Scanning every triangle for every point, the check of a 38-body engine had not finished one
+/// position of its study after minutes, and the window waited for it (09/11/2026).
+#[derive(Clone)]
+pub(super) struct Surface {
+    tris: Vec<[Vec3; 3]>,
+    tree: solidcraft_geom::Bvh,
+    /// The mesh's box (its points), which the points of the other mesh are tested against.
+    bounds: Aabb3,
+}
+
+impl Surface {
+    pub(super) fn new(m: &solidcraft_geom::Mesh) -> Surface {
+        let tris = tris(m);
+        let boxes: Vec<Aabb3> = tris.iter().map(padded_box).collect();
+        Surface { tree: solidcraft_geom::Bvh::new(&boxes), tris, bounds: m.bounds() }
+    }
+
+    /// How far `p` is from the nearest triangle (`f64::MAX` with none), as the smallest of every
+    /// triangle's distance: a box no nearer than the best so far holds no nearer triangle.
+    fn distance(&self, p: Vec3, meter: &mut Meter<'_>) -> std::result::Result<f64, Spent> {
+        let (best, seen) = (std::cell::Cell::new(f64::MAX), std::cell::Cell::new(0usize));
+        self.tree.visit(
+            |b| {
+                seen.set(seen.get() + 1);
+                point_box_distance(b, p) < best.get()
+            },
+            |i| {
+                seen.set(seen.get() + 1);
+                if let Some([a, b, c]) = self.tris.get(i as usize) {
+                    let d = closest(p, *a, *b, *c).dist(p);
+                    if d < best.get() {
+                        best.set(d);
+                    }
+                }
+            },
+        );
+        meter.add(seen.get())?;
+        Ok(best.get())
+    }
+
+    /// Whether `p` is inside, by the parity of the triangles the ray [`inside`] casts passes
+    /// through: only triangles whose boxes the ray meets can be among them.
+    fn inside(&self, p: Vec3, meter: &mut Meter<'_>) -> std::result::Result<bool, Spent> {
+        let dir = parity_ray();
+        let inv = Vec3::new(1.0 / dir.x, 1.0 / dir.y, 1.0 / dir.z);
+        let (crossed, seen) = (std::cell::Cell::new(0usize), std::cell::Cell::new(0usize));
+        self.tree.visit(
+            |b| {
+                seen.set(seen.get() + 1);
+                ray_meets_box(p, inv, b)
+            },
+            |i| {
+                seen.set(seen.get() + 1);
+                if self.tris.get(i as usize).is_some_and(|t| ray_crosses(p, dir, t)) {
+                    crossed.set(crossed.get() + 1);
+                }
+            },
+        );
+        meter.add(seen.get())?;
+        Ok(crossed.get() % 2 == 1)
+    }
+
+    /// Where the edge `p`→`q` passes through a triangle, as fractions of the edge from `p`
+    /// (unsorted): only triangles whose boxes meet the edge's box can be passed through.
+    fn crossings(&self, p: Vec3, q: Vec3, meter: &mut Meter<'_>) -> std::result::Result<Vec<f64>, Spent> {
+        let d = q - p;
+        let len2 = d.dot(d);
+        let mut edge = Aabb3::EMPTY;
+        edge.add(p);
+        edge.add(q);
+        let edge = pad(edge);
+        let seen = std::cell::Cell::new(0usize);
+        let mut at = Vec::new();
+        self.tree.visit(
+            |b| {
+                seen.set(seen.get() + 1);
+                b.meets(&edge)
+            },
+            |i| {
+                seen.set(seen.get() + 1);
+                if let Some(t) = self.tris.get(i as usize)
+                    && let Some(h) = contact_sweep::segment_hits_triangle(p, q, t)
+                {
+                    at.push((h - p).dot(d) / len2);
+                }
+            },
+        );
+        meter.add(seen.get())?;
+        Ok(at)
+    }
+}
+
+/// `b` grown a little, so a point on what it holds, or a ray or an edge through it, is never lost
+/// to rounding in a box test (as `solidcraft_geom::MeshIndex` pads its triangles' boxes).
+fn pad(mut b: Aabb3) -> Aabb3 {
+    if b.is_empty() {
+        return b;
+    }
+    let scale = [b.min.x, b.min.y, b.min.z, b.max.x, b.max.y, b.max.z].iter().fold(1.0f64, |m, v| m.max(v.abs()));
+    let e = scale * 1e-9;
+    b.min -= Vec3::new(e, e, e);
+    b.max += Vec3::new(e, e, e);
+    b
+}
+
+/// A triangle's box, padded ([`pad`]).
+fn padded_box(t: &[Vec3; 3]) -> Aabb3 {
+    let mut b = Aabb3::EMPTY;
+    for p in t {
+        b.add(*p);
+    }
+    pad(b)
+}
+
+/// How far `p` is from box `b` (0 inside it).
+fn point_box_distance(b: &Aabb3, p: Vec3) -> f64 {
+    let along = |v: f64, lo: f64, hi: f64| (lo - v).max(v - hi).max(0.0);
+    let (x, y, z) = (along(p.x, b.min.x, b.max.x), along(p.y, b.min.y, b.max.y), along(p.z, b.min.z, b.max.z));
+    (x * x + y * y + z * z).sqrt()
+}
+
+/// Whether the ray from `o` (with `inv` = 1 / its direction, every component finite) meets box `b`.
+fn ray_meets_box(o: Vec3, inv: Vec3, b: &Aabb3) -> bool {
+    let (mut t0, mut t1) = (0.0f64, f64::INFINITY);
+    for (o, inv, lo, hi) in [(o.x, inv.x, b.min.x, b.max.x), (o.y, inv.y, b.min.y, b.max.y), (o.z, inv.z, b.min.z, b.max.z)] {
+        let (a, c) = ((lo - o) * inv, (hi - o) * inv);
+        let (a, c) = if a <= c { (a, c) } else { (c, a) };
+        t0 = t0.max(a);
+        t1 = t1.min(c);
+        if t0 > t1 {
+            return false;
+        }
+    }
+    true
+}
+
+/// The deepest any sample point of `a` lies inside `b` (0 if none), asked of `b`'s [`Surface`].
+fn deepest(a: &solidcraft_geom::Mesh, b: &Surface, tol: f64, meter: &mut Meter<'_>) -> std::result::Result<f64, Spent> {
+    let bx = b.bounds;
     let mut pts: Vec<Vec3> = a.positions.clone();
     let mut edges: Vec<(Vec3, Vec3)> = Vec::new();
     for [p, q, r] in tris(a) {
@@ -285,6 +482,7 @@ fn deepest(a: &solidcraft_geom::Mesh, b: &solidcraft_geom::Mesh, tol: f64) -> f6
     }
     let mut best = 0.0f64;
     for p in pts.into_iter().take(200_000) {
+        meter.add(1)?;
         if p.x < bx.min.x - tol
             || p.x > bx.max.x + tol
             || p.y < bx.min.y - tol
@@ -294,15 +492,16 @@ fn deepest(a: &solidcraft_geom::Mesh, b: &solidcraft_geom::Mesh, tol: f64) -> f6
         {
             continue;
         }
-        let d = tb.iter().map(|[a, b, c]| closest(p, *a, *b, *c).dist(p)).fold(f64::MAX, f64::min);
-        if d > tol.max(best) && inside(p, &tb) {
+        let d = b.distance(p, meter)?;
+        if d > tol.max(best) && b.inside(p, meter)? {
             best = d;
         }
     }
     for (p, q) in edges.into_iter().take(200_000) {
-        best = best.max(crossing(p, q, &tb, bx, tol));
+        meter.add(1)?;
+        best = best.max(crossing(p, q, b, bx, tol, meter)?);
     }
-    best
+    Ok(best)
 }
 
 /// Where the edge `p`→`q` of one mesh reaches through the surface `tb` of the other: the
@@ -310,7 +509,7 @@ fn deepest(a: &solidcraft_geom::Mesh, b: &solidcraft_geom::Mesh, tol: f64) -> f6
 /// lie inside, deeper than `tol`, as elsewhere in the check). Two plates crossing each other's
 /// faces put no vertex, mid-edge or triangle centre of either inside the other — the chord an
 /// edge cuts is how that crossing is seen (#3323).
-fn crossing(p: Vec3, q: Vec3, tb: &[[Vec3; 3]], bx: Aabb3, tol: f64) -> f64 {
+fn crossing(p: Vec3, q: Vec3, b: &Surface, bx: Aabb3, tol: f64, meter: &mut Meter<'_>) -> std::result::Result<f64, Spent> {
     if p.x.max(q.x) < bx.min.x - tol
         || p.x.min(q.x) > bx.max.x + tol
         || p.y.max(q.y) < bx.min.y - tol
@@ -318,19 +517,19 @@ fn crossing(p: Vec3, q: Vec3, tb: &[[Vec3; 3]], bx: Aabb3, tol: f64) -> f64 {
         || p.z.max(q.z) < bx.min.z - tol
         || p.z.min(q.z) > bx.max.z + tol
     {
-        return 0.0;
+        return Ok(0.0);
     }
     let d = q - p;
     let len2 = d.dot(d);
     if len2 <= 0.0 {
-        return 0.0;
+        return Ok(0.0);
     }
     // Where the edge crosses the surface, along the edge. A crossing at a vertex or along an
     // edge shared by two triangles is found twice (or more); merges of neighbours leave the
     // entry and exit of each chord as one pair each.
-    let mut hits: Vec<f64> = tb.iter().filter_map(|t| contact_sweep::segment_hits_triangle(p, q, t)).map(|h| (h - p).dot(d) / len2).collect();
+    let mut hits: Vec<f64> = b.crossings(p, q, meter)?;
     if hits.len() < 2 {
-        return 0.0;
+        return Ok(0.0);
     }
     hits.sort_by(|x, y| x.total_cmp(y));
     hits.dedup_by(|x, y| (*x - *y).abs() < 1e-6);
@@ -340,43 +539,47 @@ fn crossing(p: Vec3, q: Vec3, tb: &[[Vec3; 3]], bx: Aabb3, tol: f64) -> f64 {
             break;
         }
         let m = p + d * ((pair[0] + pair[1]) * 0.5);
-        let deep = tb.iter().map(|[a, b, c]| closest(m, *a, *b, *c).dist(m)).fold(f64::MAX, f64::min);
-        if deep > tol.max(best) && inside(m, tb) {
+        let deep = b.distance(m, meter)?;
+        if deep > tol.max(best) && b.inside(m, meter)? {
             best = deep;
         }
     }
-    best
+    Ok(best)
 }
 
-/// Ray parity along a skew direction (no axis-aligned edge hits).
-fn inside(p: Vec3, tris: &[[Vec3; 3]]) -> bool {
+/// The skew direction parity rays are cast along (no axis-aligned edge hits).
+fn parity_ray() -> Vec3 {
     // Fixed ray coordinates, not an approximation used to compute Euler's constant.
     #[allow(clippy::approx_constant)]
-    let dir = Vec3::new(0.577_215_664_9, 0.327_118_441_9, 0.751_891_438_7);
-    let mut n = 0;
-    for [a, b, c] in tris {
-        let (e1, e2) = (*b - *a, *c - *a);
-        let h = dir.cross(e2);
-        let det = e1.dot(h);
-        if det.abs() < 1e-14 {
-            continue;
-        }
-        let f = 1.0 / det;
-        let sv = p - *a;
-        let u = f * sv.dot(h);
-        if !(0.0..=1.0).contains(&u) {
-            continue;
-        }
-        let q = sv.cross(e1);
-        let v = f * dir.dot(q);
-        if v < 0.0 || u + v > 1.0 {
-            continue;
-        }
-        if f * e2.dot(q) > 0.0 {
-            n += 1;
-        }
+    Vec3::new(0.577_215_664_9, 0.327_118_441_9, 0.751_891_438_7)
+}
+
+/// Whether the ray from `p` along `dir` passes through triangle `t` (ahead of `p`).
+fn ray_crosses(p: Vec3, dir: Vec3, [a, b, c]: &[Vec3; 3]) -> bool {
+    let (e1, e2) = (*b - *a, *c - *a);
+    let h = dir.cross(e2);
+    let det = e1.dot(h);
+    if det.abs() < 1e-14 {
+        return false;
     }
-    n % 2 == 1
+    let f = 1.0 / det;
+    let sv = p - *a;
+    let u = f * sv.dot(h);
+    if !(0.0..=1.0).contains(&u) {
+        return false;
+    }
+    let q = sv.cross(e1);
+    let v = f * dir.dot(q);
+    if v < 0.0 || u + v > 1.0 {
+        return false;
+    }
+    f * e2.dot(q) > 0.0
+}
+
+/// Ray parity along a skew direction ([`parity_ray`]), every triangle scanned.
+fn inside(p: Vec3, tris: &[[Vec3; 3]]) -> bool {
+    let dir = parity_ray();
+    tris.iter().filter(|t| ray_crosses(p, dir, t)).count() % 2 == 1
 }
 
 /// The point of triangle abc nearest p.

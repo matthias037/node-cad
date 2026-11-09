@@ -32,7 +32,8 @@ pub const INTERFERENCE_DOC: &str = "study: id|name; occurrences?: [ids or names]
      default every occurrence), with against?: [ids or names] (then each of `occurrences` is checked only against these, such \
      as an arm against the parts it must miss), or contact_sets?: true (the pairs of the design's contact sets); samples? \
      (2…1000, default the study's steps + 1); budget_s?: seconds (above 0, at most 86400; default a fixed work budget): the \
-     time the check may take instead, looked at between samples, for a mechanism such as a gear train that needs longer → collisions: [{a, b, first_step, last_step, steps: [[from, to]…] (the step ranges where they overlap), \
+     time the check may take instead, looked at all along it (inside a sample too: it stops within moments of it), for a \
+     mechanism such as a gear train that needs longer → collisions: [{a, b, first_step, last_step, steps: [[from, to]…] (the step ranges where they overlap), \
      volume_mm3 (the most volume they share at a sample, worked out exactly from the bodies), deepest_step (the first sample \
      sharing that volume), not_measured (null, or why the volume was not worked out at every sample they overlap, such as \
      a budget it ran past: then volume_mm3 and deepest_step are null, never an estimate), depth_mm (how far into each \
@@ -397,10 +398,13 @@ pub(super) fn interference(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// `motion.interference` with at most `budget` collision work (see `ContactGeometry::hits`), or,
 /// given `seconds`, with that time instead: the work is then not counted against a budget, and
-/// the time is looked at before each sample, so the last one may run past it (#7855).
+/// the time is looked at all along, inside the work of a sample too (#7855). It was once looked
+/// at only between samples, and one sample of a 38-body engine ran for minutes, the window
+/// waiting for it (09/11/2026).
 fn interference_within(s: &mut Session, p: &Value, budget: usize, seconds: Option<f64>) -> Result<Value> {
     let cmd = "motion.interference";
     let deadline = seconds.and_then(|v| std::time::Duration::try_from_secs_f64(v).ok()).and_then(|d| web_time::Instant::now().checked_add(d));
+    let late = || deadline.is_some_and(|d| web_time::Instant::now() >= d);
     let budget = if deadline.is_some() { usize::MAX } else { budget };
     let m = s.doc.assembly.studies.get(study_index(s, p, cmd)?).cloned().ok_or_else(|| bad(cmd, "study"))?;
     let n = samples(p, &m, 2, cmd)?;
@@ -409,7 +413,7 @@ fn interference_within(s: &mut Session, p: &Value, budget: usize, seconds: Optio
     let (mut work, mut checked, mut truncated) = (0usize, 0usize, false);
     let mut booleans = MAX_BOOLEANS;
     let stop = play(s, &m, n, false, |t, k| {
-        if deadline.is_some_and(|d| web_time::Instant::now() >= d) {
+        if late() {
             truncated = true;
             return Ok(false);
         }
@@ -419,9 +423,10 @@ fn interference_within(s: &mut Session, p: &Value, budget: usize, seconds: Optio
             truncated = true;
             return Ok(false);
         }
-        let hits: Vec<(Member, Member, f64)> = match geometry.hits(t, &mut work, budget, true) {
+        let hits: Vec<(Member, Member, f64)> = match geometry.hits(t, &mut work, budget, deadline, true) {
             Ok(h) => h,
-            Err(_) if work > budget => {
+            // Stopped inside the sample: it is not checked.
+            Err(_) if work > budget || late() => {
                 truncated = true;
                 return Ok(false);
             }
@@ -449,7 +454,9 @@ fn interference_within(s: &mut Session, p: &Value, budget: usize, seconds: Optio
             c.samples.push(k);
             c.depth = c.depth.max(depth);
             if c.most_volume.is_ok() {
-                c.take_volume(k, shared_volume(s, &t.doc, a, b, &mut booleans));
+                // Body booleans take long too: past the deadline no more are made.
+                let volume = if late() { Err("the check's budget_s ran out before its volume was worked out".to_string()) } else { shared_volume(s, &t.doc, a, b, &mut booleans) };
+                c.take_volume(k, volume);
             }
         }
         Ok(true)

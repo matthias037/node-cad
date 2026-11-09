@@ -1199,3 +1199,219 @@ fn an_in_context_sketch_follows_only_the_parts_it_reads() {
     assert!(std::sync::Arc::ptr_eq(&model, &s.model.state()));
     same_bodies(&s.model.state(), &rebuilt(&s));
 }
+
+// ── Collision checks asked through a hierarchy (09/11/2026) ──────────────────────────────
+
+/// The meshes a collision check makes of the bodies `build` leaves (chord tolerance a thousandth
+/// of each body's size, as `overlap` and the contact sweep mesh them).
+fn check_meshes(build: &[(&str, Value)]) -> Vec<solidcraft_geom::Mesh> {
+    let mut s = Session::default();
+    for (id, p) in build {
+        run(&mut s, id, p.clone());
+    }
+    let st = s.model.state();
+    st.bodies
+        .iter()
+        .map(|b| b.body.mesh(&solidcraft_kernel::MeshTolerance::chord((b.body.size() * 1e-3).max(1e-3))).unwrap_or_default())
+        .collect()
+}
+
+/// `m` moved by `by`.
+fn moved(m: &solidcraft_geom::Mesh, by: Vec3) -> solidcraft_geom::Mesh {
+    let mut out = m.clone();
+    for p in &mut out.positions {
+        *p = *p + by;
+    }
+    out
+}
+
+/// Points spread over a box, always the same (xorshift).
+struct Spread(u64);
+
+impl Spread {
+    fn unit(&mut self) -> f64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        (self.0 >> 11) as f64 / (1u64 << 53) as f64
+    }
+
+    fn within(&mut self, b: &solidcraft_geom::Aabb3) -> Vec3 {
+        let mut at = |lo: f64, hi: f64| lo + (hi - lo) * self.unit();
+        Vec3::new(at(b.min.x, b.max.x), at(b.min.y, b.max.y), at(b.min.z, b.max.z))
+    }
+}
+
+/// What the hierarchy stands in for: every triangle asked, for every point and edge (the check
+/// until 09/11/2026, kept here as the reference its answers must equal).
+fn scan_distance(p: Vec3, tb: &[[Vec3; 3]]) -> f64 {
+    tb.iter().map(|[a, b, c]| super::closest(p, *a, *b, *c).dist(p)).fold(f64::MAX, f64::min)
+}
+
+fn scan_crossings(p: Vec3, q: Vec3, tb: &[[Vec3; 3]]) -> Vec<f64> {
+    let d = q - p;
+    let len2 = d.dot(d);
+    tb.iter().filter_map(|t| super::contact_sweep::segment_hits_triangle(p, q, t)).map(|h| (h - p).dot(d) / len2).collect()
+}
+
+fn scan_crossing(p: Vec3, q: Vec3, tb: &[[Vec3; 3]], bx: solidcraft_geom::Aabb3, tol: f64) -> f64 {
+    if p.x.max(q.x) < bx.min.x - tol
+        || p.x.min(q.x) > bx.max.x + tol
+        || p.y.max(q.y) < bx.min.y - tol
+        || p.y.min(q.y) > bx.max.y + tol
+        || p.z.max(q.z) < bx.min.z - tol
+        || p.z.min(q.z) > bx.max.z + tol
+    {
+        return 0.0;
+    }
+    let d = q - p;
+    if d.dot(d) <= 0.0 {
+        return 0.0;
+    }
+    let mut hits = scan_crossings(p, q, tb);
+    if hits.len() < 2 {
+        return 0.0;
+    }
+    hits.sort_by(|x, y| x.total_cmp(y));
+    hits.dedup_by(|x, y| (*x - *y).abs() < 1e-6);
+    let mut best = 0.0;
+    for pair in hits.chunks(2) {
+        if pair.len() < 2 {
+            break;
+        }
+        let m = p + d * ((pair[0] + pair[1]) * 0.5);
+        let deep = scan_distance(m, tb);
+        if deep > tol.max(best) && super::inside(m, tb) {
+            best = deep;
+        }
+    }
+    best
+}
+
+fn scan_deepest(a: &solidcraft_geom::Mesh, b: &solidcraft_geom::Mesh, tol: f64) -> f64 {
+    let tb = super::tris(b);
+    let bx = b.bounds();
+    let mut pts: Vec<Vec3> = a.positions.clone();
+    let mut edges: Vec<(Vec3, Vec3)> = Vec::new();
+    for [p, q, r] in super::tris(a) {
+        pts.extend([(p + q) * 0.5, (q + r) * 0.5, (r + p) * 0.5, (p + q + r) * (1.0 / 3.0)]);
+        edges.extend([(p, q), (q, r), (r, p)]);
+    }
+    let mut best = 0.0f64;
+    for p in pts.into_iter().take(200_000) {
+        if p.x < bx.min.x - tol || p.x > bx.max.x + tol || p.y < bx.min.y - tol || p.y > bx.max.y + tol || p.z < bx.min.z - tol || p.z > bx.max.z + tol {
+            continue;
+        }
+        let d = scan_distance(p, &tb);
+        if d > tol.max(best) && super::inside(p, &tb) {
+            best = d;
+        }
+    }
+    for (p, q) in edges.into_iter().take(200_000) {
+        best = best.max(scan_crossing(p, q, &tb, bx, tol));
+    }
+    best
+}
+
+fn scan_overlap(ma: &solidcraft_geom::Mesh, mb: &solidcraft_geom::Mesh, tol: f64) -> Option<f64> {
+    let (ba, bb) = (ma.bounds(), mb.bounds());
+    if ba.max.x < bb.min.x + tol || bb.max.x < ba.min.x + tol || ba.max.y < bb.min.y + tol || bb.max.y < ba.min.y + tol || ba.max.z < bb.min.z + tol || bb.max.z < ba.min.z + tol {
+        return None;
+    }
+    let depth = scan_deepest(ma, mb, tol).max(scan_deepest(mb, ma, tol));
+    (depth > tol).then_some(depth)
+}
+
+/// The three questions a collision check asks of a surface — how far, inside or not, where an
+/// edge passes through — answered through its hierarchy as a scan of every triangle answers them,
+/// value for value: points spread around, the mesh's own vertices and the middles of its edges.
+#[test]
+fn a_surface_answers_as_a_scan_of_every_triangle() {
+    let meshes = check_meshes(&[
+        ("solid.sphere", json!({"radius": 10})),
+        ("solid.torus", json!({"major": 12, "minor": 3, "center": [60, 0, 0]})),
+        ("solid.box", json!({"length": 20, "width": 10, "height": 6, "corner": [-10, 40, 0]})),
+        ("solid.cylinder", json!({"diameter": 8, "height": 30, "base": [0, -60, 0], "axis": [1, 1, 0]})),
+    ]);
+    assert_eq!(meshes.len(), 4, "four bodies");
+    let mut spread = Spread(0x9e37_79b9_7f4a_7c15);
+    let mut work = 0;
+    for m in &meshes {
+        let tb = super::tris(m);
+        let surface = super::Surface::new(m);
+        let mut meter = super::Meter::new(&mut work, usize::MAX, None);
+        let mut around = m.bounds();
+        let grow = around.size() * 0.25;
+        around.min -= grow;
+        around.max += grow;
+        let mut points: Vec<Vec3> = (0..400).map(|_| spread.within(&around)).collect();
+        points.extend(m.positions.iter().step_by(7).copied());
+        points.extend(tb.iter().step_by(5).map(|[a, b, _]| (*a + *b) * 0.5));
+        for p in &points {
+            assert_eq!(surface.distance(*p, &mut meter).ok(), Some(scan_distance(*p, &tb)), "distance from {p:?}");
+            assert_eq!(surface.inside(*p, &mut meter).ok(), Some(super::inside(*p, &tb)), "inside or not: {p:?}");
+        }
+        let sorted = |mut v: Vec<f64>| {
+            v.sort_by(f64::total_cmp);
+            v
+        };
+        for pair in points.chunks(2) {
+            let [p, q] = pair else { continue };
+            assert_eq!(surface.crossings(*p, *q, &mut meter).ok().map(sorted), Some(sorted(scan_crossings(*p, *q, &tb))), "edge {p:?} → {q:?}");
+        }
+    }
+}
+
+/// How deep two meshes pass into each other, through their hierarchies, is the scan's depth:
+/// a bar through a sphere, half in it, touching it, away from it; a ring around it, and above it.
+#[test]
+fn the_depth_two_meshes_pass_into_each_other_is_the_scan_s() {
+    let meshes = check_meshes(&[
+        ("solid.sphere", json!({"radius": 10})),
+        ("solid.box", json!({"length": 20, "width": 4, "height": 4, "corner": [40, -2, -2]})),
+        ("solid.torus", json!({"major": 8, "minor": 2, "center": [0, 60, 0]})),
+    ]);
+    let [sphere, bar, ring] = &meshes[..] else { panic!("three bodies, not {}", meshes.len()) };
+    let tol = 2e-3;
+    let mut found = 0;
+    for b in [
+        moved(bar, Vec3::new(-50.0, 0.0, 0.0)),
+        moved(bar, Vec3::new(-34.0, 0.0, 0.0)),
+        moved(bar, Vec3::new(-30.0, 0.0, 0.0)),
+        moved(bar, Vec3::new(-20.0, 0.0, 0.0)),
+        moved(ring, Vec3::new(0.0, -60.0, 0.0)),
+        moved(ring, Vec3::new(0.0, -60.0, 9.0)),
+    ] {
+        let depth = super::mesh_overlap(sphere, &b, tol);
+        assert_eq!(depth, scan_overlap(sphere, &b, tol), "{depth:?}");
+        found += usize::from(depth.is_some());
+    }
+    assert!(found >= 3, "the bar through and half in, and the ring around, pass into the sphere: {found}");
+}
+
+/// A check stops inside its work once its deadline has passed, or past its work budget: never a
+/// partial answer. Unbounded, it finds what the scan finds, for a fraction of the scan's work.
+#[test]
+fn a_check_stops_inside_its_work_past_its_deadline_or_its_budget() {
+    let meshes = check_meshes(&[("solid.sphere", json!({"radius": 10})), ("solid.sphere", json!({"radius": 10, "center": [50, 0, 0]}))]);
+    let [a, far] = &meshes[..] else { panic!("two bodies, not {}", meshes.len()) };
+    let b = moved(far, Vec3::new(-45.0, 0.0, 0.0));
+    let (sa, sb) = (super::Surface::new(a), super::Surface::new(&b));
+    let tol = 2e-3;
+    let mut work = 0;
+    let free = super::mesh_overlap_in(a, &b, &sa, &sb, tol, &mut super::Meter::new(&mut work, usize::MAX, None));
+    assert!(matches!(free, Ok(Some(d)) if d > 1.0), "{free:?}");
+    assert_eq!(free.ok().flatten(), scan_overlap(a, &b, tol));
+    assert!(work > super::CLOCK_EVERY, "enough work to read the clock: {work}");
+    // What scanning every triangle cost (its estimate of this check, until 09/11/2026).
+    let scan = (a.positions.len() + 7 * a.triangles.len()) * b.triangles.len() + (b.positions.len() + 7 * b.triangles.len()) * a.triangles.len();
+    // Two spheres deep into each other are its worst case (a point deep inside has many triangles
+    // within reach): still a tenth of the scan at most.
+    assert!(work * 10 < scan, "the hierarchy asks {work}, the scan {scan}");
+    let mut late = 0;
+    let past = web_time::Instant::now();
+    let stopped = super::mesh_overlap_in(a, &b, &sa, &sb, tol, &mut super::Meter::new(&mut late, usize::MAX, Some(past)));
+    assert!(stopped.is_err() && late < work, "stopped at its first reading of the clock: {late} of {work}");
+    let mut some = 0;
+    assert!(super::mesh_overlap_in(a, &b, &sa, &sb, tol, &mut super::Meter::new(&mut some, 1000, None)).is_err(), "past its budget");
+}
