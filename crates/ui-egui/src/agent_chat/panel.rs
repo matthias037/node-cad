@@ -1528,7 +1528,6 @@ mod config_ui_tests {
 
 /// What is drawn under the agent switcher keeps the switcher's side margin (#10172): it starts
 /// where the switcher's fields start, not at the panel's edge.
-#[cfg(not(target_arch = "wasm32"))]
 fn inset<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     egui::Frame::NONE.inner_margin(egui::Margin::symmetric(Tokens::get().space_12 as i8, 0)).show(ui, add).inner
 }

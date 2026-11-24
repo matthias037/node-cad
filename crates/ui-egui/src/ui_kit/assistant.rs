@@ -1,6 +1,5 @@
 //! Assistant presentation primitives; protocol state and action dispatch stay with callers.
 use crate::theme::Tokens;
-#[cfg(not(target_arch = "wasm32"))]
 use crate::ui_kit::BackingTooltipExt as _;
 use egui::{InnerResponse, Response, Ui, vec2};
 
