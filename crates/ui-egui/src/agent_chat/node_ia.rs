@@ -449,6 +449,16 @@ fn poll(app: &mut crate::SolveApp, ctx: &egui::Context) {
 /// Preferences > AI in the official app: the NØDE account, its subscription or trial, and the
 /// buttons that lead to them.
 pub fn section(app: &mut crate::SolveApp, ui: &mut egui::Ui) {
+    // NØDE IA est retiré (25/11/2026) : la version web n'offre plus que l'IA de la personne, branchée
+    // par le relais MCP (Aide > Connecter des assistants IA).
+    if cfg!(target_arch = "wasm32") {
+        crate::ui_kit::text(
+            ui,
+            crate::i18n::tr_label("NØDE IA is no longer offered. Plug in your own AI: Help > Connect AI assistants, then paste the address into Claude or another MCP-compatible AI."),
+            crate::ui_kit::Text::Note("node_ia_retire"),
+        );
+        return;
+    }
     use super::trf;
     use crate::i18n::tr;
     use crate::ui_kit;

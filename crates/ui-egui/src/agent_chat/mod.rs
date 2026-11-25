@@ -919,7 +919,9 @@ enum Outcome {
 
 /// The AI features are on (the master switch in Settings → AI); in the browser too, for NØDE IA.
 pub fn shown(app: &SolveApp) -> bool {
-    app.preferences.ai_features
+    // Dans le navigateur, l'assistant intégré (NØDE IA) est retiré le 25/11/2026 : on y branche sa
+    // propre IA par le relais MCP, qui tourne sans lui (`relais_mcp`).
+    !cfg!(target_arch = "wasm32") && app.preferences.ai_features
 }
 
 /// The Assistant button in the application bar is shown (honours the existing preference).
