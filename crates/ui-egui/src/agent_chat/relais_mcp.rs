@@ -26,6 +26,17 @@ pub const SITE: &str = "";
 /// L'attente longue d'un message de l'IA (s) : le site répond au plus tard au bout de 25 s.
 const ATTENTE_S: u64 = 40;
 
+thread_local! {
+    /// Ce que l'hôte fait quand le site a répondu alors que l'onglet est caché : le navigateur ne
+    /// dessine plus d'image, donc `pump` ne tourne plus ; l'hôte appelle alors `pump_cache`.
+    static HORS_IMAGE: RefCell<Option<Rc<dyn Fn()>>> = const { RefCell::new(None) };
+}
+
+/// L'hôte (la page web) dit comment faire tourner le relais hors des images.
+pub fn hors_image(f: Rc<dyn Fn()>) {
+    HORS_IMAGE.with(|h| *h.borrow_mut() = Some(f));
+}
+
 /// Ce que l'onglet montre de la liaison.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Etat {
@@ -57,6 +68,7 @@ struct EnCours {
 pub struct Relais {
     fetch: Fetch,
     wake: Rc<dyn Fn()>,
+    ctx: egui::Context,
     pub etat: Etat,
     jeton: Option<String>,
     /// Une attente longue est en cours.
@@ -74,10 +86,11 @@ pub struct Relais {
 }
 
 impl Relais {
-    pub fn new(fetch: Fetch, wake: Rc<dyn Fn()>, depart_undo: usize) -> Relais {
+    pub fn new(fetch: Fetch, wake: Rc<dyn Fn()>, ctx: egui::Context, depart_undo: usize) -> Relais {
         let r = Relais {
             fetch,
             wake,
+            ctx,
             etat: Etat::Ouverture,
             jeton: None,
             ecoute: false,
@@ -214,7 +227,24 @@ fn reponse(id: Value, resultat: Value) -> Value {
 /// Le relais de l'onglet, chaque image : ce que le site a répondu, l'attente suivante, puis les
 /// messages de l'IA, dans le temps d'une image.
 pub fn pump(app: &mut SolveApp, ctx: &egui::Context) {
-    let Some(mut r) = app.agent_chat.relais.take() else { return };
+    pump_budget(app, ctx, FRAME_BUDGET_MS);
+}
+
+/// Le relais quand l'onglet est caché (l'IA est dans un autre onglet : le cas courant) : appelé par
+/// l'hôte à chaque réponse du site, il traite tout ce qui attend, sans compter le temps d'une image
+/// que personne ne regarde.
+pub fn pump_cache(app: &mut SolveApp) {
+    let Some(ctx) = app.agent_chat.relais.as_ref().map(|r| r.ctx.clone()) else { return };
+    for _ in 0..600 {
+        if !pump_budget(app, &ctx, 1000.0) {
+            break;
+        }
+    }
+}
+
+/// `true` : il reste du travail (un long lot en cours, des messages en attente).
+fn pump_budget(app: &mut SolveApp, ctx: &egui::Context, budget_ms: f64) -> bool {
+    let Some(mut r) = app.agent_chat.relais.take() else { return false };
     let maintenant = ctx.input(|i| i.time);
     r.lire(maintenant);
     if matches!(r.etat, Etat::Coupee(_)) && maintenant >= r.pas_avant && r.jeton.is_none() {
@@ -224,7 +254,7 @@ pub fn pump(app: &mut SolveApp, ctx: &egui::Context) {
     if r.jeton.is_some() && !r.ecoute && maintenant >= r.pas_avant {
         r.ecouter();
     }
-    let frame = Frame { clock: Clock::start(), budget_ms: FRAME_BUDGET_MS };
+    let frame = Frame { clock: Clock::start(), budget_ms };
     let limite = app.preferences.agent_chat_turn_limit.clamp(1, 1000);
     let mut premier = true;
     while r.en_cours.is_some() || !r.file.is_empty() {
@@ -242,7 +272,9 @@ pub fn pump(app: &mut SolveApp, ctx: &egui::Context) {
     if !r.ecoute || r.pas_avant > maintenant {
         ctx.request_repaint_after(std::time::Duration::from_millis(500));
     }
+    let reste = r.en_cours.is_some() || !r.file.is_empty();
     app.agent_chat.relais = Some(r);
+    reste
 }
 
 fn traiter(app: &mut SolveApp, ctx: &egui::Context, r: &mut Relais, rid: String, msg: Value, limite: u32) {
@@ -310,7 +342,13 @@ pub fn demarrer(app: &mut SolveApp, ctx: &egui::Context) -> bool {
     let Some(fetch) = app.services.fetch.clone() else { return false };
     let c = ctx.clone();
     let depart = app.session.undo.len();
-    app.agent_chat.relais = Some(Relais::new(fetch, Rc::new(move || c.request_repaint()), depart));
+    let wake = Rc::new(move || {
+        c.request_repaint();
+        if let Some(f) = HORS_IMAGE.with(|h| h.borrow().clone()) {
+            f();
+        }
+    });
+    app.agent_chat.relais = Some(Relais::new(fetch, wake, ctx.clone(), depart));
     true
 }
 

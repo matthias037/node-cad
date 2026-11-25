@@ -1292,6 +1292,24 @@ mod web {
                     }),
                 )
                 .await;
+            if result.is_ok() {
+                // Le relais MCP répond aussi quand l'onglet est caché (l'IA est dans un autre onglet) :
+                // le navigateur n'y dessine plus d'image, mais les réponses du réseau arrivent.
+                let runner = runner.clone();
+                solidcraft_ui_egui::agent_chat::relais_mcp::hors_image(std::rc::Rc::new(move || {
+                    let runner = runner.clone();
+                    wasm_bindgen_futures::spawn_local(async move {
+                        let cache = web_sys::window()
+                            .and_then(|w| w.document())
+                            .and_then(|d| js_sys::Reflect::get(&d, &"visibilityState".into()).ok())
+                            .and_then(|v| v.as_string())
+                            .is_some_and(|v| v == "hidden");
+                        if cache && let Some(mut shell) = runner.app_mut::<Shell>() {
+                            solidcraft_ui_egui::agent_chat::relais_mcp::pump_cache(&mut shell.app);
+                        }
+                    });
+                }));
+            }
             if result.is_ok()
                 && crate::Launch::parse(&query()).persists()
                 && let Some(window) = web_sys::window()
