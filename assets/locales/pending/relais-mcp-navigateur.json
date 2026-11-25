@@ -1,0 +1,22 @@
+{
+  "en": {
+    "Connect an AI to this tab": "Connect an AI to this tab",
+    "Stop the link": "Stop the link",
+    "Add this address to your AI as an MCP server: in Claude, Settings > Connectors > Add custom connector. The AI then works in this tab, under your eyes. Anyone who has the address can drive this tab: give it to no one.": "Add this address to your AI as an MCP server: in Claude, Settings > Connectors > Add custom connector. The AI then works in this tab, under your eyes. Anyone who has the address can drive this tab: give it to no one.",
+    "Opening the link…": "Opening the link…",
+    "node-os.fr does not answer; trying again…": "node-os.fr does not answer; trying again…",
+    "Copy the address": "Copy the address",
+    "Waiting for the AI…": "Waiting for the AI…",
+    "Tool calls from the AI:": "Tool calls from the AI:"
+  },
+  "fr": {
+    "Connect an AI to this tab": "Connecter une IA à cet onglet",
+    "Stop the link": "Couper la liaison",
+    "Add this address to your AI as an MCP server: in Claude, Settings > Connectors > Add custom connector. The AI then works in this tab, under your eyes. Anyone who has the address can drive this tab: give it to no one.": "Ajoutez cette adresse à votre IA comme serveur MCP : dans Claude, Réglages > Connecteurs > Ajouter un connecteur personnalisé. L'IA travaille alors dans cet onglet, sous vos yeux. Toute personne qui a l'adresse peut piloter cet onglet : ne la donnez à personne.",
+    "Opening the link…": "Ouverture de la liaison…",
+    "node-os.fr does not answer; trying again…": "node-os.fr ne répond pas ; nouvel essai…",
+    "Copy the address": "Copier l'adresse",
+    "Waiting for the AI…": "En attente de l'IA…",
+    "Tool calls from the AI:": "Demandes de l'IA :"
+  }
+}

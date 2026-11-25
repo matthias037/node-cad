@@ -25,7 +25,7 @@ const REQUEST_TIMEOUT_S: u64 = 300;
 
 /// The time a frame gives the tool calls (ms): a batch runs its steps within it, a few dozen at a
 /// time, and the page draws and answers the person in between.
-const FRAME_BUDGET_MS: f64 = 30.0;
+pub(super) const FRAME_BUDGET_MS: f64 = 30.0;
 
 /// A page the browser draws seldom (in the background, or its window covered) is not watched:
 /// when this long went by since the calls' last frame (ms), a frame gives them
@@ -34,13 +34,13 @@ const SELDOM_MS: f64 = 200.0;
 const SELDOM_BUDGET_MS: f64 = 250.0;
 
 /// This frame's time for the tool calls.
-struct Frame {
-    clock: Clock,
-    budget_ms: f64,
+pub(super) struct Frame {
+    pub(super) clock: Clock,
+    pub(super) budget_ms: f64,
 }
 
 impl Frame {
-    fn spent(&self) -> bool {
+    pub(super) fn spent(&self) -> bool {
         self.clock.ms() >= self.budget_ms
     }
 }
@@ -127,17 +127,17 @@ struct Running {
 /// again and reads its earlier answers back. Nothing runs, nor passes the gate, twice; the
 /// tool's own code is the desktop's.
 #[derive(Default)]
-struct Tape {
-    answers: Vec<(String, Value, Result<Value, String>)>,
+pub(super) struct Tape {
+    pub(super) answers: Vec<(String, Value, Result<Value, String>)>,
     /// The answers this call of the tool has read back.
-    read: usize,
+    pub(super) read: usize,
     /// The long request this call of the tool put off.
     put_off: Option<(String, Value)>,
 }
 
 impl Tape {
     /// The answer of the request put off, for the next call of the tool.
-    fn answered(&mut self, answer: Result<Value, String>) {
+    pub(super) fn answered(&mut self, answer: Result<Value, String>) {
         if let Some((method, params)) = self.put_off.take() {
             self.answers.push((method, params, answer));
         }
@@ -145,7 +145,7 @@ impl Tape {
 }
 
 /// A request that runs over several frames, the gate passed.
-enum Long {
+pub(super) enum Long {
     /// A batch, a few steps a frame.
     Steps(Batch),
     /// A measure of many bodies, a few bodies a frame.
@@ -154,7 +154,7 @@ enum Long {
 
 impl Long {
     /// A long request, started (a refusal is its answer at once). `None`: it runs now, as any.
-    fn begin(app: &mut SolveApp, method: &str, params: &Value) -> Option<Result<Long, Outcome>> {
+    pub(super) fn begin(app: &mut SolveApp, method: &str, params: &Value) -> Option<Result<Long, Outcome>> {
         match method {
             // `control::handle` runs a request that names folders inside them; the page's never do.
             "engine.batch" if params.get("allow_paths").is_none() => {
@@ -171,13 +171,13 @@ impl Long {
 /// `inspect.measure` of many bodies, one body at a time, and their measures merged as the
 /// command merges them ([`solidcraft_engine::cmd::measure_reply`]): a big design is measured
 /// on one thread in the browser, for seconds.
-struct Measuring {
+pub(super) struct Measuring {
     /// The command's parameters.
     params: Value,
     /// The bodies left to measure, in the design's order, and the measures so far.
     left: VecDeque<String>,
-    done: Vec<Value>,
-    total: usize,
+    pub(super) done: Vec<Value>,
+    pub(super) total: usize,
     /// The design they are measured in: anything changing it stops the measure.
     doc: std::sync::Arc<solidcraft_engine::doc::Document>,
 }
@@ -209,7 +209,7 @@ impl Measuring {
 
     /// Measure the next bodies, at least one, while the frame's time lasts: the command's reply
     /// once the last is measured, `None` while bodies are left.
-    fn go_on(&mut self, app: &mut SolveApp, ctx: &egui::Context, frame: &Frame) -> Option<Result<Value, String>> {
+    pub(super) fn go_on(&mut self, app: &mut SolveApp, ctx: &egui::Context, frame: &Frame) -> Option<Result<Value, String>> {
         if !std::sync::Arc::ptr_eq(&app.session.doc, &self.doc) {
             return Some(Err("the design changed while it was being measured (an edit, an undo or another tab): measure it again".into()));
         }
@@ -480,14 +480,17 @@ impl ChatBackend for WebBackend {
 /// The page itself, as the tools' backend: each request passes the gate, then runs here, now.
 /// With a [`Tape`], the tool's long requests are put off ([`Long`]) and its earlier requests
 /// answered from the tape.
-struct InPage<'a> {
-    app: &'a mut SolveApp,
+pub(super) struct InPage<'a> {
+    pub(super) app: &'a mut SolveApp,
     /// `None`: the message was stopped, and nothing more runs.
-    ctx: Option<&'a egui::Context>,
-    limit: u32,
-    tape: Option<&'a mut Tape>,
+    pub(super) ctx: Option<&'a egui::Context>,
+    pub(super) limit: u32,
+    pub(super) tape: Option<&'a mut Tape>,
     /// The long request put off, started.
-    begun: Option<Long>,
+    pub(super) begun: Option<Long>,
+    /// Une IA extérieure par le relais MCP (`relais_mcp`) : le contrôle sans conversation, et ce que
+    /// la page pouvait défaire quand la liaison s'est ouverte (l'IA ne défait rien d'avant).
+    pub(super) relais_undo: Option<usize>,
 }
 
 /// Why a tool's requests after one put off are not run (no one reads it: the tool is called
@@ -496,7 +499,11 @@ const PUT_OFF: &str = "put off: a long request runs over the next frames";
 
 impl InPage<'_> {
     fn gate(&mut self, method: &str, params: &Value) -> Result<(), String> {
-        match super::judge(self.app, method, params, self.limit) {
+        let juge = match self.relais_undo {
+            Some(depart) => super::judge_relais(self.app, method, params, depart),
+            None => super::judge(self.app, method, params, self.limit),
+        };
+        match juge {
             super::Judged::Run => Ok(()),
             super::Judged::Ask { title, .. } => Err(format!(
                 "{title}: this needs the person's approval, which NØDE IA does not ask for in the browser yet. Tell the person what you \
@@ -508,7 +515,7 @@ impl InPage<'_> {
 }
 
 /// What the control channel answered, as the tools' backend returns it.
-fn answer(outcome: Outcome) -> Result<Value, String> {
+pub(super) fn answer(outcome: Outcome) -> Result<Value, String> {
     match outcome {
         Outcome::Done(v) if v.get("ok").and_then(Value::as_bool) == Some(true) => Ok(v.get("result").cloned().unwrap_or(Value::Null)),
         Outcome::Done(v) => Err(v.get("error").and_then(Value::as_str).unwrap_or("error").to_string()),
@@ -636,7 +643,7 @@ fn start(app: &mut SolveApp, ctx: &egui::Context, core: &Rc<RefCell<Core>>, call
         // A model that calls an engine command as a tool: run it through `execute`, and say so.
         match core::as_execute(names, &call.name, &args) {
             Some((execute, a)) => {
-                let mut page = InPage { app, ctx: Some(ctx), limit, tape: None, begun: None };
+                let mut page = InPage { app, ctx: Some(ctx), limit, tape: None, begun: None, relais_undo: None };
                 let (text, failed) = core::tool_text(&solidcraft_mcp::call_tool(&mut page, &execute, &a));
                 (format!("{text}\n(`{}` is not a tool: this ran as execute {{command, params}}.)", call.name), failed)
             }
@@ -653,7 +660,7 @@ fn start(app: &mut SolveApp, ctx: &egui::Context, core: &Rc<RefCell<Core>>, call
 fn call_tool(app: &mut SolveApp, ctx: Option<&egui::Context>, core: &Rc<RefCell<Core>>, mut running: Running, limit: u32) -> Option<(Running, Long)> {
     let args = running.call.arguments.clone().unwrap_or_else(|_| json!({}));
     running.tape.read = 0;
-    let mut page = InPage { app, ctx, limit, tape: Some(&mut running.tape), begun: None };
+    let mut page = InPage { app, ctx, limit, tape: Some(&mut running.tape), begun: None, relais_undo: None };
     let r = solidcraft_mcp::call_tool(&mut page, &running.call.name, &args);
     if let Some(long) = page.begun.take() {
         return Some((running, long));

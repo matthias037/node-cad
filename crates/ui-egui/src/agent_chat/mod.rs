@@ -41,6 +41,7 @@ mod process;
 pub mod settings;
 pub mod summary;
 pub mod web_client;
+pub mod relais_mcp;
 
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
@@ -337,6 +338,8 @@ struct ModelRevert {
 pub struct AgentChat {
     /// The panel is shown (View menu, the application bar's chat button, Ctrl+Shift+A).
     pub open: bool,
+    /// Le relais MCP du navigateur : une IA extérieure pilote cet onglet par node-os.fr (`relais_mcp`).
+    pub relais: Option<relais_mcp::Relais>,
     /// The official app: NØDE IA is the only agent (`node_ia`). Off (tests, and builds with the
     /// `agents-libres` feature): the installed agents and the endpoints the person adds.
     pub node_ia_only: bool,
@@ -2066,6 +2069,20 @@ pub(crate) fn judge(app: &mut SolveApp, method: &str, params: &Value, limit: u32
     }
 }
 
+/// Le contrôle d'une demande d'une IA extérieure par le relais MCP du navigateur : les règles de
+/// `gate::request`, sans conversation. Ce qui demanderait l'accord de la personne est refusé (le
+/// relais ne peut pas le lui demander), et l'IA ne défait que ce qu'elle a fait depuis la liaison.
+pub(crate) fn judge_relais(app: &mut SolveApp, method: &str, params: &Value, depart_undo: usize) -> Judged {
+    let undo_left = app.session.undo.len().saturating_sub(depart_undo);
+    match gate::request(method, params, undo_left) {
+        gate::Verdict::Run { .. } => Judged::Run,
+        gate::Verdict::Ask(title) => Judged::Refuse(format!(
+            "{title}: this needs the person's approval, which cannot be asked through the MCP link. Tell the person what you wanted to do."
+        )),
+        gate::Verdict::Refuse(e) => Judged::Refuse(e),
+    }
+}
+
 /// The requests the agent's tools sent through the chat's endpoint: each one passes the gate.
 fn pump_tools(app: &mut SolveApp) {
     let Some(rx) = app.agent_chat.tools_rx.take() else { return };
@@ -2151,6 +2168,8 @@ pub(crate) fn take_loaded(app: &mut SolveApp, ctx: &egui::Context) {
 
 pub fn poll(app: &mut SolveApp, ctx: &egui::Context) {
     settings::poll_tests(&mut app.agent_chat);
+    // Le relais MCP tourne même assistant fermé : c'est une IA extérieure qui pilote l'onglet.
+    relais_mcp::pump(app, ctx);
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(rx) = &app.agent_chat.detecting
         && let Ok(d) = rx.try_recv()

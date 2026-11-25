@@ -23,6 +23,8 @@ pub struct HelpState {
     pub about: bool,
     /// The result of Connect AI assistants, one line per client, while its window is open.
     pub connect: Option<Vec<String>>,
+    /// La fenêtre « Connecter une IA » du navigateur (relais MCP par node-os.fr) est ouverte.
+    pub connect_web: bool,
     /// The GPU the window renders with (set by the host).
     pub gpu: Option<String>,
 }
@@ -69,6 +71,11 @@ pub fn run(app: &mut SolveApp, ctx: &egui::Context, item: &str) {
             app.keymap.read_only = true;
         }
         "crashes" => crate::crash_ui::open(app),
+        // Dans le navigateur, l'IA se branche par le relais de node-os.fr.
+        "connect" if app.services.fetch.is_some() && cfg!(target_arch = "wasm32") => {
+            crate::agent_chat::relais_mcp::demarrer(app, ctx);
+            app.help.connect_web = true;
+        }
         "connect" => app.help.connect = Some(connect_assistants()),
         "install_cli" => {
             let (msg, error) = crate::cli_link::install_from_menu();
@@ -180,6 +187,7 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context, anchor: egui::Pos2) {
     }
     about(app, ctx);
     connect(app, ctx);
+    connect_web(app, ctx);
     crate::crash_ui::show(app, ctx);
     crate::messages::show(app, ctx);
 }
@@ -260,5 +268,63 @@ mod tests {
         assert!(diagnostics(&app).ends_with("(1 feature, 1 body)"), "{}", diagnostics(&app));
         app.session.execute("solid.box", &serde_json::json!({"length": 10, "width": 10, "height": 10, "corner": [30, 0, 0]})).unwrap();
         assert!(diagnostics(&app).ends_with("(2 features, 2 bodies)"), "{}", diagnostics(&app));
+    }
+}
+
+/// La fenêtre « Connecter une IA » du navigateur : l'adresse MCP secrète de cet onglet, à coller
+/// dans l'IA, et ce que l'IA a fait. Fermer la fenêtre laisse la liaison ouverte ; Arrêter la coupe.
+fn connect_web(app: &mut SolveApp, ctx: &egui::Context) {
+    use crate::agent_chat::relais_mcp::Etat;
+    if !app.help.connect_web {
+        return;
+    }
+    let Some(relais) = app.agent_chat.relais.as_ref() else {
+        app.help.connect_web = false;
+        return;
+    };
+    let etat = relais.etat.clone();
+    let (appels, dernier) = (relais.appels, relais.dernier.clone());
+    let mut copier = None;
+    let (closed, action) = ui_kit::Window::new(egui::Id::unique("sc_connect_web"), "help", crate::i18n::tr_label("Connect an AI to this tab"))
+        .cards(2.0)
+        .actions("Stop the link", "Close", None)
+        .show(ctx, true, |ui| {
+            ui_kit::text(
+                ui,
+                crate::i18n::tr_label(
+                    "Add this address to your AI as an MCP server: in Claude, Settings > Connectors > Add custom connector. The AI then \
+                     works in this tab, under your eyes. Anyone who has the address can drive this tab: give it to no one.",
+                ),
+                ui_kit::Text::Note("connect_web_note"),
+            );
+            match &etat {
+                Etat::Ouverture => {
+                    ui_kit::text(ui, crate::i18n::tr_label("Opening the link…"), ui_kit::Text::Note("connect_web_state"));
+                }
+                Etat::Coupee(raison) => {
+                    let t = format!("{} ({raison})", crate::i18n::tr_label("node-os.fr does not answer; trying again…"));
+                    ui_kit::text(ui, &t, ui_kit::Text::Note("connect_web_state"));
+                }
+                Etat::Prete { adresse } => {
+                    ui_kit::text(ui, adresse, ui_kit::Text::Report("connect_web_address", false));
+                    if ui_kit::button(ui, crate::i18n::tr_label("Copy the address"), ui_kit::Button::Primary).clicked() {
+                        copier = Some(adresse.clone());
+                    }
+                    let suivi = match (&dernier, appels) {
+                        (None, _) => crate::i18n::tr_label("Waiting for the AI…").to_string(),
+                        (Some(d), n) => format!("{} {n} · {d}", crate::i18n::tr_label("Tool calls from the AI:")),
+                    };
+                    ui_kit::text(ui, &suivi, ui_kit::Text::Note("connect_web_state"));
+                }
+            }
+        });
+    if let Some(a) = copier {
+        ctx.copy_text(a);
+    }
+    if action == ui_kit::Action::Ok {
+        crate::agent_chat::relais_mcp::arreter(app);
+        app.help.connect_web = false;
+    } else if closed || action == ui_kit::Action::Cancel {
+        app.help.connect_web = false;
     }
 }

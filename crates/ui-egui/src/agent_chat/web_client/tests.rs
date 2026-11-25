@@ -259,7 +259,7 @@ fn at_once(name: &str, args: &Value, before: &[Value]) -> (Value, Value, (u32, u
     }
     send(&mut app, &ctx, "d'un coup".into());
     let limit = app.preferences.agent_chat_turn_limit.clamp(1, 1000);
-    let mut page = InPage { app: &mut app, ctx: Some(&ctx), limit, tape: None, begun: None };
+    let mut page = InPage { app: &mut app, ctx: Some(&ctx), limit, tape: None, begun: None, relais_undo: None };
     let (text, _) = core::tool_text(&solidcraft_mcp::call_tool(&mut page, name, args));
     let counted = app.agent_chat.turn.as_ref().map(|t| (t.requests, t.changes)).unwrap();
     let design = app.session.execute("inspect.measure", &json!({})).unwrap();
